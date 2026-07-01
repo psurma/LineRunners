@@ -13,7 +13,7 @@
     integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
     integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-  <link rel="stylesheet" href="style.css?v=38" />
+  <link rel="stylesheet" href="style.css?v=41" />
 </head>
 <body>
   <header class="site-header">
@@ -157,7 +157,8 @@
     <!-- ROUTE IDEAS -->
     <section id="routes" class="routes">
       <h2 class="section-title">Route ideas</h2>
-      <p class="section-sub">A library of group-friendly London routes &mdash; parks, rivers, canals and landmark tours &mdash; to adapt into upcoming runs. Curated from a runners' guide to London. <strong>Tap a route to trace it on the map</strong> (&#8984;/Ctrl + scroll to zoom).</p>
+      <p class="section-sub">A library of group-friendly London routes &mdash; parks, rivers, canals and landmark tours &mdash; to adapt into upcoming runs. <strong>Tap a route to trace it on the map</strong> (&#8984;/Ctrl + scroll to zoom), or filter by type and distance.</p>
+      <div id="routeFilters" class="route-filters"></div>
       <div class="route-layout">
         <div id="routeMap" class="route-map"></div>
         <div id="routeList" class="route-grid"></div>
@@ -270,6 +271,6 @@
     <p class="fine">Not affiliated with Transport for London. Roundel-inspired branding used with affection, not endorsement.</p>
   </footer>
 
-  <script src="script.js?v=38"></script>
+  <script src="script.js?v=41"></script>
 </body>
 </html>

@@ -798,3 +798,32 @@ body.tm-map-active .tm-zoom, body.tm-map-active .tm-scrollhint { display: none; 
   font-family: var(--font-display);
   font-weight: 400;
 }
+
+/* Multi-day run emphasis on the next-run card */
+.multiday-badge {
+  display: inline-block; margin-left: 8px; vertical-align: middle;
+  background: var(--tfl-red); color: #fff; font: 700 11px/1 Inter, sans-serif;
+  text-transform: uppercase; letter-spacing: 0.6px; padding: 6px 10px; border-radius: 20px;
+}
+.nd-days { list-style: none; margin: 16px 0 6px; display: grid; gap: 8px; }
+.nd-days li { padding: 10px 14px; background: var(--paper); border-left: 4px solid var(--run-col, var(--tfl-blue)); border-radius: 8px; }
+.nd-days li strong { display: block; font-size: 14px; margin-bottom: 2px; }
+.nd-days li span { font-size: 13px; color: var(--muted); }
+
+/* Tube-line-coloured accent bar under every section heading */
+.section-title { position: relative; }
+.section-title::after {
+  content: ""; display: block; width: 56px; height: 5px; border-radius: 3px;
+  background: var(--accent, var(--tfl-blue)); margin-top: 10px;
+}
+
+/* Route filters */
+.route-filters { display: flex; flex-direction: column; gap: 8px; margin-bottom: 18px; }
+.rf-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.rf-chip {
+  font: 600 13px Inter, sans-serif; padding: 5px 13px; border-radius: 20px;
+  border: 1px solid var(--line); background: #fff; color: var(--muted); cursor: pointer; transition: all 0.12s;
+}
+.rf-chip:hover { border-color: var(--tfl-blue); color: var(--tfl-blue); }
+.rf-chip.on { background: var(--tfl-blue); border-color: var(--tfl-blue); color: #fff; }
+.routes-empty { color: var(--muted); padding: 24px 4px; grid-column: 1 / -1; }

@@ -294,21 +294,30 @@
     if (!el || !nextRun) return;
     const c = nextRun.colour, tc = contrastText(c);
     el.style.borderLeftColor = c;
+    el.style.setProperty("--run-col", c);
+    const md = nextRun.days && nextRun.days.length > 1 ? nextRun.days : null;
+    const endDate = md ? new Date(nextRun.date.getTime() + (md.length - 1) * 86400000) : null;
+    el.classList.toggle("is-multiday", !!md);
     el.innerHTML = `
       <div class="date-badge">
-        <div class="dow">${DOW[nextRun.date.getDay()]}</div>
-        <div class="day">${nextRun.date.getDate()}</div>
+        <div class="dow">${md ? DOW[nextRun.date.getDay()] + "–" + DOW[endDate.getDay()] : DOW[nextRun.date.getDay()]}</div>
+        <div class="day">${md ? nextRun.date.getDate() + "–" + endDate.getDate() : nextRun.date.getDate()}</div>
         <div class="mon">${MON[nextRun.date.getMonth()]} ${nextRun.date.getFullYear()}</div>
         <div class="cd">${countdownText(nextRun.date)}</div>
       </div>
       <div class="next-body">
         <span class="line-tag" style="background:${c};color:${tc}">${escapeHtml(nextRun.badge)}</span>
+        ${md ? `<span class="multiday-badge">${md.length}-day run</span>` : ""}
         <h3>${escapeHtml(nextRun.leg)}</h3>
         <div class="next-meta">
           <div><strong>Meet</strong> ${MEET_TIME} · <a class="meet-link" href="${escapeAttr(meetMapUrl(nextRun))}" target="_blank" rel="noopener">${escapeHtml(nextRun.start)} ↗</a></div>
           <div><strong>Distance</strong> ${escapeHtml(nextRun.distance)}</div>
           ${nextRun.location !== "London" ? `<div><strong>Where</strong> ${escapeHtml(nextRun.location)}</div>` : ""}
         </div>
+        ${md ? `<ol class="nd-days">${md.map((d) => `<li><strong>${escapeHtml(d.title)}</strong>${
+          [d.start && "Start " + d.start, d.distance, d.finish && "Finish " + d.finish].filter(Boolean).length
+            ? `<span>${[d.start && "Start " + d.start, d.distance, d.finish && "Finish " + d.finish].filter(Boolean).map(escapeHtml).join(" · ")}</span>` : ""
+        }</li>`).join("")}</ol>` : ""}
         ${routeLinksHtml(nextRun)}
       </div>`;
   }
@@ -716,11 +725,28 @@
     { name: "St James's & Green Park", type: "park", leg: "Loop around both parks and the lake", start: "Green Park / St James's Park", distance: "2.4 mi (3.9 km)", highlights: "Green oasis on Buckingham Palace's doorstep with a photo-ready lake and The Mall.", suitability: "Easy short social loop, very photogenic; heavy foot traffic.", loop: true, path: [[51.5067, -0.1428], [51.5058, -0.1360], [51.5045, -0.1320], [51.5024, -0.1340], [51.5014, -0.1419], [51.5035, -0.1442], [51.5050, -0.1440], [51.5067, -0.1428]] },
     { name: "Southwark Park & the Docks", type: "river", leg: "Park out to Greenland Dock & Thames Path", start: "Surrey Quays / Canada Water", distance: "1.4 mi (2.25 km), extendable", highlights: "Victorian park linking to Greenland Dock, Russia Dock Woodland and a rare south-bank river corridor.", suitability: "Flexible — flat, quiet, easily lengthened along the docks and river.", loop: false, path: [[51.4980, -0.0498], [51.4958, -0.0520], [51.4945, -0.0480], [51.4915, -0.0450], [51.4950, -0.0430], [51.5000, -0.0470]] },
     { name: "Wormwood Scrubs", type: "park", leg: "Perimeter loop of 'The Scrubs'", start: "East Acton (Central)", distance: "2.4 mi (3.85 km)", highlights: "Vast open grass with a 960m sealed loop and Grand Union Canal access next door; flat.", suitability: "Roomy and flat for all paces, with the canal as an add-on.", loop: true, path: [[51.5165, -0.2480], [51.5195, -0.2430], [51.5225, -0.2380], [51.5228, -0.2300], [51.5200, -0.2280], [51.5175, -0.2330], [51.5170, -0.2430], [51.5165, -0.2480]] },
+    { name: "Richmond Park (Tamsin Trail)", type: "trail", leg: "Perimeter shared-use loop", start: "Richmond (District/Overground)", distance: "7.2 mi (11.7 km)", highlights: "London's largest royal park — wild deer, ancient oaks, Isabella Plantation and big skies on a way-marked gravel loop.", suitability: "A proper long run for a confident group — gently hilly, traffic-free, easy to follow.", loop: true, path: [[51.4530, -0.2880], [51.4560, -0.2560], [51.4380, -0.2400], [51.4270, -0.2680], [51.4380, -0.2950], [51.4530, -0.2880]] },
+    { name: "Bushy Park", type: "park", leg: "Chestnut Avenue & Diana Fountain loop", start: "Teddington / Hampton Wick (rail)", distance: "4.0 mi (6.5 km)", highlights: "Deer, the mile-long Chestnut Avenue, the Diana Fountain and the Water Gardens, next to Hampton Court.", suitability: "Flat, open and roomy — great all-paces park with plenty of space.", loop: true, path: [[51.4180, -0.3450], [51.4180, -0.3300], [51.4080, -0.3300], [51.4080, -0.3450], [51.4180, -0.3450]] },
+    { name: "Wimbledon Common & Putney Heath", type: "trail", leg: "Windmill & woodland loop", start: "Putney / Wimbledon (rail)", distance: "5.0 mi (8 km)", highlights: "Heath, woods and horse rides around the windmill; a mix of gravel tracks and trails.", suitability: "Undulating and easy to get lost — keep the group together; muddy after rain.", loop: true, path: [[51.4400, -0.2400], [51.4400, -0.2200], [51.4270, -0.2200], [51.4270, -0.2400], [51.4400, -0.2400]] },
+    { name: "Clapham Common", type: "park", leg: "Triangle loop past the bandstand", start: "Clapham Common (Northern)", distance: "2.4 mi (3.9 km)", highlights: "Flat open triangle with wide paths, the bandstand and three ponds; a south London running staple.", suitability: "Flat and central — perfect easy social loop for all paces.", loop: true, path: [[51.4640, -0.1520], [51.4640, -0.1420], [51.4580, -0.1420], [51.4580, -0.1520], [51.4640, -0.1520]] },
+    { name: "Wandsworth Common", type: "park", leg: "Perimeter loop", start: "Wandsworth Common (rail)", distance: "2.5 mi (4 km)", highlights: "Leafy common with a lake, the Scope and quiet paths away from the traffic.", suitability: "Flat, relaxed and rarely crowded — a friendly all-paces loop.", loop: true, path: [[51.4490, -0.1700], [51.4490, -0.1620], [51.4410, -0.1620], [51.4410, -0.1700], [51.4490, -0.1700]] },
+    { name: "Brockwell Park", type: "park", leg: "Hilltop loop above Herne Hill", start: "Herne Hill (rail)", distance: "2.2 mi (3.5 km)", highlights: "A short climb to a walled garden and one of the best skyline views in south London, plus the lido.", suitability: "Small but punchy — one hill, big reward; loops nicely for mixed paces.", loop: true, path: [[51.4560, -0.1090], [51.4560, -0.1020], [51.4500, -0.1020], [51.4500, -0.1090], [51.4560, -0.1090]] },
+    { name: "Dulwich Park", type: "park", leg: "Flat carriage-drive loop", start: "North Dulwich (rail)", distance: "1.6 mi (2.6 km)", highlights: "A smooth ex-carriage-drive loop round lawns, a boating lake and rhododendrons.", suitability: "Flat, sealed and easy — ideal for beginners and recovery runs.", loop: true, path: [[51.4440, -0.0880], [51.4440, -0.0800], [51.4400, -0.0800], [51.4400, -0.0880], [51.4440, -0.0880]] },
+    { name: "Crystal Palace Park", type: "park", leg: "Dinosaurs & terraces loop", start: "Crystal Palace (rail)", distance: "1.6 mi (2.6 km)", highlights: "Victorian dinosaurs, the old palace terraces, a maze and the National Sports Centre.", suitability: "Quirky and fun — gentle undulations, lots to look at.", loop: true, path: [[51.4240, -0.0730], [51.4240, -0.0670], [51.4180, -0.0670], [51.4180, -0.0730], [51.4240, -0.0730]] },
+    { name: "Alexandra Park", type: "landmark", leg: "Ally Pally panorama loop", start: "Alexandra Palace (rail)", distance: "2.5 mi (4 km)", highlights: "'The People's Palace' with a sweeping panorama across the whole city; a proper hill up to the terrace.", suitability: "One big climb, then a view to earn it — a spirited group loop.", loop: true, path: [[51.5960, -0.1350], [51.5960, -0.1230], [51.5910, -0.1230], [51.5910, -0.1350], [51.5960, -0.1350]] },
+    { name: "Finsbury Park", type: "park", leg: "Perimeter loop", start: "Finsbury Park (Victoria/Piccadilly)", distance: "1.6 mi (2.6 km)", highlights: "Busy north London park with a boating lake, an athletics track and the New River on its edge.", suitability: "Flat, central and sociable — links straight onto the Parkland Walk.", loop: true, path: [[51.5740, -0.1020], [51.5740, -0.0940], [51.5690, -0.0940], [51.5690, -0.1020], [51.5740, -0.1020]] },
+    { name: "Parkland Walk", type: "trail", leg: "Finsbury Park → Highgate (disused railway)", start: "Finsbury Park (Victoria/Piccadilly)", distance: "3.0 mi (5 km)", highlights: "London's longest nature reserve along an old railway line — leafy, car-free and gently graded.", suitability: "Traffic-free and easy to follow — a lovely point-to-point; return for double.", loop: false, path: [[51.5710, -0.0980], [51.5730, -0.1150], [51.5760, -0.1300], [51.5780, -0.1430]] },
+    { name: "Grand Union Canal (Paddington Arm)", type: "canal", leg: "Little Venice → Alperton", start: "Warwick Avenue (Bakerloo)", distance: "5.0 mi (8 km)", highlights: "Flat, quiet towpath out of Little Venice past Kensal Green and Wembley's edge — narrowboats all the way.", suitability: "Flat and easy underfoot — a calm long run away from the traffic.", loop: false, path: [[51.5225, -0.1830], [51.5270, -0.2200], [51.5330, -0.2550], [51.5400, -0.2990]] },
+    { name: "Lea Navigation", type: "canal", leg: "Limehouse → Hackney Marshes", start: "Limehouse (DLR)", distance: "5.0 mi (8 km)", highlights: "Towpath from the Thames up past the Olympic Park and out to the wide-open Hackney Marshes.", suitability: "Flat, traffic-free and splittable — a favourite east London long run.", loop: false, path: [[51.5122, -0.0395], [51.5250, -0.0380], [51.5400, -0.0360], [51.5560, -0.0300]] },
+    { name: "Queen Elizabeth Olympic Park", type: "landmark", leg: "Stadium, Orbit & waterways loop", start: "Stratford / Hackney Wick", distance: "3.0 mi (5 km)", highlights: "The 2012 Stadium, the ArcelorMittal Orbit, the Aquatics Centre and waterside paths through the park.", suitability: "Wide, flat, way-marked paths — modern and sociable for all paces.", loop: true, path: [[51.5480, -0.0200], [51.5480, -0.0110], [51.5380, -0.0110], [51.5380, -0.0200], [51.5480, -0.0200]] },
+    { name: "Thames Path: Putney → Richmond", type: "river", leg: "Boat Race course to Richmond", start: "Putney Bridge (District)", distance: "6.0 mi (9.7 km)", highlights: "The Championship Course along the river past Barnes and Kew Gardens to riverside Richmond.", suitability: "Flat riverside miles — scenic and easy to follow; can be muddy in patches.", loop: false, path: [[51.4670, -0.2160], [51.4750, -0.2450], [51.4700, -0.2800], [51.4610, -0.3080]] },
+    { name: "Thames Barrier Path", type: "river", leg: "Greenwich → the Thames Barrier", start: "Cutty Sark (DLR)", distance: "4.0 mi (6.5 km)", highlights: "Downriver from Greenwich past the O2 to the silver hoods of the Thames Barrier.", suitability: "Flat, open and breezy — a straightforward point-to-point along the river.", loop: false, path: [[51.4830, -0.0090], [51.4880, 0.0080], [51.4930, 0.0230], [51.4975, 0.0360]] },
   ];
 
   const routeMap = { map: null, layer: null };
   // Real OSM route geometry (data/routes.geojson), keyed by slug in ROUTES order.
-  const ROUTE_IDS = ["regents-canal", "hyde-kensington", "grand-tour", "regents-park", "diana-memorial", "victoria-park", "battersea-park", "greenwich-park", "hampstead-heath", "stjames-green", "southwark-docks", "wormwood-scrubs"];
+  const ROUTE_IDS = ["regents-canal", "hyde-kensington", "grand-tour", "regents-park", "diana-memorial", "victoria-park", "battersea-park", "greenwich-park", "hampstead-heath", "stjames-green", "southwark-docks", "wormwood-scrubs",
+    "richmond-park", "bushy-park", "wimbledon-common", "clapham-common", "wandsworth-common", "brockwell-park", "dulwich-park", "crystal-palace-park", "alexandra-park", "finsbury-park", "parkland-walk", "grand-union-paddington", "lea-navigation", "olympic-park", "thames-putney-richmond", "thames-barrier"];
   let routesGeo = null;
   async function loadRoutes() {
     if (routesGeo) return routesGeo;
@@ -760,20 +786,22 @@
     m.fitBounds(L.latLngBounds(all), { padding: [34, 34] });
   }
 
-  function selectRoute(i) {
-    const cards = document.querySelectorAll("#routeList .route-card");
-    cards.forEach((el, j) => { el.classList.toggle("on", j === i); el.setAttribute("aria-pressed", j === i ? "true" : "false"); });
-    drawRoute(i);
-    if (window.matchMedia("(max-width: 860px)").matches && routeMap.map)
-      document.getElementById("routeMap").scrollIntoView({ behavior: "smooth", block: "center" });
-  }
+  // --- Route filters (type + distance) ----------------------------------
+  const routeKm = (r) => { const m = /([\d.]+)\s*km/.exec(r.distance); return m ? parseFloat(m[1]) : 0; };
+  const DIST_BUCKETS = [
+    { key: "short", label: "Short · under 5k", test: (k) => k > 0 && k < 5 },
+    { key: "medium", label: "Medium · 5–10k", test: (k) => k >= 5 && k <= 10 },
+    { key: "long", label: "Long · 10k+", test: (k) => k > 10 },
+  ];
+  const TYPE_LABELS = { all: "All", park: "Parks", trail: "Trails", canal: "Canals", river: "Rivers", landmark: "Landmarks", loop: "Loops", tube: "Tube" };
+  const routeFilter = { type: "all", dist: "all" };
+  const distBucket = (k) => { const b = DIST_BUCKETS.find((x) => x.test(k)); return b ? b.key : ""; };
+  const routeMatches = (r) => (routeFilter.type === "all" || r.type === routeFilter.type)
+    && (routeFilter.dist === "all" || distBucket(routeKm(r)) === routeFilter.dist);
 
-  function renderRoutes() {
-    const el = document.getElementById("routeList");
-    if (!el) return;
-    el.innerHTML = ROUTES.map((r, i) => {
-      const c = ROUTE_COLOURS[r.type] || "#0019A8";
-      return `<div class="route-card" data-i="${i}" role="button" tabindex="0" aria-pressed="false" style="border-top-color:${c}">
+  function routeCardHtml(r, i) {
+    const c = ROUTE_COLOURS[r.type] || "#0019A8";
+    return `<div class="route-card" data-i="${i}" role="button" tabindex="0" aria-pressed="false" style="border-top-color:${c}">
         <div class="rc-top"><span class="rc-type" style="background:${c}">${escapeHtml(r.type)}</span><span class="rc-dist">${escapeHtml(r.distance)}</span></div>
         <h3>${escapeHtml(r.name)}</h3>
         <p class="rc-leg">${escapeHtml(r.leg)}</p>
@@ -782,12 +810,59 @@
         ${r.suitability ? `<p class="rc-suit">${escapeHtml(r.suitability)}</p>` : ""}
         <p class="rc-show">Show on map →</p>
       </div>`;
-    }).join("");
+  }
+
+  // Rebuild the (filtered) card list; returns the original index of the first visible route.
+  function renderRouteCards() {
+    const el = document.getElementById("routeList");
+    if (!el) return -1;
+    const visible = ROUTES.map((r, i) => ({ r, i })).filter((x) => routeMatches(x.r));
+    if (!visible.length) {
+      el.innerHTML = `<p class="routes-empty">No routes match that filter — try a wider distance or another type.</p>`;
+      return -1;
+    }
+    el.innerHTML = visible.map((x) => routeCardHtml(x.r, x.i)).join("");
     el.querySelectorAll(".route-card").forEach((card) => {
       const i = parseInt(card.dataset.i, 10);
       card.addEventListener("click", () => selectRoute(i));
       card.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); selectRoute(i); } });
     });
+    return visible[0].i;
+  }
+
+  function renderFilters() {
+    const el = document.getElementById("routeFilters");
+    if (!el) return;
+    const types = ["all", ...Array.from(new Set(ROUTES.map((r) => r.type)))];
+    const chip = (group, val, label) =>
+      `<button type="button" class="rf-chip${routeFilter[group] === val ? " on" : ""}" data-group="${group}" data-val="${val}">${escapeHtml(label)}</button>`;
+    const typeChips = types.map((t) => chip("type", t, TYPE_LABELS[t] || t)).join("");
+    const distChips = [{ key: "all", label: "Any distance" }, ...DIST_BUCKETS].map((d) => chip("dist", d.key, d.label)).join("");
+    el.innerHTML = `<div class="rf-row" role="group" aria-label="Filter routes by type">${typeChips}</div>
+      <div class="rf-row" role="group" aria-label="Filter routes by distance">${distChips}</div>`;
+    el.querySelectorAll(".rf-chip").forEach((b) => b.addEventListener("click", () => {
+      routeFilter[b.dataset.group] = b.dataset.val;
+      renderFilters();
+      const first = renderRouteCards();
+      if (first >= 0) selectRoute(first);
+    }));
+  }
+
+  function selectRoute(i) {
+    document.querySelectorAll("#routeList .route-card").forEach((el) => {
+      const on = +el.dataset.i === i;
+      el.classList.toggle("on", on); el.setAttribute("aria-pressed", on ? "true" : "false");
+    });
+    drawRoute(i);
+    if (window.matchMedia("(max-width: 860px)").matches && routeMap.map)
+      document.getElementById("routeMap").scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+
+  function renderRoutes() {
+    const el = document.getElementById("routeList");
+    if (!el) return;
+    renderFilters();
+    const first = renderRouteCards();
 
     const mapEl = document.getElementById("routeMap");
     if (mapEl && typeof L !== "undefined") {
@@ -795,7 +870,7 @@
       cartoBasemap().addTo(routeMap.map);
       modifierWheelZoom(routeMap.map);
       observeMapSize(routeMap.map);
-      requestAnimationFrame(async () => { routeMap.map.invalidateSize(false); await loadRoutes(); selectRoute(0); });
+      requestAnimationFrame(async () => { routeMap.map.invalidateSize(false); await loadRoutes(); selectRoute(first >= 0 ? first : 0); });
     }
   }
 
@@ -1154,7 +1229,22 @@
   function tmComputeKm(net, hi) {
     const out = {};
     if (!hi || !net[hi]) return out;
-    const line = net[hi], br = line.branches.reduce((a, b) => (b.length > a.length ? b : a), line.branches[0] || []);
+    const line = net[hi];
+    // Prefer the actual run's ordered waypoints so times accumulate from the real start
+    // (e.g. Chesham → Aldgate), not from the arbitrary first stop of the line's longest branch.
+    const wp = nextRun && norm(nextRun.key) === norm(line.name) ? WAYPOINTS[nextRun.key] : null;
+    if (wp && wp.length) {
+      const idByName = {};
+      for (const sid in line.stations) idByName[norm(line.stations[sid].n)] = sid;
+      let cum = 0;
+      for (let i = 0; i < wp.length; i++) {
+        if (i > 0) cum += haversineKm([0, wp[i - 1][1], wp[i - 1][2]], [0, wp[i][1], wp[i][2]]) * ROAD_FACTOR;
+        const sid = idByName[norm(wp[i][0])];
+        if (sid !== undefined) out[sid] = cum;
+      }
+      return out;
+    }
+    const br = line.branches.reduce((a, b) => (b.length > a.length ? b : a), line.branches[0] || []);
     let cum = 0;
     for (let i = 0; i < br.length; i++) {
       if (i > 0) { const a = line.stations[br[i - 1]], b = line.stations[br[i]]; cum += haversineKm([0, a.lat, a.lon], [0, b.lat, b.lon]) * ROAD_FACTOR; }
@@ -1423,6 +1513,13 @@
     holder.scrollTop = ((y0 + y1) / 2 - vb.y) * scale - holder.clientHeight / 2;
   }
 
+  // Underline each section heading in a rotating official Tube-line colour.
+  function themeSections() {
+    const cols = ["#E32017", "#003688", "#0098D4", "#00782A", "#B36305", "#9B0056", "#6950A1", "#000000", "#F3A9BB", "#A0A5A9"];
+    document.querySelectorAll(".section-title").forEach((h, i) => h.style.setProperty("--accent", cols[i % cols.length]));
+  }
+
+  themeSections();
   renderLive();
   renderTubeMap();
   renderLineStats();
