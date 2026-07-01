@@ -799,7 +799,7 @@
         </div>
       </div>
       <div class="tm-scroll" id="tmHolder"><p class="tm-loading">Loading the map…</p></div>
-      <p class="tm-scrollhint">Scroll or drag inside the map to pan · use +/&minus; to zoom.</p>`;
+      <p class="tm-scrollhint">Drag to pan · ⌘/Ctrl + scroll to zoom to the cursor · or use +/&minus;.</p>`;
     root.querySelectorAll(".tm-tab").forEach((b) => b.addEventListener("click", () => {
       curMap = b.dataset.map;
       curZoom = defaultZoom(curMapKind());
@@ -828,6 +828,22 @@
     const endDrag = () => { drag = false; holder.style.cursor = "grab"; };
     holder.addEventListener("pointerup", endDrag);
     holder.addEventListener("pointercancel", endDrag);
+    // Cmd/Ctrl + wheel to zoom toward the cursor (trackpad pinch sends ctrl+wheel).
+    holder.addEventListener("wheel", (e) => {
+      if (!(e.metaKey || e.ctrlKey) || curMapKind() === "data") return;
+      const node = holder.querySelector("svg, img");
+      if (!node) return;
+      e.preventDefault();
+      const rect = holder.getBoundingClientRect();
+      const ox = e.clientX - rect.left, oy = e.clientY - rect.top;
+      const px = holder.scrollLeft + ox, py = holder.scrollTop + oy;
+      const before = curZoom;
+      curZoom = Math.min(6, Math.max(0.5, curZoom * (e.deltaY < 0 ? 1.12 : 1 / 1.12)));
+      applyZoom();
+      const scale = curZoom / before;
+      holder.scrollLeft = px * scale - ox;
+      holder.scrollTop = py * scale - oy;
+    }, { passive: false });
     loadMap();
   }
 
