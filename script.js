@@ -15,7 +15,7 @@
     instagram: "https://www.instagram.com/ldntuberun",
     facebook: "https://www.facebook.com/LdnTubeRun/",
     twitter: "https://twitter.com/LdnTubeRun",
-    eventbrite: "http://london-tube-run.eventbrite.co.uk",
+    eventbrite: "https://www.eventbrite.co.uk/o/london-tube-run-15271012006",
     whatsapp: "", // TODO: paste the WhatsApp group invite link when ready
   };
 
