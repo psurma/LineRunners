@@ -970,6 +970,17 @@
     go.addEventListener("click", trace);
     pick.addEventListener("change", trace);
     dir.addEventListener("change", () => { if ((pick.value || "").trim()) trace(); });
+
+    // Quick-pick chips for a few scenic/iconic routes (all current TfL routes).
+    const faves = [["24", "Pimlico – Hampstead Heath"], ["11", "Westminster & St Paul's sightseeing"], ["15", "Tower of London (Routemaster heritage)"], ["9", "Kensington & the West End"], ["159", "Marble Arch – Streatham"], ["88", "Camden – Clapham via the West End"]];
+    const quick = document.getElementById("busQuick");
+    if (quick) {
+      quick.innerHTML = `<span class="bq-lbl">Try one:</span>` + faves.map(([id, hint]) =>
+        `<button type="button" class="bq-chip" data-route="${escapeHtml(id)}" title="${escapeHtml(hint)}">${escapeHtml(id)}</button>`).join("");
+      quick.querySelectorAll(".bq-chip").forEach((b) => b.addEventListener("click", () => {
+        pick.value = b.dataset.route; dir.value = "outbound"; trace();
+      }));
+    }
   }
 
   // --- Render: Line stats ------------------------------------------------

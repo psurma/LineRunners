@@ -858,3 +858,9 @@ body.tm-map-active .tm-zoom, body.tm-map-active .tm-scrollhint { display: none; 
 .bus-mi { color: var(--muted); font-weight: 600; font-size: 15px; }
 .bus-error, .bus-loading { color: var(--muted); padding: 10px 0; }
 .bus-error strong { color: var(--tfl-red); }
+
+/* Bus quick-pick chips */
+.bus-quick { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: -4px 0 18px; }
+.bq-lbl { color: var(--muted); font-size: 13px; font-weight: 600; }
+.bq-chip { font: 600 13px Inter, sans-serif; padding: 5px 13px; border-radius: 20px; border: 1px solid var(--line); background: #fff; color: var(--tfl-blue); cursor: pointer; transition: all 0.12s; }
+.bq-chip:hover { border-color: var(--tfl-red); color: var(--tfl-red); }
