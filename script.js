@@ -101,7 +101,7 @@
   //   notes      — free text
   const RUN_PLAN = [
     {
-      type: "tube", line: "Metropolitan", date: "2026-07-04",
+      type: "tube", line: "Metropolitan", date: "2026-07-04", bound: "Southbound",
       leg: "Chesham → Aldgate", start: "Chesham Underground Station",
       distance: "2 days · ~40 km",
       routeLink: "https://www.strava.com/clubs/311876/group_events/3499820905351240354",
@@ -234,6 +234,7 @@
       stay: entry.stay || null,
       notes: entry.notes || null,
       leg: entry.leg, start: entry.start, distance: entry.distance,
+      bound: entry.bound || null,        // explicit line direction (e.g. TfL "Southbound"); overrides the computed compass
     };
     if (entry.type === "tube") {
       return { ...rich, key: entry.line, badge: `${entry.line} line`, colour: LINE_COLOURS[entry.line] || "#0019A8" };
@@ -289,16 +290,15 @@
     return h ? `${h}h ${m}m` : `${m} min`;
   }
 
-  // Overall compass heading of a run, start → finish (8-point, e.g. "Southeastbound").
+  // Overall run direction as one of the four cardinals (Northbound/Eastbound/…),
+  // start → finish. Compares north/south vs east/west travel and picks the larger.
   function compassBound(wp) {
     if (!wp || wp.length < 2) return null;
     const a = wp[0], b = wp[wp.length - 1];
-    const lat1 = a[1] * Math.PI / 180, lat2 = b[1] * Math.PI / 180, dLon = (b[2] - a[2]) * Math.PI / 180;
-    const y = Math.sin(dLon) * Math.cos(lat2);
-    const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
-    const brng = (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
-    const dirs = ["North", "Northeast", "East", "Southeast", "South", "Southwest", "West", "Northwest"];
-    return dirs[Math.round(brng / 45) % 8] + "bound";
+    const dNorthKm = (b[1] - a[1]) * 111;                                   // + = north
+    const dEastKm = (b[2] - a[2]) * 111 * Math.cos((a[1] + b[1]) / 2 * Math.PI / 180); // + = east
+    if (Math.abs(dEastKm) > Math.abs(dNorthKm)) return dEastKm >= 0 ? "Eastbound" : "Westbound";
+    return dNorthKm >= 0 ? "Northbound" : "Southbound";
   }
 
   // --- Render: Next run card + weather ----------------------------------
@@ -309,7 +309,7 @@
     el.style.borderLeftColor = c;
     el.style.setProperty("--run-col", c);
     const md = nextRun.days && nextRun.days.length > 1 ? nextRun.days : null;
-    const bound = compassBound(WAYPOINTS[nextRun.key]);
+    const bound = nextRun.bound || compassBound(WAYPOINTS[nextRun.key]);
     const endDate = md ? new Date(nextRun.date.getTime() + (md.length - 1) * 86400000) : null;
     el.classList.toggle("is-multiday", !!md);
     el.innerHTML = `

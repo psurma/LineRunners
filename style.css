@@ -1262,3 +1262,8 @@ body {
 .jb-end .jb-name { font-weight: 800; }
 .jb-end .jb-time { color: var(--tfl-blue); }
 .jb-foot { margin-top: 12px; font-size: 12px; color: var(--muted); }
+
+/* Journey board: highlight the row under the cursor for easier time-reading */
+.jb-stop { border-radius: 8px; transition: background 0.1s; }
+.jb-stop:hover { background: rgba(0, 25, 168, 0.06); }
+.jb-stop:hover .jb-time { color: var(--tfl-blue); }
