@@ -611,6 +611,11 @@ section { max-width: var(--max); margin: 0 auto; padding: clamp(48px, 8vw, 88px)
 .geo-time { font-family: Inter, sans-serif; font-weight: 700; font-size: 5.5px; paint-order: stroke; stroke: #fff; stroke-width: 1.3px; stroke-linejoin: round; pointer-events: none; }
 .geo-svg circle { cursor: pointer; }
 .geo-wc-t { font-family: Inter, sans-serif; font-weight: 800; font-size: 3.4px; fill: #fff; text-anchor: middle; text-transform: uppercase; pointer-events: none; }
+/* semantic schematic */
+.sch-svg { display: block; height: auto; background: #fff; }
+.sch-svg circle { cursor: pointer; }
+.sch-lbl { font-family: Inter, sans-serif; font-weight: 700; font-size: 6.6px; fill: #14171f; paint-order: stroke; stroke: #fff; stroke-width: 1.7px; stroke-linejoin: round; pointer-events: none; }
+.sch-time { font-family: Inter, sans-serif; font-weight: 700; font-size: 6px; paint-order: stroke; stroke: #fff; stroke-width: 1.5px; stroke-linejoin: round; pointer-events: none; }
 .geo-modes { display: inline-flex; align-items: center; gap: 4px; margin-left: 8px; }
 .geo-mode { font: 600 12px Inter, sans-serif; border: 1px solid var(--line); background: #fff; color: var(--muted); padding: 2px 9px; border-radius: 20px; cursor: pointer; }
 .geo-mode.on { background: var(--tfl-blue); border-color: var(--tfl-blue); color: #fff; }

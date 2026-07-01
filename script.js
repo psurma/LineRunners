@@ -744,6 +744,7 @@
   // Three maps in a tabbed, zoomable viewer.
   const MAPS = [
     { key: "standard", file: "img/tube-map.svg", label: "Tube map", kind: "svg", highlight: true },
+    { key: "schematic", label: "Schematic ✦", kind: "schematic" },
     { key: "running", label: "Running times", kind: "data" },
     { key: "walking", file: "img/walking-map.png", label: "Walking times", kind: "img" },
     { key: "toilets", file: "img/toilet-map.png", label: "Toilets 🚻", kind: "img" },
@@ -758,7 +759,7 @@
   let toiletSet = null;       // Set of station ids with confirmed toilets
   let geoTimeMode = "run";    // run | walk | off — badge mode on the highlighted line
   let geoShowToilets = true;  // toilet pins on the geographic map
-  function defaultZoom(kind) { return kind === "geo" ? 1.7 : kind === "data" ? 1 : 1.6; }
+  function defaultZoom(kind) { return kind === "geo" ? 1.7 : kind === "schematic" ? 1.3 : kind === "data" ? 1 : 1.6; }
   async function loadNetwork() {
     if (netData) return netData;
     const [nRes, tRes] = await Promise.all([fetch("data/tube-network.json"), fetch("data/station-toilets.json")]);
@@ -767,6 +768,21 @@
     toiletSet = new Set(tRes.ok ? await tRes.json() : []);
     return netData;
   }
+  let schemData = null;       // data/schematic.json — Beck-style schematic coords (d3-tube-map, MIT)
+  async function loadSchematic() {
+    if (schemData) return schemData;
+    const res = await fetch("data/schematic.json");
+    if (!res.ok) throw new Error("schematic data");
+    schemData = await res.json();
+    return schemData;
+  }
+  const norm = (s) => (s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  const LABEL_POS = {
+    N: { dx: 0, dy: -1, anchor: "middle" }, S: { dx: 0, dy: 1, anchor: "middle" },
+    E: { dx: 1, dy: 0, anchor: "start" }, W: { dx: -1, dy: 0, anchor: "end" },
+    NE: { dx: 1, dy: -1, anchor: "start" }, NW: { dx: -1, dy: -1, anchor: "end" },
+    SE: { dx: 1, dy: 1, anchor: "start" }, SW: { dx: -1, dy: 1, anchor: "end" },
+  };
 
   function renderTubeMap() {
     const root = document.getElementById("tubeMap");
@@ -823,6 +839,7 @@
     const active = cfg.highlight && nextRun && LINE_FILL[nextRun.key] ? nextRun.key : null;
     const CAPTIONS = {
       geo: `Our own live map, built from open TfL data — zoom, drag and tap a station.`,
+      schematic: `Our own semantic Beck-style schematic (beta).`,
       standard: active ? `<strong style="color:${LINE_COLOURS[active]}">${escapeHtml(active)} line</strong> highlighted for the next run — zoom in to trace it.` : `The official London Underground map.`,
       running: `Estimated running time to each stop on the next run's line.`,
       walking: `Walking minutes between stations — handy for short hops.`,
@@ -834,6 +851,9 @@
     if (zoom) zoom.style.visibility = cfg.kind === "data" ? "hidden" : "visible";
     holder.style.cursor = cfg.kind === "data" ? "auto" : "grab";
     holder.innerHTML = `<p class="tm-loading">Loading…</p>`;
+
+    // Our own semantic schematic (Beck-style).
+    if (cfg.kind === "schematic") { renderSchematic(holder, cap).catch(() => { holder.innerHTML = `<p class="diagram-empty">Couldn't build the schematic right now.</p>`; }); return; }
 
     // Our own data-driven geographic map.
     if (cfg.kind === "geo") { renderGeoMap(holder, cap).catch(() => { holder.innerHTML = `<p class="diagram-empty">Couldn't build the map right now.</p>`; }); return; }
@@ -1007,6 +1027,102 @@
     holder.innerHTML = buildGeoSvg(net, hi);
     applyZoom();
     requestAnimationFrame(() => { if (hi) centreGeoOn(holder, hi, net); else centreContent(holder); });
+  }
+
+  // --- Our own SEMANTIC Beck-style schematic (data/schematic.json) --------
+  function schemLineForNext(schem) {
+    if (!nextRun) return null;
+    const k = (nextRun.key || "").toLowerCase();
+    const l = schem.lines.find((L) => L.name.toLowerCase() === k || (L.label || "").toLowerCase() === k);
+    return l ? l.name : null;
+  }
+
+  function schemLabelText(schem, name) { return (schem.stations[name] && schem.stations[name].label || name).replace(/\n/g, " "); }
+
+  function schemLabel(schem, nd, x, y, timeInfo) {
+    const lp = LABEL_POS[nd.labelPos || "E"], off = 6, lh = 6.4;
+    const raw = (schem.stations[nd.name] && schem.stations[nd.name].label) || nd.name;
+    const rows = raw.split("\n");
+    const ax = x + lp.dx * off;
+    let baseline, y0;
+    if (lp.dy < 0) { baseline = "auto"; y0 = y + lp.dy * off - (rows.length - 1) * lh; }
+    else if (lp.dy > 0) { baseline = "hanging"; y0 = y + lp.dy * off; }
+    else { baseline = "middle"; y0 = y - (rows.length - 1) * lh / 2; }
+    let t = `<text class="sch-lbl" text-anchor="${lp.anchor}" dominant-baseline="${baseline}">`;
+    rows.forEach((ln, i) => { t += `<tspan x="${ax.toFixed(1)}" y="${(y0 + i * lh).toFixed(1)}">${escapeHtml(ln)}</tspan>`; });
+    t += `</text>`;
+    if (timeInfo && timeInfo.show) {
+      const ty = (lp.dy < 0 ? y - off + 1 : y0 + rows.length * lh);
+      t += `<text class="sch-time" x="${ax.toFixed(1)}" y="${ty.toFixed(1)}" text-anchor="${lp.anchor}" dominant-baseline="hanging" fill="${timeInfo.color}">${fmtTime(timeInfo.mins)}</text>`;
+    }
+    return t;
+  }
+
+  function buildSchematicSvg(schem, net, hi) {
+    const S = 15, pad = 60;
+    let minX = 1e9, maxX = -1e9, minY = 1e9, maxY = -1e9;
+    schem.lines.forEach((L) => L.nodes.forEach((nd) => { const [x, y] = nd.coords;
+      if (x < minX) minX = x; if (x > maxX) maxX = x; if (y < minY) minY = y; if (y > maxY) maxY = y; }));
+    const W = Math.round((maxX - minX) * S + 2 * pad), H = Math.round((maxY - minY) * S + 2 * pad);
+    const X = (x) => pad + (x - minX) * S, Y = (y) => pad + (maxY - y) * S; // flip Y (north up)
+
+    // cumulative km along the highlighted line, using real geographic coords by name
+    const coordByName = {};
+    for (const id in net) { const st = net[id].stations; for (const sid in st) { const s = st[sid]; const k = norm(s.n); if (!coordByName[k]) coordByName[k] = s; } }
+    const tmap = {}; let hiColor = "#0019A8";
+    if (hi) {
+      const L = schem.lines.find((l) => l.name === hi); hiColor = L.color;
+      let cum = 0, prev = null;
+      L.nodes.filter((n) => n.name).forEach((n) => { const c = coordByName[norm(n.name)];
+        if (c && prev) cum += haversineKm([0, prev.lat, prev.lon], [0, c.lat, c.lon]) * ROAD_FACTOR;
+        if (c) prev = c; tmap[n.name] = cum; });
+    }
+    const perKm = geoTimeMode === "walk" ? WALK_MIN_PER_KM : (parseFloat(paceSel && paceSel.value) || 6.5);
+
+    const order = schem.lines.slice().sort((a, b) => ((a.name === hi) ? 1 : 0) - ((b.name === hi) ? 1 : 0));
+    let paths = "";
+    order.forEach((L) => { const dim = hi && L.name !== hi, w = L.name === hi ? 6 : 3.4, op = dim ? 0.25 : 1;
+      const pts = L.nodes.map((nd) => `${X(nd.coords[0]).toFixed(1)},${Y(nd.coords[1]).toFixed(1)}`).join(" ");
+      paths += `<polyline points="${pts}" fill="none" stroke="${L.color}" stroke-width="${w}" stroke-linejoin="round" stroke-linecap="round" opacity="${op}"/>`;
+    });
+
+    let dots = "", labels = ""; const drawn = new Set();
+    order.forEach((L) => { L.nodes.forEach((nd) => { if (!nd.name || drawn.has(nd.name)) return; drawn.add(nd.name);
+      const x = X(nd.coords[0]), y = Y(nd.coords[1]);
+      const onHi = tmap[nd.name] !== undefined, op = hi && !onHi ? 0.3 : 1, inter = nd.marker === "interchange";
+      dots += inter
+        ? `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="4.4" fill="#fff" stroke="#111" stroke-width="1.6" opacity="${op}"><title>${escapeHtml(schemLabelText(schem, nd.name))}</title></circle>`
+        : `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="2.6" fill="${L.color}" opacity="${op}"><title>${escapeHtml(schemLabelText(schem, nd.name))}</title></circle>`;
+      if (!hi || onHi) labels += schemLabel(schem, nd, x, y, onHi ? { mins: tmap[nd.name] * perKm, show: geoTimeMode !== "off", color: hiColor } : null);
+    }); });
+
+    return `<svg class="tm-svg sch-svg" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" style="width:${curZoom * 100}%">`
+      + `<rect width="${W}" height="${H}" fill="#fff"/>${paths}${dots}${labels}</svg>`;
+  }
+
+  function schematicCaption(cap, schem, net, hi, holder) {
+    if (!cap) return;
+    const col = hi ? schem.lines.find((l) => l.name === hi).color : "#0019A8";
+    const modes = hi ? `<span class="geo-modes">Times: ${["run", "walk", "off"].map((m) =>
+      `<button type="button" class="geo-mode" data-mode="${m}"${geoTimeMode === m ? ' data-on="1"' : ""}>${m === "off" ? "Off" : m[0].toUpperCase() + m.slice(1)}</button>`).join("")}</span>` : "";
+    cap.innerHTML = (hi
+      ? `<strong style="color:${col}">${escapeHtml(hi)} line</strong> on our own semantic schematic <em>(beta — central zone, expanding)</em>. `
+      : `Our own semantic Beck-style schematic <em>(beta — central zone, expanding)</em>. `) + modes;
+    cap.querySelectorAll(".geo-mode[data-on]").forEach((b) => b.classList.add("on"));
+    cap.querySelectorAll(".geo-mode[data-mode]").forEach((b) => b.addEventListener("click", () => {
+      geoTimeMode = b.dataset.mode;
+      cap.querySelectorAll(".geo-mode[data-mode]").forEach((x) => x.classList.toggle("on", x === b));
+      holder.innerHTML = buildSchematicSvg(schem, net, hi); applyZoom();
+    }));
+  }
+
+  async function renderSchematic(holder, cap) {
+    const [schem] = await Promise.all([loadSchematic(), loadNetwork()]);
+    const hi = schemLineForNext(schem);
+    schematicCaption(cap, schem, netData, hi, holder);
+    holder.innerHTML = buildSchematicSvg(schem, netData, hi);
+    applyZoom();
+    requestAnimationFrame(() => centreContent(holder));
   }
 
   // Per-station running times for the next run's line (uses its WAYPOINTS).

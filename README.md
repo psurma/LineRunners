@@ -39,4 +39,17 @@ Bump the `?v=` query on the `style.css` / `script.js` links in `index.html` afte
 
 ## Maps
 
-Map images live in `img/` (converted from PDFs with `pdftocairo`). The standard map is an SVG so a single line can be highlighted; the rest are PNGs. TfL map artwork is © Transport for London — fine for club use, but a public deployment should use openly-licensed alternatives or a TfL licence.
+The map viewer (`#network`) has several tabs:
+
+- **Tube map** — the official TfL schematic (vector SVG) with the next line highlighted. TfL artwork, © Transport for London.
+- **Schematic ✦** — *our own* semantic Beck-style schematic (`data/schematic.json`), drawn from data so we control every station element: our labels, per-station run/walk times, precise line highlighting. Beta, central zone, expanding line by line.
+- **Geographic** — our own map from real coordinates (`data/tube-network.json`), with run/walk time badges and toilet pins.
+- **Running / Walking times, Toilets, Overground, Rail connections** — computed table and reference images.
+
+### Data & attribution
+
+- `data/tube-network.json` — 11 lines / 272 stations with real coordinates, compiled from the [TfL Unified API](https://api.tfl.gov.uk) (open data).
+- `data/station-toilets.json` — stations with confirmed toilets, from TfL StopPoint facility data.
+- `data/schematic.json` — Beck-style schematic coordinates, seeded from [`d3-tube-map`](https://github.com/johnwalley/d3-tube-map) by John Walley (**MIT licence**), extended over time.
+
+Static image maps in `img/` were converted from PDFs with `pdftocairo`. TfL map artwork is © Transport for London — fine for club use, but a public deployment should prefer the openly-licensed / own-drawn maps above.
