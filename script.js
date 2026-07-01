@@ -743,16 +743,27 @@
 
   // Three maps in a tabbed, zoomable viewer.
   const MAPS = [
-    { key: "standard", file: "img/tube-map.svg", label: "Standard", kind: "svg", highlight: true },
+    { key: "standard", file: "img/tube-map.svg", label: "Tube map", kind: "svg", highlight: true },
     { key: "running", label: "Running times", kind: "data" },
     { key: "walking", file: "img/walking-map.png", label: "Walking times", kind: "img" },
     { key: "toilets", file: "img/toilet-map.png", label: "Toilets 🚻", kind: "img" },
+    { key: "geo", label: "Geographic", kind: "geo" },
     { key: "overground", file: "img/overground-map.png", label: "Overground", kind: "img" },
     { key: "connections", file: "img/connections-map.png", label: "Rail connections", kind: "img" },
   ];
   const svgCache = {};
   let curMap = "standard";
   let curZoom = 1.6;
+  let netData = null;         // data/tube-network.json, lazy-loaded
+  let geoTimeMode = "run";    // run | walk | off — badge mode on the highlighted line
+  function defaultZoom(kind) { return kind === "geo" ? 1.7 : kind === "data" ? 1 : 1.6; }
+  async function loadNetwork() {
+    if (netData) return netData;
+    const res = await fetch("data/tube-network.json");
+    if (!res.ok) throw new Error("network data");
+    netData = await res.json();
+    return netData;
+  }
 
   function renderTubeMap() {
     const root = document.getElementById("tubeMap");
@@ -772,12 +783,13 @@
       <p class="tm-scrollhint">Scroll or drag inside the map to pan · use +/&minus; to zoom.</p>`;
     root.querySelectorAll(".tm-tab").forEach((b) => b.addEventListener("click", () => {
       curMap = b.dataset.map;
+      curZoom = defaultZoom(curMapKind());
       root.querySelectorAll(".tm-tab").forEach((x) => x.classList.toggle("on", x === b));
       loadMap();
     }));
     root.querySelectorAll(".tm-zbtn").forEach((b) => b.addEventListener("click", () => {
       const z = b.dataset.z;
-      curZoom = z === "in" ? Math.min(5, curZoom + 0.3) : z === "out" ? Math.max(0.8, curZoom - 0.3) : 1.6;
+      curZoom = z === "in" ? Math.min(5, curZoom + 0.3) : z === "out" ? Math.max(0.8, curZoom - 0.3) : defaultZoom(curMapKind());
       applyZoom();
     }));
     // Drag-to-pan inside the map viewport.
@@ -807,7 +819,8 @@
     const cfg = MAPS.find((m) => m.key === curMap);
     const active = cfg.highlight && nextRun && LINE_FILL[nextRun.key] ? nextRun.key : null;
     const CAPTIONS = {
-      standard: active ? `<strong style="color:${LINE_COLOURS[active]}">${escapeHtml(active)} line</strong> highlighted for the next run — zoom in to trace it.` : `The standard London Underground map.`,
+      geo: `Our own live map, built from open TfL data — zoom, drag and tap a station.`,
+      standard: active ? `<strong style="color:${LINE_COLOURS[active]}">${escapeHtml(active)} line</strong> highlighted for the next run — zoom in to trace it.` : `The official London Underground map.`,
       running: `Estimated running time to each stop on the next run's line.`,
       walking: `Walking minutes between stations — handy for short hops.`,
       toilets: `Stations with toilets — plan your pit stops.`,
@@ -818,6 +831,9 @@
     if (zoom) zoom.style.visibility = cfg.kind === "data" ? "hidden" : "visible";
     holder.style.cursor = cfg.kind === "data" ? "auto" : "grab";
     holder.innerHTML = `<p class="tm-loading">Loading…</p>`;
+
+    // Our own data-driven geographic map.
+    if (cfg.kind === "geo") { renderGeoMap(holder, cap).catch(() => { holder.innerHTML = `<p class="diagram-empty">Couldn't build the map right now.</p>`; }); return; }
 
     // Data view: a computed per-station running-time table (no image).
     if (cfg.kind === "data") { renderRunningTimes(holder); return; }
@@ -870,6 +886,110 @@
   }
 
   function curMapKind() { return (MAPS.find((m) => m.key === curMap) || {}).kind; }
+
+  // --- Our own geographic tube map (data/tube-network.json) ---------------
+  // Resolve the next run's line to a network id (tube runs only).
+  function geoHighlightId(net) {
+    if (!nextRun) return null;
+    const key = (nextRun.key || "").toLowerCase();
+    for (const id in net) if (net[id].name.toLowerCase() === key) return id;
+    return null;
+  }
+
+  // Equirectangular projection of lat/lon → a 1000-wide viewBox.
+  function geoProject(net) {
+    let minLat = 90, maxLat = -90, minLon = 180, maxLon = -180;
+    for (const id in net) { const st = net[id].stations; for (const sid in st) { const s = st[sid];
+      if (s.lat < minLat) minLat = s.lat; if (s.lat > maxLat) maxLat = s.lat;
+      if (s.lon < minLon) minLon = s.lon; if (s.lon > maxLon) maxLon = s.lon; } }
+    const kx = Math.cos(((minLat + maxLat) / 2) * Math.PI / 180);
+    const W = 1000, pad = 26;
+    const scale = (W - 2 * pad) / ((maxLon - minLon) * kx);
+    const H = Math.round((maxLat - minLat) * scale + 2 * pad);
+    return { W, H, X: (lon) => pad + (lon - minLon) * kx * scale, Y: (lat) => pad + (maxLat - lat) * scale };
+  }
+
+  function buildGeoSvg(net, hi) {
+    const p = geoProject(net);
+    // station id → line ids serving it (for interchange dots + tooltips)
+    const slines = {};
+    for (const id in net) { const st = net[id].stations; for (const sid in st) (slines[sid] || (slines[sid] = [])).push(id); }
+    const order = Object.keys(net).sort((a, b) => (a === hi ? 1 : 0) - (b === hi ? 1 : 0)); // highlighted on top
+
+    let paths = "";
+    for (const id of order) { const line = net[id], dim = hi && id !== hi;
+      const w = id === hi ? 4.4 : 2.4, op = dim ? 0.18 : 1;
+      for (const br of line.branches) {
+        const pts = br.map((sid) => { const s = line.stations[sid]; return `${p.X(s.lon).toFixed(1)},${p.Y(s.lat).toFixed(1)}`; }).join(" ");
+        paths += `<polyline points="${pts}" fill="none" stroke="${line.colour}" stroke-width="${w}" stroke-linejoin="round" stroke-linecap="round" opacity="${op}"/>`;
+      }
+    }
+
+    let dots = ""; const drawn = new Set();
+    for (const id of order) { const line = net[id], dim = hi && id !== hi;
+      for (const sid in line.stations) { if (drawn.has(sid)) continue; drawn.add(sid);
+        const s = line.stations[sid], x = p.X(s.lon).toFixed(1), y = p.Y(s.lat).toFixed(1);
+        const onHi = hi && slines[sid].indexOf(hi) >= 0, op = dim && !onHi ? 0.22 : 1, inter = slines[sid].length > 1;
+        const title = `<title>${escapeHtml(s.n)} — ${escapeHtml(slines[sid].map((l) => net[l].name).join(", "))}</title>`;
+        dots += inter
+          ? `<circle cx="${x}" cy="${y}" r="${onHi ? 3.4 : 2.8}" fill="#fff" stroke="#111" stroke-width="1" opacity="${op}">${title}</circle>`
+          : `<circle cx="${x}" cy="${y}" r="1.7" fill="${line.colour}" opacity="${op}">${title}</circle>`;
+      }
+    }
+
+    // Labels + cumulative time badges on the highlighted line.
+    let labels = "";
+    if (hi) {
+      const line = net[hi];
+      const br = line.branches.reduce((a, b) => (b.length > a.length ? b : a), line.branches[0] || []);
+      const perKm = geoTimeMode === "walk" ? WALK_MIN_PER_KM : (parseFloat(paceSel && paceSel.value) || 6.5);
+      let cum = 0; const tmap = {};
+      for (let i = 0; i < br.length; i++) { if (i > 0) { const a = line.stations[br[i - 1]], b = line.stations[br[i]];
+        cum += haversineKm([0, a.lat, a.lon], [0, b.lat, b.lon]) * ROAD_FACTOR; } tmap[br[i]] = cum; }
+      for (const sid in line.stations) { const s = line.stations[sid], x = +p.X(s.lon).toFixed(1), y = +p.Y(s.lat).toFixed(1);
+        labels += `<text class="geo-lbl" x="${x + 4}" y="${y + 2.5}">${escapeHtml(s.n)}</text>`;
+        if (geoTimeMode !== "off" && tmap[sid] !== undefined)
+          labels += `<text class="geo-time" x="${x + 4}" y="${y + 9}" fill="${line.colour}">${fmtTime(tmap[sid] * perKm)}</text>`;
+      }
+    }
+
+    return `<svg class="tm-svg geo-svg" viewBox="0 0 ${p.W} ${p.H}" xmlns="http://www.w3.org/2000/svg" style="width:${curZoom * 100}%">`
+      + `<rect x="0" y="0" width="${p.W}" height="${p.H}" fill="#f7f9fc"/>${paths}${dots}${labels}</svg>`;
+  }
+
+  function centreGeoOn(holder, hi, net) {
+    const svg = holder.querySelector("svg"); if (!svg) return;
+    const p = geoProject(net), line = net[hi];
+    let sx = 0, sy = 0, n = 0;
+    for (const sid in line.stations) { const s = line.stations[sid]; sx += p.X(s.lon); sy += p.Y(s.lat); n++; }
+    if (!n) return;
+    const r = svg.getBoundingClientRect();
+    holder.scrollLeft = (sx / n / p.W) * r.width - holder.clientWidth / 2;
+    holder.scrollTop = (sy / n / p.H) * r.height - holder.clientHeight / 2;
+  }
+
+  function geoCaption(cap, net, hi, holder) {
+    if (!cap) return;
+    const modes = hi ? `<span class="geo-modes">Times: ${["run", "walk", "off"].map((m) =>
+      `<button type="button" class="geo-mode${geoTimeMode === m ? " on" : ""}" data-mode="${m}">${m === "off" ? "Off" : m[0].toUpperCase() + m.slice(1)}</button>`).join("")}</span>` : "";
+    cap.innerHTML = (hi
+      ? `<strong style="color:${net[hi].colour}">${escapeHtml(net[hi].name)} line</strong> lit up for the next run — every other line dimmed. `
+      : `Our own live map, built from open TfL data — zoom, drag and tap a station. `) + modes;
+    cap.querySelectorAll(".geo-mode").forEach((b) => b.addEventListener("click", () => {
+      geoTimeMode = b.dataset.mode;
+      cap.querySelectorAll(".geo-mode").forEach((x) => x.classList.toggle("on", x === b));
+      holder.innerHTML = buildGeoSvg(net, hi); applyZoom();
+    }));
+  }
+
+  async function renderGeoMap(holder, cap) {
+    const net = await loadNetwork();
+    const hi = geoHighlightId(net);
+    geoCaption(cap, net, hi, holder);
+    holder.innerHTML = buildGeoSvg(net, hi);
+    applyZoom();
+    requestAnimationFrame(() => { if (hi) centreGeoOn(holder, hi, net); else centreContent(holder); });
+  }
 
   // Per-station running times for the next run's line (uses its WAYPOINTS).
   function renderRunningTimes(holder) {
