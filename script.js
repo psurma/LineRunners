@@ -530,7 +530,7 @@
         <span class="wx-icon">${icon}</span>
         <span class="wx-main">${Math.round(temp)}°C · ${desc}</span>
         <span class="wx-sub">
-          ${feels != null ? `feels ${Math.round(feels)}° · ` : ""}${pop != null ? `${pop}% rain` : ""}${wind != null ? ` · ${Math.round(wind)} km/h wind` : ""}
+          ${feels != null ? `feels ${Math.round(feels)}° · ` : ""}${pop != null ? `${Math.round(pop)}% rain` : ""}${wind != null ? ` · ${Math.round(wind)} km/h wind` : ""}
         </span>
         <span class="wx-tag">forecast for ${DOW[nextRun.date.getDay()]} ${MEET_TIME}</span>`;
     } catch (_) {
@@ -606,7 +606,7 @@
   }
 
   // --- Route ideas library (adapted from a runners' guide to London) -----
-  const ROUTE_COLOURS = { river: "#1CA6C4", canal: "#2E8B57", park: "#3AA655", landmark: "#9B0056", trail: "#5A7D2A", loop: "#B36305", tube: "#0098D4" };
+  const ROUTE_COLOURS = { river: "#0E7C90", canal: "#237A49", park: "#2C7D45", landmark: "#9B0056", trail: "#4E6E22", loop: "#8F5104", tube: "#0072A6" };
   // Each route carries an indicative `path` of [lat,lon] waypoints tracing the described
   // course (an overview line, not a turn-by-turn GPX); `loop` closes the trace visually.
   const ROUTES = [
@@ -1089,6 +1089,7 @@
       if (stationGrp) map.removeLayer(stationGrp);
       if (toiletGrp) map.removeLayer(toiletGrp);
       const perKm = geoTimeMode === "walk" ? WALK_MIN_PER_KM : (parseFloat(paceSel && paceSel.value) || 6.5);
+      const dense = map.getZoom() < 12; // thin the permanent labels when zoomed out to avoid overlap
       stationGrp = L.layerGroup();
       for (const sid in coordById) { const s = coordById[sid], inter = count[sid] > 1, onHi = km[sid] !== undefined, dim = hi && !onHi;
         const m = L.circleMarker([s.lat, s.lon], {
@@ -1097,10 +1098,13 @@
           fillColor: inter ? "#fff" : (dim ? "#c4ccd4" : colourById[sid]),
           fillOpacity: 1, opacity: dim ? 0.55 : 1,
         });
-        if (onHi) {
-          const time = geoTimeMode !== "off" ? `<span style="color:${net[hi].colour}">${fmtTime(km[sid] * perKm)}</span>` : "";
+        if (onHi && (!dense || inter)) {
+          const time = geoTimeMode !== "off" ? `<span>${fmtTime(km[sid] * perKm)}</span>` : "";
           m.bindTooltip(`<b>${escapeHtml(s.n)}</b>${time}`, { permanent: true, direction: "right", className: "tm-run-label", offset: [7, 0] });
-        } else { m.bindTooltip(escapeHtml(s.n), { direction: "top", className: "tm-hover-label" }); }
+        } else {
+          const t = onHi && geoTimeMode !== "off" ? escapeHtml(s.n) + " · " + fmtTime(km[sid] * perKm) : escapeHtml(s.n);
+          m.bindTooltip(t, { direction: "top", className: "tm-hover-label" });
+        }
         stationGrp.addLayer(m);
       }
       stationGrp.addTo(map);
@@ -1112,6 +1116,8 @@
     }
     draw();
     geoCaption(cap, net, hi, draw);
+    let wasDense = map.getZoom() < 12;
+    map.on("zoomend", () => { const d = map.getZoom() < 12; if (d !== wasDense) { wasDense = d; draw(); } });
 
     requestAnimationFrame(() => { map.invalidateSize(false);
       if (hi) { const b = L.latLngBounds([]); lineLayer.eachLayer((l) => { if (l.feature.properties.line === hi) b.extend(l.getBounds()); });
