@@ -682,11 +682,18 @@
     if (/plotaroute\.com/i.test(url)) return "plotaroute";
     return "route";
   }
+  // Label a link by what it actually opens — a group event page isn't a route map.
+  function routeLinkLabel(u) {
+    const who = providerOf(u);
+    if (/group_events|\/events?\//i.test(u)) return "See the event on " + who;
+    if (/\/activities?\//i.test(u)) return "View activity on " + who;
+    return "View route on " + who;
+  }
   function routeLinksHtml(r, extraClass) {
     if (!r.routeLink) return "";
     const urls = Array.isArray(r.routeLink) ? r.routeLink : [r.routeLink];
     return urls.map((u) =>
-      `<a class="route-link${extraClass ? " " + extraClass : ""}" href="${escapeAttr(u)}" target="_blank" rel="noopener">View route on ${escapeHtml(providerOf(u))} ↗</a>`
+      `<a class="route-link${extraClass ? " " + extraClass : ""}" href="${escapeAttr(u)}" target="_blank" rel="noopener">${escapeHtml(routeLinkLabel(u))} ↗</a>`
     ).join("");
   }
 
