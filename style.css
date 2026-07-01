@@ -844,6 +844,9 @@ body.tm-map-active .tm-zoom, body.tm-map-active .tm-scrollhint { display: none; 
 .busrun-controls #busPick { width: 100%; padding: 9px 12px; border: 1px solid var(--line); border-radius: 8px; font: inherit; background: #fff; }
 .busrun-controls #busGo { align-self: flex-end; }
 .busrun-layout { display: grid; grid-template-columns: 1fr; gap: 18px; }
+/* let the wide strip map scroll inside its column instead of stretching the page */
+.busrun-layout > * { min-width: 0; }
+.busrun-result { min-width: 0; }
 #busMap { height: min(70vh, 560px); border-radius: 12px; overflow: hidden; border: 1px solid var(--line); background: #eef0f4; }
 @media (min-width: 861px) {
   .busrun-layout { grid-template-columns: 1.05fr 1fr; align-items: start; }
