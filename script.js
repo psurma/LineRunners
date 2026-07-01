@@ -524,32 +524,6 @@
       .join("");
   }
 
-  // --- Join form ---------------------------------------------------------
-  function wireForm() {
-    const form = document.getElementById("joinForm");
-    const note = document.getElementById("formNote");
-    if (!form) return;
-    form.addEventListener("submit", (e) => {
-      e.preventDefault();
-      const name = form.name.value.trim();
-      const email = form.email.value.trim();
-      const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-      if (!name || !emailOk) {
-        note.className = "form-note err";
-        note.textContent = "Please add your name and a valid email.";
-        return;
-      }
-      try {
-        const list = JSON.parse(localStorage.getItem("tuberun_signups") || "[]");
-        list.push({ name, email, at: new Date().toISOString() });
-        localStorage.setItem("tuberun_signups", JSON.stringify(list));
-      } catch (_) { /* ignore */ }
-      note.className = "form-note ok";
-      note.textContent = `Thanks ${name.split(" ")[0]} — see you on the first Sunday!`;
-      form.reset();
-    });
-  }
-
   function escapeHtml(s) {
     return String(s).replace(/[&<>"']/g, (ch) => (
       { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]
@@ -1274,6 +1248,5 @@
   renderLineCollector();
   renderGallery();
   wireSocials();
-  wireForm();
   loadWeather();
 })();

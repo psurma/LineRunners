@@ -12,7 +12,7 @@
     integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
     integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-  <link rel="stylesheet" href="style.css?v=27" />
+  <link rel="stylesheet" href="style.css?v=28" />
 </head>
 <body>
   <header class="site-header">
@@ -30,7 +30,7 @@
       <a href="#routes">Routes</a>
       <a href="#collector">Progress</a>
       <a href="#clubs">Clubs</a>
-      <a href="#join">Join us</a>
+      <a href="#join">Come run</a>
     </nav>
   </header>
 
@@ -246,26 +246,19 @@
 
     <!-- JOIN -->
     <section id="join" class="join">
-      <h2 class="section-title">Join us</h2>
+      <h2 class="section-title">Come run with us</h2>
       <p class="section-sub">
-        Turn up on the day &mdash; that's it. Drop your details below and we'll send you the
-        meeting point and line for the next run.
+        There's nothing to join and nothing to pay &mdash; just turn up on the day. We post the
+        meeting point and line for every run right here and across our socials, so follow whichever
+        you like, then come say hi at the roundel.
       </p>
-      <form class="join-form" id="joinForm" novalidate>
-        <div class="field">
-          <label for="name">Name</label>
-          <input id="name" name="name" type="text" autocomplete="name" placeholder="Your name" required />
-        </div>
-        <div class="field">
-          <label for="email">Email</label>
-          <input id="email" name="email" type="email" autocomplete="email" placeholder="you@example.com" required />
-        </div>
-        <button class="btn btn-primary" type="submit">Count me in</button>
-        <p class="form-note" id="formNote" role="status" aria-live="polite"></p>
-      </form>
+      <div class="join-cta">
+        <a class="btn btn-primary" href="#next">See the next run</a>
+        <a class="btn btn-ghost" href="#newhere">New here? Start here</a>
+      </div>
 
       <div class="connect">
-        <span class="connect-label">Find us on</span>
+        <span class="connect-label">Keep up with us on</span>
         <div class="social-links" id="socialLinks"></div>
       </div>
     </section>
@@ -276,6 +269,6 @@
     <p class="fine">Not affiliated with Transport for London. Roundel-inspired branding used with affection, not endorsement.</p>
   </footer>
 
-  <script src="script.js?v=27"></script>
+  <script src="script.js?v=28"></script>
 </body>
 </html>

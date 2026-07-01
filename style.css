@@ -460,7 +460,7 @@ section { max-width: var(--max); margin: 0 auto; padding: clamp(48px, 8vw, 88px)
 .stat-label { color: #c9d2ff; font-size: 14px; }
 
 /* ---------- Join ---------- */
-.join-form { display: grid; gap: 16px; max-width: 460px; }
+.join-cta { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 26px; }
 .field { display: grid; gap: 6px; }
 .field label { font-weight: 600; font-size: 14px; }
 .field input {
@@ -471,9 +471,6 @@ section { max-width: var(--max); margin: 0 auto; padding: clamp(48px, 8vw, 88px)
   background: #fff;
 }
 .field input:focus { outline: none; border-color: var(--tfl-blue); box-shadow: 0 0 0 3px rgba(0, 25, 168, 0.12); }
-.form-note { font-size: 14px; min-height: 20px; }
-.form-note.ok { color: #00782a; font-weight: 600; }
-.form-note.err { color: var(--tfl-red); font-weight: 600; }
 
 /* ---------- Footer ---------- */
 .site-footer {
