@@ -936,8 +936,61 @@
 
   // --- Run a bus route (live from the TfL API) --------------------------
   const BUS_COL = "#DC241F"; // London bus red
-  const busMapObj = { map: null, layer: null };
+  const busMapObj = { map: null, layer: null, currentId: null };
   let busIds = null;
+
+  // Bus routes you've run — kept per-visitor in the browser, like the line collector.
+  const BUS_KEY = "tuberun_buses";
+  function loadBuses() {
+    try { const s = JSON.parse(localStorage.getItem(BUS_KEY)); return new Set(Array.isArray(s) ? s : []); }
+    catch (_) { return new Set(); }
+  }
+  function saveBuses(set) {
+    try { localStorage.setItem(BUS_KEY, JSON.stringify([...set])); } catch (_) { /* private mode etc. */ }
+  }
+  let busRun = loadBuses();
+  const BUS_FAVE_IDS = ["24", "11", "15", "9", "159", "88"];
+  const BUS_BADGES = [
+    { icon: "🚌", name: "First Bus", desc: "Run your first bus route", test: (c) => c.count >= 1 },
+    { icon: "🎫", name: "Red Rover", desc: "Run 5 bus routes", test: (c) => c.count >= 5 },
+    { icon: "🚌", name: "Double Decker", desc: "Run 10 bus routes", test: (c) => c.count >= 10 },
+    { icon: "🎡", name: "Iconic Six", desc: "Run the 24, 11, 15, 9, 159 & 88", test: (c) => c.iconic >= 6 },
+    { icon: "🦉", name: "Night Owl", desc: "Run a night bus (an N-route)", test: (c) => c.night },
+    { icon: "🏙", name: "Around Town", desc: "Run 25 bus routes", test: (c) => c.count >= 25 },
+    { icon: "🚏", name: "Route Master", desc: "Run 50 bus routes", test: (c) => c.count >= 50 },
+    { icon: "💯", name: "Bus Century", desc: "Run 100 bus routes", test: (c) => c.count >= 100 },
+  ];
+
+  function syncBusMark() {
+    const mark = document.getElementById("busMark");
+    if (!mark) return;
+    const ran = busRun.has(mark.dataset.id);
+    mark.classList.toggle("on", ran);
+    mark.textContent = ran ? "✓ Ran this route" : "＋ Mark as run";
+  }
+  function renderBusProgress() {
+    const el = document.getElementById("busProgress");
+    if (!el) return;
+    const ids = [...busRun];
+    const ctx = { count: ids.length, iconic: BUS_FAVE_IDS.filter((x) => busRun.has(x)).length, night: ids.some((x) => /^N/i.test(x)) };
+    const got = BUS_BADGES.filter((b) => b.test(ctx)).length;
+    const sorted = ids.slice().sort((a, b) => (parseInt(a, 10) || 0) - (parseInt(b, 10) || 0) || a.localeCompare(b));
+    const chips = sorted.length
+      ? sorted.map((id) => `<button type="button" class="bus-chip" title="Tap to remove">${escapeHtml(id)} ✕</button>`).join("")
+      : `<span class="bus-none">None yet — trace a route above and tap “Mark as run”.</span>`;
+    const badges = BUS_BADGES.map((b) => {
+      const g = b.test(ctx);
+      return `<div class="badge${g ? " got" : ""}"><span class="badge-ic">${g ? b.icon : "🔒"}</span><span class="badge-nm">${escapeHtml(b.name)}</span><span class="badge-ds">${escapeHtml(b.desc)}</span></div>`;
+    }).join("");
+    el.innerHTML = `
+      <div class="lc-badges-head"><h3>Bus running champs</h3><span class="lc-badges-count">${ids.length} route${ids.length === 1 ? "" : "s"} run · ${got} / ${BUS_BADGES.length} badges</span></div>
+      <div class="bus-chips">${chips}</div>
+      <div class="lc-badges">${badges}</div>`;
+    el.querySelectorAll(".bus-chip").forEach((ch) => ch.addEventListener("click", () => {
+      busRun.delete(ch.textContent.replace(/\s*✕\s*$/, ""));
+      saveBuses(busRun); renderBusProgress(); syncBusMark();
+    }));
+  }
 
   function drawBus(seq, wp) {
     const m = busMapObj.map;
@@ -1011,15 +1064,24 @@
       const paceKm = parseFloat(paceSel && paceSel.value) || 6.5;
       const from = wp[0][0], to = wp[wp.length - 1][0];
       const banner = `Route ${id} · ${from} → ${to}`;
+      busMapObj.currentId = id;
       drawBus(seq, wp);
       result.innerHTML = `
         <div class="bus-summary">
           <div class="cr-main"><span class="cr-km">${km.toFixed(1)} km</span> <span class="bus-mi">${(km * MI_PER_KM).toFixed(1)} mi</span></div>
           <div class="cr-times"><span class="cr-run">🏃 run ~${fmtTime(km * paceKm)}</span> <span class="cr-cycle">🚴 cycle ~${fmtTime(km * CYCLE_MIN_PER_KM)}</span> <span class="cr-walk">🚶 walk ~${fmtTime(km * WALK_MIN_PER_KM)}</span></div>
           <div class="cr-detail">${escapeHtml(from)} → ${escapeHtml(to)} · ${wp.length} stops</div>
+          <button type="button" id="busMark" class="bus-mark" data-id="${escapeHtml(id)}">＋ Mark as run</button>
           <div class="cr-note">Distance along the stops × ${ROAD_FACTOR} for the road. Buses run on-road — mind the traffic and lights.</div>
         </div>
         <div class="line-diagram strip bus-strip" style="--line-col:${BUS_COL}">${stripMapHtml(null, BUS_COL, banner, { wp, bannerLabel: banner })}</div>`;
+      syncBusMark();
+      const mark = document.getElementById("busMark");
+      if (mark) mark.addEventListener("click", () => {
+        const rid = mark.dataset.id;
+        if (busRun.has(rid)) busRun.delete(rid); else busRun.add(rid);
+        saveBuses(busRun); syncBusMark(); renderBusProgress();
+      });
     }
     go.addEventListener("click", trace);
     pick.addEventListener("change", trace);
@@ -1035,6 +1097,7 @@
         pick.value = b.dataset.route; dir.value = "outbound"; trace();
       }));
     }
+    renderBusProgress();
   }
 
   // --- Render: Line stats ------------------------------------------------

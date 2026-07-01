@@ -1217,3 +1217,13 @@ body {
 #fieldFinish.next-pick label { color: #1e7a44; font-weight: 800; }
 #fieldStart.next-pick select { border-color: var(--tfl-blue); box-shadow: 0 0 0 3px rgba(0, 25, 168, 0.14); }
 #fieldFinish.next-pick select { border-color: #1e7a44; box-shadow: 0 0 0 3px rgba(30, 122, 68, 0.16); }
+
+/* Bus tracker: mark-as-run + your-routes chips */
+.bus-mark { display: inline-flex; align-items: center; gap: 6px; margin: 10px 0 4px; font: 700 14px Inter, sans-serif; padding: 8px 16px; border-radius: 24px; border: 2px solid var(--tfl-red); background: #fff; color: var(--tfl-red); cursor: pointer; transition: all 0.12s; }
+.bus-mark:hover { background: var(--tfl-red); color: #fff; }
+.bus-mark.on { background: var(--tfl-red); color: #fff; }
+.bus-progress { margin-top: 26px; }
+.bus-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0 18px; }
+.bus-chip { font: 700 13px Inter, sans-serif; padding: 5px 12px; border-radius: 20px; border: 1px solid var(--tfl-red); background: #fff; color: var(--tfl-red); cursor: pointer; }
+.bus-chip:hover { background: var(--tfl-red); color: #fff; }
+.bus-none { color: var(--muted); font-size: 14px; }
