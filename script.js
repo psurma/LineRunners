@@ -372,6 +372,28 @@
   const MI_PER_KM = 0.621371;
   let firstPick = true;
 
+  // Interchange data for the carriage-style strip map: which tube lines meet at each stop.
+  let interchangeMap = null; // norm(station name) -> [{name, colour}]
+  function buildInterchangeMap(net) {
+    const m = {};
+    for (const id in net) {
+      const ln = net[id];
+      for (const sid in ln.stations) {
+        const k = norm(ln.stations[sid].n);
+        if (!m[k]) m[k] = [];
+        if (!m[k].some((x) => x.name === ln.name)) m[k].push({ name: ln.name, colour: ln.colour });
+      }
+    }
+    return m;
+  }
+  function interchangeTags(name) {
+    if (!interchangeMap || !nextRun) return "";
+    const here = (interchangeMap[norm(name)] || []).filter((x) => norm(x.name) !== norm(nextRun.key));
+    if (!here.length) return "";
+    return `<span class="stn-tags">${here.map((x) =>
+      `<span class="stn-tag" style="background:${x.colour};color:${contrastText(x.colour)}">${escapeHtml(x.name)}</span>`).join("")}</span>`;
+  }
+
   function fmtPace(minPerUnit) {
     const mm = Math.floor(minPerUnit);
     const ss = Math.round((minPerUnit - mm) * 60);
@@ -415,6 +437,8 @@
     [fromSel, toSel, paceSel, unitsSel].filter(Boolean).forEach((s) => s.addEventListener("change", update));
     renderDiagram();
     update();
+    // Enrich the strip with interchange tags once the network data loads.
+    loadNetwork().then((net) => { interchangeMap = buildInterchangeMap(net); renderDiagram(); }).catch(() => {});
   }
 
   function renderDiagram() {
@@ -423,13 +447,16 @@
     let a = +fromSel.value, b = +toSel.value;
     if (a > b) [a, b] = [b, a];
     diagram.style.setProperty("--line-col", nextRun.colour);
-    diagram.innerHTML = `<div class="line-track">${pts.map((p, i) => {
+    diagram.classList.add("strip");
+    const banner = `<div class="strip-line" style="background:${nextRun.colour};color:${contrastText(nextRun.colour)}">${escapeHtml(nextRun.key)} line · tap two stops</div>`;
+    diagram.innerHTML = banner + `<div class="line-track">${pts.map((p, i) => {
       const active = i >= a && i <= b;
       const endpoint = i === +fromSel.value || i === +toSel.value;
       return `<button class="stn${active ? " active" : ""}${endpoint ? " endpoint" : ""}"
-                data-i="${i}" title="${escapeHtml(p[0])}">
-                <span class="rail"><span class="dot"></span></span>
+                data-i="${i}" title="${escapeHtml(p[0])}" aria-label="${escapeHtml(p[0])}">
                 <span class="stn-name">${escapeHtml(p[0])}</span>
+                <span class="rail"><span class="dot"></span></span>
+                ${interchangeTags(p[0])}
               </button>`;
     }).join("")}</div>`;
     diagram.querySelectorAll(".stn").forEach((btn) => {
