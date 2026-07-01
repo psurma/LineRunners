@@ -1396,6 +1396,20 @@
   let geoShowToilets = true;  // toilet pins on the geographic map
   let geoDistUnit = "km";     // km | mi — distance unit shown alongside times
   function geoDistStr(km) { return geoDistUnit === "mi" ? `${(km * MI_PER_KM).toFixed(1)} mi` : `${km.toFixed(1)} km`; }
+  // Compass bearing (deg, 0 = north) from waypoint a to b — for direction arrows.
+  function bearingDeg(a, b) {
+    const lat1 = a[1] * Math.PI / 180, lat2 = b[1] * Math.PI / 180, dLon = (b[2] - a[2]) * Math.PI / 180;
+    const y = Math.sin(dLon) * Math.cos(lat2);
+    const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
+    return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+  }
+  // Clock time = MEET_TIME + mins; a ±5-min window brackets the group's expected arrival.
+  function hhmmPlus(mins) {
+    const [h, m] = MEET_TIME.split(":").map(Number);
+    let t = (h * 60 + m + Math.round(mins)) % 1440; if (t < 0) t += 1440;
+    return `${String(Math.floor(t / 60)).padStart(2, "0")}:${String(t % 60).padStart(2, "0")}`;
+  }
+  function arrivalWindow(mins) { return `${hhmmPlus(mins - 5)}–${hhmmPlus(mins + 5)}`; }
   function defaultZoom(kind) { return kind === "geo" ? 1.4 : kind === "schematic" ? 1.3 : kind === "data" ? 1 : 1.6; }
   async function loadNetwork() {
     if (netData) return netData;
@@ -1690,7 +1704,7 @@
       `<button type="button" class="geo-mode geo-unit" data-unit="${u}"${geoDistUnit === u ? ' data-on="1"' : ""}>${u}</button>`).join("")}</span>` : "";
     const wcBtn = `<button type="button" class="geo-mode geo-wc-btn" data-wc="1"${geoShowToilets ? ' data-on="1"' : ""}>🚻 Toilets</button>`;
     cap.innerHTML = (hi
-      ? `<strong style="color:${net[hi].colour}">${escapeHtml(net[hi].name)} line</strong> lit up for the next run, with running time and distance to each stop. `
+      ? `<strong style="color:${net[hi].colour}">${escapeHtml(net[hi].name)} line</strong> lit up for the next run — arrows show the direction of travel, with running time, distance and the group's expected arrival window (from a ${MEET_TIME} start) at each stop. `
       : `Our own live map — real streets, parks and the Thames, with every tube line on top. `) + modes + " " + units + " " + wcBtn;
     cap.querySelectorAll(".geo-mode[data-on]").forEach((b) => b.classList.add("on"));
     cap.querySelectorAll(".geo-mode[data-mode]").forEach((b) => b.addEventListener("click", () => {
@@ -1737,6 +1751,16 @@
         .bindTooltip("Start · " + escapeHtml(wp[0][0]), { direction: "top" }).addTo(map);
       L.marker(wl[wl.length - 1], { icon: L.divIcon({ className: "route-finish", html: "◉", iconSize: [15, 15], iconAnchor: [7, 7] }) })
         .bindTooltip("Finish · " + escapeHtml(wp[wp.length - 1][0]), { direction: "top" }).addTo(map);
+      // Direction-of-travel arrows spaced along the route (point start → finish).
+      const step = Math.max(1, Math.floor(wp.length / 9));
+      for (let i = step; i < wp.length - 1; i += step) {
+        const deg = bearingDeg(wp[i], wp[i + 1]);
+        L.marker(wl[i], { interactive: false, keyboard: false, icon: L.divIcon({
+          className: "route-arrow",
+          html: `<span style="transform:rotate(${Math.round(deg - 90)}deg);color:${net[hi].colour}">➤</span>`,
+          iconSize: [22, 22], iconAnchor: [11, 11],
+        }) }).addTo(map);
+      }
     }
 
     // Station lookup: dedup by id, count lines per station (interchange), colour.
@@ -1759,11 +1783,12 @@
           fillColor: inter ? "#fff" : (dim ? "#c4ccd4" : colourById[sid]),
           fillOpacity: 1, opacity: dim ? 0.55 : 1,
         });
+        const mins = km[sid] * perKm;
         if (onHi && (!dense || inter)) {
-          const time = geoTimeMode !== "off" ? `<span>${fmtTime(km[sid] * perKm)} · ${geoDistStr(km[sid])}</span>` : "";
+          const time = geoTimeMode !== "off" ? `<span>${fmtTime(mins)} · ${geoDistStr(km[sid])}<br><b class="tm-eta">🕒 ${arrivalWindow(mins)}</b></span>` : "";
           m.bindTooltip(`<b>${escapeHtml(s.n)}</b>${time}`, { permanent: true, direction: "right", className: "tm-run-label", offset: [7, 0] });
         } else {
-          const t = onHi && geoTimeMode !== "off" ? `${escapeHtml(s.n)} · ${fmtTime(km[sid] * perKm)} · ${geoDistStr(km[sid])}` : escapeHtml(s.n);
+          const t = onHi && geoTimeMode !== "off" ? `${escapeHtml(s.n)} · ${fmtTime(mins)} · ${geoDistStr(km[sid])} · group here ~${arrivalWindow(mins)}` : escapeHtml(s.n);
           m.bindTooltip(t, { direction: "top", className: "tm-hover-label" });
         }
         stationGrp.addLayer(m);

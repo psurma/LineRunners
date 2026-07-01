@@ -1243,3 +1243,8 @@ body {
 .rc-mark:hover { background: var(--tfl-blue); color: #fff; }
 .rc-mark.on { background: var(--tfl-blue); color: #fff; }
 .route-progress { margin-top: 30px; }
+
+/* Direction-of-travel arrows + arrival window on the network map */
+.route-arrow { background: none; border: none; }
+.route-arrow span { display: block; font-size: 18px; line-height: 22px; text-align: center; text-shadow: 0 0 3px #fff, 0 0 3px #fff; }
+.tm-eta { color: var(--tfl-blue); font-weight: 700; }
