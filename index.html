@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://unpkg.com; style-src 'self' 'unsafe-inline' https://unpkg.com https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: https://unpkg.com https://*.basemaps.cartocdn.com; connect-src 'self' https://api.open-meteo.com; object-src 'none'; base-uri 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://unpkg.com; style-src 'self' 'unsafe-inline' https://unpkg.com https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: https://unpkg.com https://*.basemaps.cartocdn.com; connect-src 'self' https://api.open-meteo.com https://api.tfl.gov.uk; object-src 'none'; base-uri 'self'" />
   <title>Tube Run &middot; Running London's Underground, above ground</title>
   <meta name="description" content="Tube Run is a London running group that runs above ground, tracing the Underground line by line, on the first Sunday of every month." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -13,7 +13,7 @@
     integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
     integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-  <link rel="stylesheet" href="style.css?v=41" />
+  <link rel="stylesheet" href="style.css?v=42" />
   <link rel="stylesheet" href="styles/tfl-classic.css?v=1" />
   <script src="styles/theme-loader.js"></script>
 </head>
@@ -31,6 +31,7 @@
       <a href="#newhere">New here?</a>
       <a href="#schedule">Schedule</a>
       <a href="#routes">Routes</a>
+      <a href="#busrun">Buses</a>
       <a href="#collector">Progress</a>
       <a href="#clubs">Clubs</a>
       <a href="#join">Come run</a>
@@ -167,6 +168,31 @@
       </div>
     </section>
 
+    <!-- BUS ROUTE RUNNER -->
+    <section id="busrun" class="busrun">
+      <h2 class="section-title">Run a bus route</h2>
+      <p class="section-sub">Every London bus route &mdash; all 676 of them, both directions &mdash; as a run. Pick a route and direction to see its stops, distance and rough run/walk time, traced on the map. Live from the TfL network.</p>
+      <div class="busrun-controls">
+        <div class="field">
+          <label for="busPick">Route</label>
+          <input id="busPick" list="busList" placeholder="e.g. 24, N29, RV1" autocomplete="off" />
+          <datalist id="busList"></datalist>
+        </div>
+        <div class="field">
+          <label for="busDir">Direction</label>
+          <select id="busDir">
+            <option value="outbound" selected>Outbound</option>
+            <option value="inbound">Inbound</option>
+          </select>
+        </div>
+        <button type="button" id="busGo" class="btn btn-primary">Trace it</button>
+      </div>
+      <div class="busrun-layout">
+        <div id="busMap" class="route-map"></div>
+        <div id="busResult" class="busrun-result"></div>
+      </div>
+    </section>
+
     <!-- LINE COLLECTOR -->
     <section id="collector" class="collector">
       <h2 class="section-title">The line collector</h2>
@@ -273,6 +299,6 @@
     <p class="fine">Not affiliated with Transport for London. Roundel-inspired branding used with affection, not endorsement.</p>
   </footer>
 
-  <script src="script.js?v=41"></script>
+  <script src="script.js?v=42"></script>
 </body>
 </html>

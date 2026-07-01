@@ -506,8 +506,8 @@
 
   // Carriage-style strip map for a WAYPOINTS line. Interactive (planner) or read-only (schedule).
   function stripMapHtml(key, colour, lineName, opts = {}) {
-    const wp = WAYPOINTS[key];
-    if (!wp) return "";
+    const wp = opts.wp || WAYPOINTS[key];
+    if (!wp || !wp.length) return "";
     const iact = !!opts.interactive;
     const a = iact ? opts.a : 0, b = iact ? opts.b : wp.length - 1;
     const from = iact ? opts.from : 0, to = iact ? opts.to : wp.length - 1;
@@ -872,6 +872,97 @@
       observeMapSize(routeMap.map);
       requestAnimationFrame(async () => { routeMap.map.invalidateSize(false); await loadRoutes(); selectRoute(first >= 0 ? first : 0); });
     }
+  }
+
+  // --- Run a bus route (live from the TfL API) --------------------------
+  const BUS_COL = "#DC241F"; // London bus red
+  const busMapObj = { map: null, layer: null };
+  let busIds = null;
+
+  function drawBus(seq, wp) {
+    const m = busMapObj.map;
+    if (!m) return;
+    if (busMapObj.layer) m.removeLayer(busMapObj.layer);
+    const grp = L.layerGroup(), all = [];
+    let segs = [];
+    (seq.lineStrings || []).forEach((ls) => {
+      try {
+        const parsed = JSON.parse(ls);
+        const lines = Array.isArray(parsed[0][0]) ? parsed : [parsed];
+        lines.forEach((line) => segs.push(line.map((p) => [p[1], p[0]])));
+      } catch (_) { /* skip malformed */ }
+    });
+    if (!segs.length) segs = [wp.map((s) => [s[1], s[2]])];
+    segs.forEach((seg) => {
+      L.polyline(seg, { color: BUS_COL, weight: 5, opacity: 0.3, lineJoin: "round", lineCap: "round" }).addTo(grp);
+      L.polyline(seg, { renderer: L.svg(), color: BUS_COL, weight: 5, opacity: 0.95, lineCap: "round", lineJoin: "round", className: "route-flow", dashArray: "2 13" }).addTo(grp);
+      seg.forEach((p) => all.push(p));
+    });
+    const a = wp[0], b = wp[wp.length - 1];
+    L.circleMarker([a[1], a[2]], { radius: 6, color: "#fff", weight: 2, fillColor: BUS_COL, fillOpacity: 1 }).bindTooltip("Start · " + escapeHtml(a[0]), { direction: "top" }).addTo(grp);
+    L.circleMarker([b[1], b[2]], { radius: 6, color: BUS_COL, weight: 2, fillColor: "#fff", fillOpacity: 1 }).bindTooltip("Finish · " + escapeHtml(b[0]), { direction: "top" }).addTo(grp);
+    grp.addTo(m);
+    busMapObj.layer = grp;
+    if (all.length) m.fitBounds(L.latLngBounds(all), { padding: [30, 30] });
+  }
+
+  function setupBusRunner() {
+    const pick = document.getElementById("busPick");
+    const dir = document.getElementById("busDir");
+    const go = document.getElementById("busGo");
+    const result = document.getElementById("busResult");
+    const mapEl = document.getElementById("busMap");
+    if (!pick || !go || !mapEl || typeof L === "undefined") return;
+
+    fetch("data/bus-routes.json").then((r) => r.ok ? r.json() : []).then((ids) => {
+      busIds = ids;
+      const dl = document.getElementById("busList");
+      if (dl) dl.innerHTML = ids.map((id) => `<option value="${escapeAttr(id)}"></option>`).join("");
+    }).catch(() => { busIds = []; });
+
+    busMapObj.map = L.map(mapEl, { center: [51.509, -0.115], zoom: 11, preferCanvas: true, zoomSnap: 0 });
+    cartoBasemap().addTo(busMapObj.map);
+    modifierWheelZoom(busMapObj.map);
+    observeMapSize(busMapObj.map);
+    requestAnimationFrame(() => busMapObj.map.invalidateSize(false));
+
+    async function trace() {
+      const id = (pick.value || "").trim();
+      if (!id) return;
+      result.innerHTML = `<p class="bus-loading">Loading route ${escapeHtml(id)}…</p>`;
+      let seq;
+      try {
+        const res = await fetch(`https://api.tfl.gov.uk/Line/${encodeURIComponent(id)}/Route/Sequence/${dir.value}`);
+        if (!res.ok) throw new Error("http " + res.status);
+        seq = await res.json();
+      } catch (_) {
+        result.innerHTML = `<p class="bus-error">Couldn't load route <strong>${escapeHtml(id)}</strong> (${escapeHtml(dir.value)}). Check the number, or try the other direction.</p>`;
+        return;
+      }
+      const sps = seq.stopPointSequences || [];
+      const stops = sps.length ? sps[0].stopPoint : [];
+      if (!stops || stops.length < 2) {
+        result.innerHTML = `<p class="bus-error">No <strong>${escapeHtml(dir.value)}</strong> stops for route ${escapeHtml(id)} — try the other direction.</p>`;
+        return;
+      }
+      const wp = stops.map((s) => [s.name, s.lat, s.lon]);
+      const km = legDistanceKm(wp, 0, wp.length - 1);
+      const paceKm = parseFloat(paceSel && paceSel.value) || 6.5;
+      const from = wp[0][0], to = wp[wp.length - 1][0];
+      const banner = `Route ${id} · ${from} → ${to}`;
+      drawBus(seq, wp);
+      result.innerHTML = `
+        <div class="bus-summary">
+          <div class="cr-main"><span class="cr-km">${km.toFixed(1)} km</span> <span class="bus-mi">${(km * MI_PER_KM).toFixed(1)} mi</span></div>
+          <div class="cr-times"><span class="cr-run">🏃 run ~${fmtTime(km * paceKm)}</span> <span class="cr-walk">🚶 walk ~${fmtTime(km * WALK_MIN_PER_KM)}</span></div>
+          <div class="cr-detail">${escapeHtml(from)} → ${escapeHtml(to)} · ${wp.length} stops</div>
+          <div class="cr-note">Distance along the stops × ${ROAD_FACTOR} for the road. Buses run on-road — mind the traffic and lights.</div>
+        </div>
+        <div class="line-diagram strip bus-strip" style="--line-col:${BUS_COL}">${stripMapHtml(null, BUS_COL, banner, { wp, bannerLabel: banner })}</div>`;
+    }
+    go.addEventListener("click", trace);
+    pick.addEventListener("change", trace);
+    dir.addEventListener("change", () => { if ((pick.value || "").trim()) trace(); });
   }
 
   // --- Render: Line stats ------------------------------------------------
@@ -1527,6 +1618,7 @@
   renderList();
   renderRoutes();
   setupPlanner();
+  setupBusRunner();
   renderLineCollector();
   renderGallery();
   wireSocials();
