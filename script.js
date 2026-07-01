@@ -338,27 +338,57 @@
   }
 
   // --- Render: Journey board (vertical National-Rail-style calling points) ---
+  // Split the waypoints into per-day segments for a multi-day event, else one segment.
+  function journeySegments(wp) {
+    const last = wp.length - 1;
+    const norm = (s) => (s || "").toLowerCase().replace(/underground station|station/g, "").replace(/\(.*?\)/g, "").replace(/[^a-z0-9]/g, "");
+    const findIdx = (name) => wp.findIndex((p) => norm(p[0]) === norm(name));
+    const days = nextRun.days;
+    if (Array.isArray(days) && days.length > 1) {
+      const segs = [];
+      for (const d of days) {
+        const leg = (d.title || "").split("—").pop();
+        const parts = leg.split("→");
+        if (parts.length < 2) return null;
+        const from = findIdx(parts[0]), to = findIdx(parts[1]);
+        if (from < 0 || to < 0 || to <= from) return null;
+        segs.push({ label: (d.title || "").split("—")[0].trim(), leg: `${parts[0].trim()} → ${parts[1].trim()}`, from, to, start: parseClock(d.start) });
+      }
+      return segs;
+    }
+    return [{ label: null, leg: nextRun.leg, from: 0, to: last, start: MEET_TIME }];
+  }
+
+  function journeyBoardSection(wp, seg, c, paceKm) {
+    const rows = [];
+    for (let j = seg.from; j <= seg.to; j++) {
+      const mins = legDistanceKm(wp, seg.from, j) * paceKm;
+      const isStart = j === seg.from, isEnd = j === seg.to, end = isStart || isEnd;
+      const time = isStart ? `depart ${seg.start}` : (isEnd ? `arrive ~${arrivalWindow(mins, seg.start)}` : `~${arrivalWindow(mins, seg.start)}`);
+      rows.push(`<li class="jb-stop${end ? " jb-end" : ""}">
+        <span class="jb-dot" style="border-color:${c}${end ? `;background:${c}` : ""}"></span>
+        <span class="jb-name">${escapeHtml(wp[j][0])}${interchangeTags(wp[j][0], nextRun.key)}</span>
+        <span class="jb-time">${time}</span>
+      </li>`);
+    }
+    const head = seg.label
+      ? `<p class="jb-day">${escapeHtml(seg.label)}</p><p class="jb-sub" style="color:${c}">${escapeHtml(seg.leg)}</p>`
+      : `<p class="jb-sub" style="color:${c}">${escapeHtml(nextRun.badge)} · ${escapeHtml(seg.leg)}</p>`;
+    return `<div class="jb-section">${head}<ol class="jb-list" style="--jb-col:${c}">${rows.join("")}</ol></div>`;
+  }
+
   function renderJourneyBoard() {
     const el = document.getElementById("journeyBoard");
     if (!el || !nextRun) return;
     const wp = WAYPOINTS[nextRun.key];
     if (!wp || wp.length < 2) { el.innerHTML = ""; return; }
     const c = nextRun.colour, paceKm = 6.5;
-    const rows = wp.map((p, i) => {
-      const mins = legDistanceKm(wp, 0, i) * paceKm;
-      const end = i === 0 || i === wp.length - 1;
-      const time = i === 0 ? `depart ${MEET_TIME}` : (i === wp.length - 1 ? `arrive ~${arrivalWindow(mins)}` : `~${arrivalWindow(mins)}`);
-      return `<li class="jb-stop${end ? " jb-end" : ""}">
-        <span class="jb-dot" style="border-color:${c}${end ? `;background:${c}` : ""}"></span>
-        <span class="jb-name">${escapeHtml(p[0])}${interchangeTags(p[0], nextRun.key)}</span>
-        <span class="jb-time">${time}</span>
-      </li>`;
-    }).join("");
+    const segs = journeySegments(wp) || [{ label: null, leg: nextRun.leg, from: 0, to: wp.length - 1, start: MEET_TIME }];
+    const sections = segs.map((s) => journeyBoardSection(wp, s, c, paceKm)).join("");
     el.innerHTML = `
       <h3 class="jb-title">Journey board</h3>
-      <p class="jb-sub" style="color:${c}">${escapeHtml(nextRun.badge)} · ${escapeHtml(nextRun.leg)}</p>
-      <ol class="jb-list" style="--jb-col:${c}">${rows}</ol>
-      <p class="jb-foot">Expected arrival windows from a ${MEET_TIME} start at a steady 6:30/km — add time for regroups and photos.</p>`;
+      ${sections}
+      <p class="jb-foot">Expected arrival windows at a steady 6:30/km from each day's start — add time for regroups and photos.</p>`;
   }
 
   // --- Render: Schedule --------------------------------------------------
@@ -671,10 +701,48 @@
   };
   function describe(code) { return WMO[code] || ["—", "🌡️"]; }
 
+  // One forecast target per run day (multi-day events get a chip each).
+  function weatherDays() {
+    if (Array.isArray(nextRun.days) && nextRun.days.length > 1) {
+      return nextRun.days.map((d, i) => {
+        const date = new Date(nextRun.date.getTime() + i * 86400000);
+        const clock = parseClock(d.start).slice(0, 3) + "00"; // hourly buckets sit on the hour
+        return { date, clock, label: `${DOW[date.getDay()]} ${date.getDate()} ${MON[date.getMonth()].slice(0, 3)}` };
+      });
+    }
+    return [{ date: nextRun.date, clock: MEET_TIME, label: `${DOW[nextRun.date.getDay()]} ${MEET_TIME}` }];
+  }
+
+  function weatherChip(data, d) {
+    const dateStr = isoDate(d.date);
+    const hIdx = data.hourly.time.indexOf(`${dateStr}T${d.clock}`);
+    let code, temp, feels, pop, wind;
+    if (hIdx !== -1) {
+      code = data.hourly.weather_code[hIdx];
+      temp = data.hourly.temperature_2m[hIdx];
+      feels = data.hourly.apparent_temperature[hIdx];
+      pop = data.hourly.precipitation_probability[hIdx];
+      wind = data.hourly.wind_speed_10m[hIdx];
+    } else {
+      const dIdx = data.daily.time.indexOf(dateStr);
+      if (dIdx === -1) return "";
+      code = data.daily.weather_code[dIdx];
+      temp = data.daily.temperature_2m_max[dIdx];
+      pop = data.daily.precipitation_probability_max[dIdx];
+    }
+    const [desc, icon] = describe(code);
+    return `<div class="wx-row">
+      <span class="wx-icon">${icon}</span>
+      <span class="wx-main">${Math.round(temp)}°C · ${desc}</span>
+      <span class="wx-sub">${feels != null ? `feels ${Math.round(feels)}° · ` : ""}${pop != null ? `${Math.round(pop)}% rain` : ""}${wind != null ? ` · ${Math.round(wind)} km/h wind` : ""}</span>
+      <span class="wx-tag">${escapeHtml(d.label)}</span>
+    </div>`;
+  }
+
   async function loadWeather() {
     const el = document.getElementById("weather");
     if (!el || !nextRun) return;
-    const dateStr = isoDate(nextRun.date);
+    const days = weatherDays();
     const url = `https://api.open-meteo.com/v1/forecast?latitude=${LONDON.lat}&longitude=${LONDON.lon}` +
       `&hourly=temperature_2m,apparent_temperature,precipitation_probability,weather_code,wind_speed_10m` +
       `&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max` +
@@ -683,33 +751,16 @@
       const res = await fetch(url);
       if (!res.ok) throw new Error("weather fetch failed");
       const data = await res.json();
-      const hIdx = data.hourly.time.indexOf(`${dateStr}T${MEET_TIME}`);
-      let code, temp, feels, pop, wind;
-      if (hIdx !== -1) {
-        code = data.hourly.weather_code[hIdx];
-        temp = data.hourly.temperature_2m[hIdx];
-        feels = data.hourly.apparent_temperature[hIdx];
-        pop = data.hourly.precipitation_probability[hIdx];
-        wind = data.hourly.wind_speed_10m[hIdx];
-      } else {
-        const dIdx = data.daily.time.indexOf(dateStr);
-        if (dIdx === -1) {
-          el.innerHTML = `<span class="wx-soft">Weather forecast will appear closer to the day.</span>`;
-          return;
-        }
-        code = data.daily.weather_code[dIdx];
-        temp = data.daily.temperature_2m_max[dIdx];
-        pop = data.daily.precipitation_probability_max[dIdx];
+      const chips = days.map((d) => weatherChip(data, d)).filter(Boolean);
+      if (!chips.length) {
+        el.classList.remove("weather-multi");
+        el.innerHTML = `<span class="wx-soft">Weather forecast will appear closer to the day.</span>`;
+        return;
       }
-      const [desc, icon] = describe(code);
-      el.innerHTML = `
-        <span class="wx-icon">${icon}</span>
-        <span class="wx-main">${Math.round(temp)}°C · ${desc}</span>
-        <span class="wx-sub">
-          ${feels != null ? `feels ${Math.round(feels)}° · ` : ""}${pop != null ? `${Math.round(pop)}% rain` : ""}${wind != null ? ` · ${Math.round(wind)} km/h wind` : ""}
-        </span>
-        <span class="wx-tag">forecast for ${DOW[nextRun.date.getDay()]} ${MEET_TIME}</span>`;
+      el.classList.toggle("weather-multi", chips.length > 1);
+      el.innerHTML = chips.join("");
     } catch (_) {
+      el.classList.remove("weather-multi");
       el.innerHTML = `<span class="wx-soft">Couldn't load the forecast right now.</span>`;
     }
   }
@@ -1427,13 +1478,21 @@
     const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
     return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
   }
-  // Clock time = MEET_TIME + mins; a ±5-min window brackets the group's expected arrival.
-  function hhmmPlus(mins) {
-    const [h, m] = MEET_TIME.split(":").map(Number);
+  // Clock time = base (HH:MM, default MEET_TIME) + mins; ±5-min window brackets the arrival.
+  function clockAdd(base, mins) {
+    const [h, m] = (base || MEET_TIME).split(":").map(Number);
     let t = (h * 60 + m + Math.round(mins)) % 1440; if (t < 0) t += 1440;
     return `${String(Math.floor(t / 60)).padStart(2, "0")}:${String(t % 60).padStart(2, "0")}`;
   }
-  function arrivalWindow(mins) { return `${hhmmPlus(mins - 5)}–${hhmmPlus(mins + 5)}`; }
+  function arrivalWindow(mins, base) { return `${clockAdd(base, mins - 5)}–${clockAdd(base, mins + 5)}`; }
+  // Parse a start blurb like "Chesham Underground Station, 9:18am" into "09:18".
+  function parseClock(s) {
+    const m = (s || "").match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)/i);
+    if (!m) return MEET_TIME;
+    let h = +m[1]; const mm = m[2] ? +m[2] : 0, ap = m[3].toLowerCase();
+    if (ap === "pm" && h < 12) h += 12; if (ap === "am" && h === 12) h = 0;
+    return `${String(h).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
+  }
   function defaultZoom(kind) { return kind === "geo" ? 1.4 : kind === "schematic" ? 1.3 : kind === "data" ? 1 : 1.6; }
   async function loadNetwork() {
     if (netData) return netData;

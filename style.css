@@ -198,9 +198,8 @@ section { max-width: var(--max); margin: 0 auto; padding: clamp(48px, 8vw, 88px)
 /* ---------- Weather chip ---------- */
 .weather {
   display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 6px 12px;
+  flex-direction: column;
+  gap: 8px;
   margin-top: 16px;
   padding: 12px 18px;
   background: var(--card);
@@ -209,6 +208,8 @@ section { max-width: var(--max); margin: 0 auto; padding: clamp(48px, 8vw, 88px)
   font-size: 15px;
 }
 .weather:empty { display: none; }
+.wx-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px; }
+.weather-multi .wx-row + .wx-row { border-top: 1px solid var(--line); padding-top: 8px; }
 .wx-icon { font-size: 22px; }
 .wx-main { font-weight: 700; }
 .wx-sub { color: var(--muted); }
@@ -1267,3 +1268,7 @@ body {
 .jb-stop { border-radius: 8px; transition: background 0.1s; }
 .jb-stop:hover { background: rgba(0, 25, 168, 0.06); }
 .jb-stop:hover .jb-time { color: var(--tfl-blue); }
+
+/* Journey board: per-day sections for multi-day events */
+.jb-section + .jb-section { margin-top: 22px; padding-top: 20px; border-top: 1px dashed var(--line); }
+.jb-day { font-weight: 800; font-size: 16px; margin-bottom: 2px; }
