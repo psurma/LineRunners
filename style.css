@@ -318,7 +318,7 @@ section { max-width: var(--max); margin: 0 auto; padding: clamp(48px, 8vw, 88px)
   gap: 16px;
   max-width: 900px;
 }
-.calc select {
+.calc select, .busrun-controls select {
   padding: 12px 14px;
   border: 1px solid var(--line);
   border-radius: 10px;
@@ -326,7 +326,7 @@ section { max-width: var(--max); margin: 0 auto; padding: clamp(48px, 8vw, 88px)
   background: #fff;
   width: 100%;
 }
-.calc select:focus { outline: none; border-color: var(--tfl-blue); box-shadow: 0 0 0 3px rgba(0, 25, 168, 0.12); }
+.calc select:focus, .busrun-controls select:focus { outline: none; border-color: var(--tfl-blue); box-shadow: 0 0 0 3px rgba(0, 25, 168, 0.12); }
 
 .calc-result { margin-top: 22px; }
 .calc-result:empty { display: none; }
@@ -850,7 +850,8 @@ body.tm-map-active .tm-zoom, body.tm-map-active .tm-scrollhint { display: none; 
 /* Bus route runner */
 .busrun-controls { display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-end; margin-bottom: 18px; }
 .busrun-controls .field { min-width: 170px; }
-.busrun-controls #busPick { width: 100%; padding: 9px 12px; border: 1px solid var(--line); border-radius: 8px; font: inherit; background: #fff; }
+.busrun-controls #busPick { width: 100%; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; font: inherit; background: #fff; }
+.busrun-controls #busPick:focus { outline: none; border-color: var(--tfl-blue); box-shadow: 0 0 0 3px rgba(0, 25, 168, 0.12); }
 .busrun-controls #busGo { align-self: flex-end; }
 .busrun-layout { display: grid; grid-template-columns: 1fr; gap: 18px; }
 /* let the wide strip map scroll inside its column instead of stretching the page */
@@ -1234,3 +1235,11 @@ body {
 .tube-map, .route-map, #tmMap, #routeMap, #busMap { isolation: isolate; }
 /* Scroll-spy: highlight the nav link for the section you're viewing */
 .nav a.active { color: var(--tfl-blue); font-weight: 800; background: rgba(0, 25, 168, 0.09); }
+
+/* Next-run compass direction chip */
+.run-dir { display: inline-flex; align-items: center; gap: 5px; font-weight: 700; font-size: 13px; color: var(--tfl-blue); background: rgba(0, 25, 168, 0.08); padding: 4px 11px; border-radius: 20px; margin-left: 8px; vertical-align: middle; }
+/* Route ideas: mark-as-run button + sightseeing badges */
+.rc-mark { font: 700 13px Inter, sans-serif; padding: 6px 13px; border-radius: 20px; border: 1px solid var(--tfl-blue); background: #fff; color: var(--tfl-blue); cursor: pointer; transition: all 0.12s; }
+.rc-mark:hover { background: var(--tfl-blue); color: #fff; }
+.rc-mark.on { background: var(--tfl-blue); color: #fff; }
+.route-progress { margin-top: 30px; }

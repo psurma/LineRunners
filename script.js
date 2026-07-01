@@ -289,6 +289,18 @@
     return h ? `${h}h ${m}m` : `${m} min`;
   }
 
+  // Overall compass heading of a run, start → finish (8-point, e.g. "Southeastbound").
+  function compassBound(wp) {
+    if (!wp || wp.length < 2) return null;
+    const a = wp[0], b = wp[wp.length - 1];
+    const lat1 = a[1] * Math.PI / 180, lat2 = b[1] * Math.PI / 180, dLon = (b[2] - a[2]) * Math.PI / 180;
+    const y = Math.sin(dLon) * Math.cos(lat2);
+    const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
+    const brng = (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+    const dirs = ["North", "Northeast", "East", "Southeast", "South", "Southwest", "West", "Northwest"];
+    return dirs[Math.round(brng / 45) % 8] + "bound";
+  }
+
   // --- Render: Next run card + weather ----------------------------------
   function renderNext() {
     const el = document.getElementById("nextCard");
@@ -297,6 +309,7 @@
     el.style.borderLeftColor = c;
     el.style.setProperty("--run-col", c);
     const md = nextRun.days && nextRun.days.length > 1 ? nextRun.days : null;
+    const bound = compassBound(WAYPOINTS[nextRun.key]);
     const endDate = md ? new Date(nextRun.date.getTime() + (md.length - 1) * 86400000) : null;
     el.classList.toggle("is-multiday", !!md);
     el.innerHTML = `
@@ -309,6 +322,7 @@
       <div class="next-body">
         <span class="line-tag" style="background:${c};color:${tc}">${escapeHtml(nextRun.badge)}</span>
         ${md ? `<span class="multiday-badge">${md.length}-day run</span>` : ""}
+        ${bound ? `<span class="run-dir">🧭 ${bound}</span>` : ""}
         <h3>${escapeHtml(nextRun.leg)}</h3>
         <div class="next-meta">
           <div><strong>Meet</strong> ${MEET_TIME} · <a class="meet-link" href="${escapeAttr(meetMapUrl(nextRun))}" target="_blank" rel="noopener">${escapeHtml(nextRun.start)} ↗</a></div>
@@ -519,15 +533,17 @@
     const wp = opts.wp || WAYPOINTS[key];
     if (!wp || !wp.length) return "";
     const iact = !!opts.interactive;
+    const tappable = iact || !!opts.tap; // opts.tap: clickable stops without the two-point planner logic
     const a = iact ? opts.a : 0, b = iact ? opts.b : wp.length - 1;
     const from = iact ? opts.from : 0, to = iact ? opts.to : wp.length - 1;
-    const tag = iact ? "button" : "span";
+    const tag = tappable ? "button" : "span";
     const label = escapeHtml(opts.bannerLabel || `${lineName} line`);
-    const banner = `<div class="strip-line" style="background:${colour};color:${contrastText(colour)}">${label}${iact ? " · tap two stops" : ""}</div>`;
+    const hint = opts.tap ? " · tap a stop to zoom the map" : "";
+    const banner = `<div class="strip-line" style="background:${colour};color:${contrastText(colour)}">${label}${hint}</div>`;
     const track = wp.map((p, i) => {
       const active = i >= a && i <= b;
       const endpoint = i === from || i === to;
-      return `<${tag} class="stn${active ? " active" : ""}${endpoint ? " endpoint" : ""}"${iact ? ` data-i="${i}"` : ""} title="${escapeHtml(p[0])}" aria-label="${escapeHtml(p[0])}">
+      return `<${tag} class="stn${active ? " active" : ""}${endpoint ? " endpoint" : ""}"${tappable ? ` data-i="${i}"` : ""} title="${escapeHtml(p[0])}" aria-label="${escapeHtml(p[0])}">
                 <span class="stn-name">${escapeHtml(p[0])}</span>
                 <span class="rail"><span class="dot"></span></span>
                 ${interchangeTags(p[0], lineName)}
@@ -784,6 +800,44 @@
   ];
 
   const routeMap = { map: null, layer: null, current: -1, reversed: false };
+
+  // Route ideas you've run — kept per-visitor (localStorage), keyed by route name.
+  const ROUTE_KEY = "tuberun_routes";
+  function loadRoutesRun() {
+    try { const s = JSON.parse(localStorage.getItem(ROUTE_KEY)); return new Set(Array.isArray(s) ? s : []); }
+    catch (_) { return new Set(); }
+  }
+  function saveRoutesRun(set) { try { localStorage.setItem(ROUTE_KEY, JSON.stringify([...set])); } catch (_) { /* private mode */ } }
+  let routeRun = loadRoutesRun();
+  const LANDMARK_TOTAL = ROUTES.filter((r) => r.type === "landmark").length;
+  const ROUTE_BADGES = [
+    { icon: "📸", name: "Sightseer", desc: "Run any landmark route", test: (c) => (c.type.landmark || 0) >= 1 },
+    { icon: "🏛", name: "Grand Tourist", desc: "Run the Grand Tour of Thames landmarks", test: (c) => c.has("The Grand Tour (Thames Landmarks)") },
+    { icon: "🌳", name: "Park Life", desc: "Run 5 park routes", test: (c) => (c.type.park || 0) >= 5 },
+    { icon: "🌊", name: "River Runner", desc: "Run 3 riverside routes", test: (c) => (c.type.river || 0) >= 3 },
+    { icon: "🛶", name: "Towpath Tramp", desc: "Run 3 canal routes", test: (c) => (c.type.canal || 0) >= 3 },
+    { icon: "🥾", name: "Trailblazer", desc: "Run 3 trail routes", test: (c) => (c.type.trail || 0) >= 3 },
+    { icon: "🗺", name: "Landmark Hunter", desc: "Run every landmark route", test: (c) => (c.type.landmark || 0) >= LANDMARK_TOTAL },
+    { icon: "🧭", name: "Explorer", desc: "Run 10 different routes", test: (c) => c.count >= 10 },
+    { icon: "👑", name: "London Complete", desc: `Run all ${ROUTES.length} routes`, test: (c) => c.count >= ROUTES.length },
+  ];
+  function renderRouteProgress() {
+    const el = document.getElementById("routeProgress");
+    if (!el) return;
+    const runList = ROUTES.filter((r) => routeRun.has(r.name));
+    const type = {};
+    runList.forEach((r) => { type[r.type] = (type[r.type] || 0) + 1; });
+    const ctx = { count: runList.length, type, has: (n) => routeRun.has(n) };
+    const got = ROUTE_BADGES.filter((b) => b.test(ctx)).length;
+    const badges = ROUTE_BADGES.map((b) => {
+      const g = b.test(ctx);
+      return `<div class="badge${g ? " got" : ""}"><span class="badge-ic">${g ? b.icon : "🔒"}</span><span class="badge-nm">${escapeHtml(b.name)}</span><span class="badge-ds">${escapeHtml(b.desc)}</span></div>`;
+    }).join("");
+    el.innerHTML = `
+      <div class="lc-badges-head"><h3>Sightseeing badges</h3><span class="lc-badges-count">${runList.length} route${runList.length === 1 ? "" : "s"} run · ${got} / ${ROUTE_BADGES.length} badges</span></div>
+      <p class="lc-hint">Mark the routes you've run to collect sightseeing badges — parks, rivers, canals, trails and London's landmarks.</p>
+      <div class="lc-badges">${badges}</div>`;
+  }
   // Real OSM route geometry (data/routes.geojson), keyed by slug in ROUTES order.
   const ROUTE_IDS = ["regents-canal", "hyde-kensington", "grand-tour", "regents-park", "diana-memorial", "victoria-park", "battersea-park", "greenwich-park", "hampstead-heath", "stjames-green", "southwark-docks", "wormwood-scrubs",
     "richmond-park", "bushy-park", "wimbledon-common", "clapham-common", "wandsworth-common", "brockwell-park", "dulwich-park", "crystal-palace-park", "alexandra-park", "finsbury-park", "parkland-walk", "grand-union-paddington", "lea-navigation", "olympic-park", "thames-putney-richmond", "thames-barrier"];
@@ -852,10 +906,16 @@
         <p class="rc-hi">${escapeHtml(r.highlights)}</p>
         ${r.suitability ? `<p class="rc-suit">${escapeHtml(r.suitability)}</p>` : ""}
         <div class="rc-actions">
-          <span class="rc-hint">Tap to trace on the map →</span>
+          <button type="button" class="rc-mark" data-name="${escapeHtml(r.name)}">＋ Mark as run</button>
           <button type="button" class="rc-reverse" data-i="${i}">⇄ Reverse direction</button>
         </div>
       </div>`;
+  }
+
+  function syncRouteMark(btn) {
+    const ran = routeRun.has(btn.dataset.name);
+    btn.classList.toggle("on", ran);
+    btn.textContent = ran ? "✓ Ran this route" : "＋ Mark as run";
   }
 
   // Rebuild the (filtered) card list; returns the original index of the first visible route.
@@ -874,6 +934,16 @@
       card.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); selectRoute(i); } });
       const rev = card.querySelector(".rc-reverse");
       if (rev) rev.addEventListener("click", (e) => { e.stopPropagation(); reverseRoute(i, rev); });
+      const mark = card.querySelector(".rc-mark");
+      if (mark) {
+        syncRouteMark(mark);
+        mark.addEventListener("click", (e) => {
+          e.stopPropagation();
+          const n = mark.dataset.name;
+          if (routeRun.has(n)) routeRun.delete(n); else routeRun.add(n);
+          saveRoutesRun(routeRun); syncRouteMark(mark); renderRouteProgress();
+        });
+      }
     });
     return visible[0].i;
   }
@@ -922,6 +992,7 @@
     if (!el) return;
     renderFilters();
     const first = renderRouteCards();
+    renderRouteProgress();
 
     const mapEl = document.getElementById("routeMap");
     if (mapEl && typeof L !== "undefined") {
@@ -1074,7 +1145,15 @@
           <button type="button" id="busMark" class="bus-mark" data-id="${escapeHtml(id)}">＋ Mark as run</button>
           <div class="cr-note">Distance along the stops × ${ROAD_FACTOR} for the road. Buses run on-road — mind the traffic and lights.</div>
         </div>
-        <div class="line-diagram strip bus-strip" style="--line-col:${BUS_COL}">${stripMapHtml(null, BUS_COL, banner, { wp, bannerLabel: banner })}</div>`;
+        <div class="line-diagram strip bus-strip" style="--line-col:${BUS_COL}">${stripMapHtml(null, BUS_COL, banner, { wp, bannerLabel: banner, tap: true })}</div>`;
+      result.querySelectorAll(".bus-strip .stn").forEach((btn) => btn.addEventListener("click", () => {
+        const s = wp[+btn.dataset.i];
+        if (!s || !busMapObj.map) return;
+        busMapObj.map.setView([s[1], s[2]], 16, { animate: true });
+        L.popup({ offset: [0, -2] }).setLatLng([s[1], s[2]]).setContent(escapeHtml(s[0])).openOn(busMapObj.map);
+        if (window.matchMedia("(max-width: 860px)").matches)
+          document.getElementById("busMap").scrollIntoView({ behavior: "smooth", block: "center" });
+      }));
       syncBusMark();
       const mark = document.getElementById("busMark");
       if (mark) mark.addEventListener("click", () => {
