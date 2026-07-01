@@ -625,23 +625,45 @@
   ];
 
   const routeMap = { map: null, layer: null };
+  // Real OSM route geometry (data/routes.geojson), keyed by slug in ROUTES order.
+  const ROUTE_IDS = ["regents-canal", "hyde-kensington", "grand-tour", "regents-park", "diana-memorial", "victoria-park", "battersea-park", "greenwich-park", "hampstead-heath", "stjames-green", "southwark-docks", "wormwood-scrubs"];
+  let routesGeo = null;
+  async function loadRoutes() {
+    if (routesGeo) return routesGeo;
+    routesGeo = {};
+    try {
+      const res = await fetch("data/routes.geojson");
+      if (res.ok) { const gj = await res.json(); for (const f of gj.features) routesGeo[f.properties.id] = f.geometry; }
+    } catch (_) { /* fall back to the sketched paths */ }
+    return routesGeo;
+  }
 
   function drawRoute(i) {
     const r = ROUTES[i], c = ROUTE_COLOURS[r.type] || "#0019A8", m = routeMap.map;
-    if (!m || !r.path || !r.path.length) return;
+    if (!m) return;
+    const geom = routesGeo && routesGeo[ROUTE_IDS[i]];
+    let segs; // array of segments, each an array of [lat,lon]
+    if (geom) {
+      const toLL = (ring) => ring.map((p) => [p[1], p[0]]);
+      segs = geom.type === "MultiLineString" ? geom.coordinates.map(toLL) : [toLL(geom.coordinates)];
+    } else if (r.path && r.path.length) {
+      segs = [r.loop && r.path.length > 2 ? r.path.concat([r.path[0]]) : r.path];
+    } else return;
     if (routeMap.layer) m.removeLayer(routeMap.layer);
-    const grp = L.layerGroup();
-    const pts = r.loop && r.path.length > 2 ? r.path.concat([r.path[0]]) : r.path;
-    L.polyline(pts, { color: c, weight: 5, opacity: 0.3, lineJoin: "round", lineCap: "round" }).addTo(grp);
-    L.polyline(pts, { renderer: L.svg(), color: c, weight: 5, opacity: 0.95, lineCap: "round", lineJoin: "round", className: "route-flow", dashArray: "2 13" }).addTo(grp);
-    const first = r.path[0], last = r.path[r.path.length - 1];
-    L.circleMarker(first, { radius: 6, color: "#fff", weight: 2, fillColor: c, fillOpacity: 1 })
+    const grp = L.layerGroup(), all = [];
+    segs.forEach((seg) => {
+      L.polyline(seg, { color: c, weight: 5, opacity: 0.3, lineJoin: "round", lineCap: "round" }).addTo(grp);
+      L.polyline(seg, { renderer: L.svg(), color: c, weight: 5, opacity: 0.95, lineCap: "round", lineJoin: "round", className: "route-flow", dashArray: "2 13" }).addTo(grp);
+      seg.forEach((p) => all.push(p));
+    });
+    const lastSeg = segs[segs.length - 1];
+    L.circleMarker(segs[0][0], { radius: 6, color: "#fff", weight: 2, fillColor: c, fillOpacity: 1 })
       .bindTooltip("Start · " + escapeHtml(r.start), { direction: "top" }).addTo(grp);
-    if (!r.loop) L.circleMarker(last, { radius: 6, color: c, weight: 2, fillColor: "#fff", fillOpacity: 1 })
+    if (!r.loop) L.circleMarker(lastSeg[lastSeg.length - 1], { radius: 6, color: c, weight: 2, fillColor: "#fff", fillOpacity: 1 })
       .bindTooltip("Finish", { direction: "top" }).addTo(grp);
     grp.addTo(m);
     routeMap.layer = grp;
-    m.fitBounds(L.latLngBounds(r.path), { padding: [34, 34] });
+    m.fitBounds(L.latLngBounds(all), { padding: [34, 34] });
   }
 
   function selectRoute(i) {
@@ -678,7 +700,8 @@
       routeMap.map = L.map(mapEl, { center: [51.509, -0.115], zoom: 11, preferCanvas: true, zoomSnap: 0 });
       cartoBasemap().addTo(routeMap.map);
       modifierWheelZoom(routeMap.map);
-      requestAnimationFrame(() => { routeMap.map.invalidateSize(false); selectRoute(0); });
+      observeMapSize(routeMap.map);
+      requestAnimationFrame(async () => { routeMap.map.invalidateSize(false); await loadRoutes(); selectRoute(0); });
     }
   }
 
@@ -838,8 +861,8 @@
     const root = document.getElementById("tubeMap");
     if (!root) return;
     root.innerHTML = `
-      <div class="tm-tabs">${MAPS.map((m) =>
-        `<button type="button" class="tm-tab${m.key === curMap ? " on" : ""}" data-map="${m.key}">${escapeHtml(m.label)}</button>`).join("")}</div>
+      <div class="tm-tabs" role="tablist" aria-label="Map views">${MAPS.map((m) =>
+        `<button type="button" role="tab" id="tmtab-${m.key}" aria-controls="tmHolder" aria-selected="${m.key === curMap ? "true" : "false"}" class="tm-tab${m.key === curMap ? " on" : ""}" data-map="${m.key}">${escapeHtml(m.label)}</button>`).join("")}</div>
       <div class="tm-bar">
         <p class="tm-caption" id="tmCaption"></p>
         <div class="tm-zoom">
@@ -848,12 +871,12 @@
           <button type="button" class="tm-zbtn" data-z="in" aria-label="Zoom in">+</button>
         </div>
       </div>
-      <div class="tm-scroll" id="tmHolder"><p class="tm-loading">Loading the map…</p></div>
+      <div class="tm-scroll" id="tmHolder" role="tabpanel" aria-live="polite" tabindex="0"><p class="tm-loading">Loading the map…</p></div>
       <p class="tm-scrollhint">Drag to pan · ⌘/Ctrl + scroll to zoom to the cursor · or use +/&minus;.</p>`;
     root.querySelectorAll(".tm-tab").forEach((b) => b.addEventListener("click", () => {
       curMap = b.dataset.map;
       curZoom = defaultZoom(curMapKind());
-      root.querySelectorAll(".tm-tab").forEach((x) => x.classList.toggle("on", x === b));
+      root.querySelectorAll(".tm-tab").forEach((x) => { const on = x === b; x.classList.toggle("on", on); x.setAttribute("aria-selected", on ? "true" : "false"); });
       loadMap();
     }));
     root.querySelectorAll(".tm-zbtn").forEach((b) => b.addEventListener("click", () => {
@@ -1018,6 +1041,21 @@
     }, { passive: false });
   }
 
+  // Recompute size the first time a map scrolls into view (mobile can init it hidden/mis-sized).
+  function observeMapSize(map) {
+    if (!("IntersectionObserver" in window)) return;
+    const io = new IntersectionObserver((entries) => {
+      if (entries.some((e) => e.isIntersecting)) map.invalidateSize(false);
+    }, { threshold: 0.05 });
+    io.observe(map.getContainer());
+  }
+  // Small persistent hint on the geo map so mouse users know how to zoom.
+  function addZoomHint(map) {
+    const c = L.control({ position: "bottomleft" });
+    c.onAdd = () => { const d = L.DomUtil.create("div", "tm-map-hint"); d.textContent = "⌘/Ctrl + scroll to zoom · drag to pan"; return d; };
+    c.addTo(map);
+  }
+
   // Cumulative running distance (km) to each stop along the highlighted line's longest branch.
   function tmComputeKm(net, hi) {
     const out = {};
@@ -1061,6 +1099,8 @@
     tmMap.map = map;
     cartoBasemap().addTo(map);
     modifierWheelZoom(map);
+    observeMapSize(map);
+    addZoomHint(map);
 
     // Tube lines (real track geometry). Highlighted line bold & on top, others dimmed.
     const lineLayer = L.geoJSON(geo, { style: (f) => { const on = hi && f.properties.line === hi;

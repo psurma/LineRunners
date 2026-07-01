@@ -641,6 +641,10 @@ body.tm-map-active .tm-zoom, body.tm-map-active .tm-scrollhint { display: none; 
   text-shadow: 0 0 2px #fff, 0 0 2px #fff;
 }
 @media (prefers-reduced-motion: reduce) { .route-flow { animation: none; } }
+.tm-map-hint {
+  background: rgba(255, 255, 255, 0.9); border-radius: 6px; padding: 3px 8px;
+  font: 600 11px Inter, sans-serif; color: #3f4653; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15); pointer-events: none;
+}
 .geo-modes { display: inline-flex; align-items: center; gap: 4px; margin-left: 8px; }
 .geo-mode { font: 600 12px Inter, sans-serif; border: 1px solid var(--line); background: #fff; color: var(--muted); padding: 2px 9px; border-radius: 20px; cursor: pointer; }
 .geo-mode.on { background: var(--tfl-blue); border-color: var(--tfl-blue); color: #fff; }
