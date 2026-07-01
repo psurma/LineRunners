@@ -548,6 +548,21 @@
     diagram.querySelectorAll(".stn").forEach((btn) => {
       btn.addEventListener("click", () => onStationClick(+btn.dataset.i));
     });
+    updatePlanPrompt();
+  }
+
+  // Make it obvious whether the next tap sets the Start or the Finish point.
+  function updatePlanPrompt() {
+    const el = document.getElementById("planPrompt");
+    const startField = document.getElementById("fieldStart");
+    const finishField = document.getElementById("fieldFinish");
+    if (startField) startField.classList.toggle("next-pick", firstPick);
+    if (finishField) finishField.classList.toggle("next-pick", !firstPick);
+    if (!el) return;
+    el.classList.toggle("is-finish", !firstPick);
+    el.innerHTML = firstPick
+      ? `<span class="pp-badge pp-start">1 · Start</span> Tap a station below (or the map) to set where you <strong>join</strong> the run.`
+      : `<span class="pp-badge pp-finish">2 · Finish</span> Now tap where you'll <strong>leave</strong> — that sets your finish. Tap Start again to redo.`;
   }
 
   function onStationClick(idx) {

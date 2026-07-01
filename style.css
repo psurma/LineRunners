@@ -1201,3 +1201,14 @@ body {
   background: var(--tfl-accent);
 }
 .site-footer .fine { color: #b8c2ee; opacity: 1; }
+
+/* Planner: obvious next-pick prompt (Start vs Finish) */
+.plan-prompt { margin: 0 0 14px; padding: 10px 14px; border-radius: 10px; background: #eef1ff; border-left: 4px solid var(--tfl-blue); font-size: 15px; color: var(--ink); }
+.plan-prompt.is-finish { background: #eaf6ef; border-left-color: #1e7a44; }
+.pp-badge { display: inline-block; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; color: #fff; padding: 2px 10px; border-radius: 20px; margin-right: 8px; }
+.pp-start { background: var(--tfl-blue); }
+.pp-finish { background: #1e7a44; }
+#fieldStart.next-pick label { color: var(--tfl-blue); font-weight: 800; }
+#fieldFinish.next-pick label { color: #1e7a44; font-weight: 800; }
+#fieldStart.next-pick select { border-color: var(--tfl-blue); box-shadow: 0 0 0 3px rgba(0, 25, 168, 0.14); }
+#fieldFinish.next-pick select { border-color: #1e7a44; box-shadow: 0 0 0 3px rgba(30, 122, 68, 0.16); }
