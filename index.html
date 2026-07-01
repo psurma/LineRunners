@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tube Run &middot; Running London's Underground, above ground</title>
+  <meta name="description" content="Tube Run is a London running group that runs above ground, tracing the Underground line by line, on the first Sunday of every month." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css?v=13" />
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="#top" aria-label="Tube Run — home">
+      <img class="brand-icon" src="img/logo.png" alt="" width="42" height="42" />
+      <span class="brand-word">Tube Run</span>
+    </a>
+    <nav class="nav">
+      <a href="#next">Next run</a>
+      <a href="#plan">Plan</a>
+      <a href="#network">Map</a>
+      <a href="#stats">Lines</a>
+      <a href="#newhere">New here?</a>
+      <a href="#schedule">Schedule</a>
+      <a href="#routes">Routes</a>
+      <a href="#collector">Progress</a>
+      <a href="#clubs">Clubs</a>
+      <a href="#join">Join us</a>
+    </nav>
+  </header>
+
+  <main id="top">
+    <div id="liveBanner" class="live-banner" hidden></div>
+
+    <!-- HERO -->
+    <section class="hero">
+      <div class="hero-inner">
+        <p class="eyebrow">London &middot; Free social running club &middot; #TubeRun</p>
+        <h1>We run the Tube.<br /><span>Above ground.</span></h1>
+        <p class="lede">
+          Tube Run traces the course of a London Underground line on foot &mdash; staying as close
+          as we can to the track above the surface. One line at a time, once a month (sometimes more),
+          rain or shine. Free, sociable, all paces welcome.
+        </p>
+        <div class="hero-cta">
+          <a class="btn btn-primary" href="#next">See the next run</a>
+          <a class="btn btn-ghost" href="#join">Join the group</a>
+        </div>
+      </div>
+      <div class="hero-lines" aria-hidden="true"></div>
+    </section>
+
+    <!-- NEXT RUN -->
+    <section id="next" class="next">
+      <h2 class="section-title">Next run</h2>
+      <div class="next-card" id="nextCard">
+        <!-- filled by script.js -->
+      </div>
+      <div class="weather" id="weather" aria-live="polite"></div>
+    </section>
+
+    <!-- PLAN YOUR DISTANCE -->
+    <section id="plan" class="plan">
+      <h2 class="section-title">Plan your distance</h2>
+      <p class="section-sub" id="planSub">
+        Joining partway, or peeling off early? Pick your start and finish points on the
+        next route to see the running distance and a rough finish time. Tap points on the
+        map to set them.
+      </p>
+      <div class="line-diagram" id="lineDiagram"></div>
+      <div class="calc" id="calc">
+        <div class="field">
+          <label for="fromStn">Start</label>
+          <select id="fromStn"></select>
+        </div>
+        <div class="field">
+          <label for="toStn">Finish</label>
+          <select id="toStn"></select>
+        </div>
+        <div class="field">
+          <label for="pace">Pace</label>
+          <select id="pace">
+            <option value="7">Easy &middot; 7:00 /km</option>
+            <option value="6.5" selected>Steady &middot; 6:30 /km</option>
+            <option value="6">Moderate &middot; 6:00 /km</option>
+            <option value="5.25">Brisk &middot; 5:15 /km</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="units">Units</label>
+          <select id="units">
+            <option value="km" selected>Kilometres</option>
+            <option value="mi">Miles</option>
+          </select>
+        </div>
+      </div>
+      <div class="calc-result" id="calcResult"></div>
+    </section>
+
+    <!-- NETWORK MAP -->
+    <section id="network" class="network">
+      <h2 class="section-title">The whole network</h2>
+      <p class="section-sub">The standard map with the next run's line lit up &mdash; plus walking-time and toilet maps for planning breaks. Zoom and drag to explore.</p>
+      <div id="tubeMap" class="tube-map"></div>
+    </section>
+
+    <!-- LINE STATS -->
+    <section id="stats" class="stats-lines">
+      <h2 class="section-title">Line by line</h2>
+      <p class="section-sub">Every Underground line ranked by length, with stations and rough end-to-end run and walk times. The next run's line is flagged.</p>
+      <div id="lineStats" class="line-stats"></div>
+    </section>
+
+    <!-- NEW HERE -->
+    <section id="newhere" class="newhere">
+      <h2 class="section-title">New here? Start with us</h2>
+      <p class="section-sub">Never run with a group before? Perfect &mdash; most of us started exactly there. Here's everything you need for your first Tube Run.</p>
+      <div class="nh-grid">
+        <div class="nh-col">
+          <h3>Your first run</h3>
+          <ul class="nh-list">
+            <li><strong>Just turn up.</strong> No sign-up, no fee. Find us at the meeting point &mdash; look for the roundel.</li>
+            <li><strong>All paces welcome.</strong> We run in loose pace groups and <em>no one gets left behind</em>.</li>
+            <li><strong>We regroup at every station.</strong> A quick breather and a group photo under the roundel before the next leg.</li>
+            <li><strong>Join or peel off anywhere.</strong> Every route runs past stations &mdash; use the planner above to pick your stretch.</li>
+            <li><strong>Stick around.</strong> We usually finish with coffee (and often a pub).</li>
+          </ul>
+        </div>
+        <div class="nh-col">
+          <h3>What to bring &amp; staying safe</h3>
+          <ul class="nh-list check">
+            <li>Comfortable trainers and clothes for the weather</li>
+            <li>Water, plus a snack for the longer runs</li>
+            <li>Contactless or Oyster for the ride home</li>
+            <li>Phone &mdash; for photos, maps and safety</li>
+            <li><strong>A head-torch or lights</strong> for evening canal and night runs</li>
+            <li>A layer to throw on at regroup stops</li>
+          </ul>
+          <p class="nh-note">We share the exact route in advance, stick to lit and populated streets and paths, and keep the group together. Run within your limits, and tell a group lead if you're heading off early.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- SCHEDULE -->
+    <section id="schedule" class="schedule">
+      <h2 class="section-title">Upcoming runs</h2>
+      <p class="section-sub">Mostly the first Sunday of every month &mdash; plus the odd adventure further afield. Here's what's coming up.</p>
+      <div class="run-list" id="runList"></div>
+    </section>
+
+    <!-- ROUTE IDEAS -->
+    <section id="routes" class="routes">
+      <h2 class="section-title">Route ideas</h2>
+      <p class="section-sub">A library of group-friendly London routes &mdash; parks, rivers, canals and landmark tours &mdash; to adapt into upcoming runs. Curated from a runners' guide to London.</p>
+      <div id="routeList" class="route-grid"></div>
+    </section>
+
+    <!-- LINE COLLECTOR -->
+    <section id="collector" class="collector">
+      <h2 class="section-title">The line collector</h2>
+      <p class="section-sub">Direction counts &mdash; running a line each way is two different runs. Collect both to truly tick it off. The goal? The whole network, both ways, one Sunday at a time.</p>
+      <div id="lineCollector" class="line-collector"></div>
+    </section>
+
+    <!-- ABOUT -->
+    <section id="about" class="about">
+      <h2 class="section-title">About Tube Run</h2>
+      <div class="about-grid">
+        <div class="about-text">
+          <p>
+            It started with a simple idea: what does the Underground actually look like
+            from up top? Each month we pick a line &mdash; or a stretch of one &mdash; and
+            run it end to end, staying as close to the tunnels and tracks as the streets allow.
+          </p>
+          <p>
+            We stop at the stations, learn a bit of the history, and finish somewhere with
+            a good coffee (and usually a pub nearby). It's part run, part exploration of the
+            city most Londoners only ever see from a platform.
+          </p>
+          <ul class="facts">
+            <li><strong>When</strong> First Sunday of every month, 09:00</li>
+            <li><strong>Distance</strong> Typically 8&ndash;16 km, split into walk-friendly legs</li>
+            <li><strong>Pace</strong> Relaxed &mdash; no one gets left behind</li>
+            <li><strong>Cost</strong> Free. Bring your Oyster for the ride home.</li>
+          </ul>
+        </div>
+        <div class="about-side">
+          <div class="stat"><span class="stat-num">11</span><span class="stat-label">lines to conquer</span></div>
+          <div class="stat"><span class="stat-num">40+</span><span class="stat-label">regular runners</span></div>
+          <div class="stat"><span class="stat-num">272</span><span class="stat-label">stations out there</span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- GALLERY -->
+    <section id="gallery" class="gallery">
+      <h2 class="section-title">From the runs</h2>
+      <p class="section-sub">Moments from the tube lines, towpaths and everything in between.</p>
+      <div id="galleryGrid" class="gallery-grid"></div>
+    </section>
+
+    <!-- FRIENDS / OTHER CLUBS -->
+    <section id="clubs" class="clubs">
+      <h2 class="section-title">Friends &amp; other London clubs</h2>
+      <p class="section-sub">
+        Tube Run is a free, social, once-a-month thing &mdash; if you've caught the bug and want to run
+        more often, London's spoilt for choice. Here are some brilliant clubs and crews worth a look.
+      </p>
+
+      <h3 class="clubs-group">Social run crews</h3>
+      <div class="club-grid">
+        <a class="club-card" href="https://www.rundemcrew.com" target="_blank" rel="noopener">
+          <strong>Run Dem Crew</strong><span>Pioneering creative East London running collective since 2007</span></a>
+        <a class="club-card" href="https://www.midnightrunners.com/cities/london" target="_blank" rel="noopener">
+          <strong>Midnight Runners</strong><span>Evening bootcamp runs with music and workout stops</span></a>
+        <a class="club-card" href="https://www.trackmafia.co.uk" target="_blank" rel="noopener">
+          <strong>TrackMafia</strong><span>Free, inclusive Thursday-night speed and track crew</span></a>
+        <a class="club-card" href="https://www.instagram.com/runnersldn" target="_blank" rel="noopener">
+          <strong>adidas Runners London</strong><span>Brand-backed free coached community runs across London</span></a>
+      </div>
+
+      <h3 class="clubs-group">Established clubs</h3>
+      <div class="club-grid">
+        <a class="club-card" href="https://www.serpentine.org.uk" target="_blank" rel="noopener">
+          <strong>Serpentine Running &amp; Tri Club</strong><span>Central London's largest inclusive run &amp; triathlon club</span></a>
+        <a class="club-card" href="https://londonfrontrunners.org" target="_blank" rel="noopener">
+          <strong>London Frontrunners</strong><span>London's inclusive LGBT+ running club since 1995</span></a>
+        <a class="club-card" href="https://www.ealingeagles.com" target="_blank" rel="noopener">
+          <strong>Ealing Eagles</strong><span>Friendly, sociable, volunteer-run West London club</span></a>
+        <a class="club-card" href="https://www.claphamchasers.co.uk" target="_blank" rel="noopener">
+          <strong>Clapham Chasers</strong><span>Inclusive South West London run &amp; triathlon club</span></a>
+        <a class="club-card" href="https://www.dulwichrunners.org.uk" target="_blank" rel="noopener">
+          <strong>Dulwich Runners</strong><span>Friendly South London club for all distances</span></a>
+        <a class="club-card" href="https://vphthac.org.uk" target="_blank" rel="noopener">
+          <strong>Victoria Park Harriers &amp; THAC</strong><span>Friendly East London athletics club, all abilities</span></a>
+      </div>
+    </section>
+
+    <!-- JOIN -->
+    <section id="join" class="join">
+      <h2 class="section-title">Join us</h2>
+      <p class="section-sub">
+        Turn up on the day &mdash; that's it. Drop your details below and we'll send you the
+        meeting point and line for the next run.
+      </p>
+      <form class="join-form" id="joinForm" novalidate>
+        <div class="field">
+          <label for="name">Name</label>
+          <input id="name" name="name" type="text" autocomplete="name" placeholder="Your name" required />
+        </div>
+        <div class="field">
+          <label for="email">Email</label>
+          <input id="email" name="email" type="email" autocomplete="email" placeholder="you@example.com" required />
+        </div>
+        <button class="btn btn-primary" type="submit">Count me in</button>
+        <p class="form-note" id="formNote" role="status" aria-live="polite"></p>
+      </form>
+
+      <div class="connect">
+        <span class="connect-label">Find us on</span>
+        <div class="social-links" id="socialLinks"></div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <p>Tube Run &middot; a community running group in London.</p>
+    <p class="fine">Not affiliated with Transport for London. Roundel-inspired branding used with affection, not endorsement.</p>
+  </footer>
+
+  <script src="script.js?v=13"></script>
+</body>
+</html>

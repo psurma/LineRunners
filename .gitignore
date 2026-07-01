@@ -1,0 +1,6 @@
+# macOS
+.DS_Store
+
+# Playwright / tooling scratch
+.playwright-mcp/
+*.tmp
