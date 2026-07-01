@@ -99,6 +99,17 @@
   //   stay       — [{ name, url }] accommodation options
   //   notes      — free text
   const RUN_PLAN = [
+    {
+      type: "tube", line: "Metropolitan", date: "2026-07-04",
+      leg: "Chesham → Aldgate", start: "Chesham Underground Station",
+      distance: "2 days · ~40 km",
+      routeLink: "https://www.strava.com/clubs/311876/group_events/3499820905351240354",
+      notes: "Our big one — the whole Metropolitan line over a weekend, from Chesham out in the Chilterns all the way to Aldgate, split overnight at Wembley Park. All paces: run as much or as little of each day as you like.",
+      days: [
+        { title: "Day 1 · Sat 4 July — Chesham → Wembley Park", start: "Chesham Underground Station, 9:18am", distance: "~6:00/km, 2 pitstops", finish: "Wembley Park Underground Station" },
+        { title: "Day 2 · Sun 5 July — Wembley Park → Aldgate", start: "Wembley Park Underground Station, 9:35am", finish: "Aldgate" },
+      ],
+    },
     { type: "tube", line: "Victoria", leg: "Brixton → Walthamstow Central", start: "Brixton stn (outside M&S)", distance: "~13 km" },
     {
       type: "adventure", name: "Shipwrights Way", colour: "#5A7D2A",
@@ -148,6 +159,25 @@
       ["Harlesden", 51.5362, -0.2575], ["Stonebridge Park", 51.5439, -0.2755], ["Wembley Central", 51.5519, -0.2963],
       ["North Wembley", 51.5621, -0.3037], ["South Kenton", 51.5700, -0.3081], ["Kenton", 51.5816, -0.3162],
       ["Harrow & Wealdstone", 51.5925, -0.3346],
+    ],
+    Central: [
+      ["Liverpool Street", 51.5174, -0.0832], ["Bank", 51.5134, -0.0889], ["St Paul's", 51.5149, -0.0976],
+      ["Chancery Lane", 51.5182, -0.1116], ["Holborn", 51.5176, -0.1205], ["Tottenham Court Road", 51.5164, -0.1304],
+      ["Oxford Circus", 51.5152, -0.1419], ["Bond Street", 51.5143, -0.1497], ["Marble Arch", 51.5134, -0.1590],
+      ["Lancaster Gate", 51.5117, -0.1755], ["Queensway", 51.5103, -0.1872], ["Notting Hill Gate", 51.5091, -0.1961],
+      ["Holland Park", 51.5071, -0.2057], ["Shepherd's Bush", 51.5044, -0.2188], ["White City", 51.5120, -0.2243],
+      ["East Acton", 51.5166, -0.2472], ["North Acton", 51.5235, -0.2598], ["West Acton", 51.5180, -0.2810],
+      ["Ealing Broadway", 51.5150, -0.3015],
+    ],
+    Metropolitan: [
+      ["Chesham", 51.7052, -0.6112], ["Chalfont & Latimer", 51.6680, -0.5607], ["Chorleywood", 51.6544, -0.5185],
+      ["Rickmansworth", 51.6402, -0.4737], ["Moor Park", 51.6298, -0.4325], ["Northwood", 51.6111, -0.4238],
+      ["Northwood Hills", 51.6006, -0.4095], ["Pinner", 51.5929, -0.3812], ["North Harrow", 51.5849, -0.3624],
+      ["Harrow-on-the-Hill", 51.5792, -0.3372], ["Northwick Park", 51.5785, -0.3181], ["Preston Road", 51.5720, -0.2951],
+      ["Wembley Park", 51.5632, -0.2793], ["Finchley Road", 51.5468, -0.1798], ["Baker Street", 51.5229, -0.1571],
+      ["Great Portland Street", 51.5238, -0.1443], ["Euston Square", 51.5256, -0.1358], ["King's Cross St Pancras", 51.5307, -0.1232],
+      ["Farringdon", 51.5203, -0.1049], ["Barbican", 51.5203, -0.0980], ["Moorgate", 51.5182, -0.0883],
+      ["Liverpool Street", 51.5174, -0.0832], ["Aldgate", 51.5142, -0.0757],
     ],
     // Non-tube example — add coords for your canal/river/bus routes the same way:
     "Regent's Canal towpath": [
@@ -230,7 +260,10 @@
   // first-Sundays in listed order. Everything is then sorted chronologically.
   function parseISO(s) { const [y, m, d] = s.split("-").map(Number); return new Date(y, m - 1, d); }
   const autoCount = RUN_PLAN.filter((r) => !r.date).length;
-  const sundays = upcomingSundays(autoCount);
+  const pinned = RUN_PLAN.filter((r) => r.date).map((r) => parseISO(r.date));
+  // Don't auto-schedule a first-Sunday run on a weekend already taken by a dated special.
+  const nearPinned = (sun) => pinned.some((p) => Math.abs(p - sun) <= 2 * 86400000);
+  const sundays = upcomingSundays(autoCount + pinned.length).filter((s) => !nearPinned(s)).slice(0, autoCount);
   let si = 0;
   const runs = RUN_PLAN
     .map((r) => ({ ...normalise(r), date: r.date ? parseISO(r.date) : sundays[si++] }))
