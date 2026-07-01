@@ -743,23 +743,22 @@
 
   // Three maps in a tabbed, zoomable viewer.
   const MAPS = [
-    { key: "standard", file: "img/tube-map.svg", label: "Tube map", kind: "svg", highlight: true },
-    { key: "schematic", label: "Schematic ✦", kind: "schematic" },
+    { key: "geo", label: "Map", kind: "geo" },
     { key: "running", label: "Running times", kind: "data" },
     { key: "walking", file: "img/walking-map.png", label: "Walking times", kind: "img" },
     { key: "toilets", file: "img/toilet-map.png", label: "Toilets 🚻", kind: "img" },
-    { key: "geo", label: "Geographic", kind: "geo" },
+    { key: "standard", file: "img/tube-map.svg", label: "Tube map", kind: "svg", highlight: true },
     { key: "overground", file: "img/overground-map.png", label: "Overground", kind: "img" },
     { key: "connections", file: "img/connections-map.png", label: "Rail connections", kind: "img" },
   ];
   const svgCache = {};
-  let curMap = "standard";
-  let curZoom = 1.6;
+  let curMap = "geo";
+  let curZoom = 1.4;
   let netData = null;         // data/tube-network.json, lazy-loaded
   let toiletSet = null;       // Set of station ids with confirmed toilets
   let geoTimeMode = "run";    // run | walk | off — badge mode on the highlighted line
   let geoShowToilets = true;  // toilet pins on the geographic map
-  function defaultZoom(kind) { return kind === "geo" ? 1.7 : kind === "schematic" ? 1.3 : kind === "data" ? 1 : 1.6; }
+  function defaultZoom(kind) { return kind === "geo" ? 1.4 : kind === "schematic" ? 1.3 : kind === "data" ? 1 : 1.6; }
   async function loadNetwork() {
     if (netData) return netData;
     const [nRes, tRes] = await Promise.all([fetch("data/tube-network.json"), fetch("data/station-toilets.json")]);
@@ -936,16 +935,30 @@
   }
 
   // Equirectangular projection of lat/lon → a 1000-wide viewBox.
+  // Equirectangular projection with a radial "fisheye" that expands dense
+  // central London and compresses the sparse edges, so labels stop colliding.
   function geoProject(net) {
     let minLat = 90, maxLat = -90, minLon = 180, maxLon = -180;
     for (const id in net) { const st = net[id].stations; for (const sid in st) { const s = st[sid];
       if (s.lat < minLat) minLat = s.lat; if (s.lat > maxLat) maxLat = s.lat;
       if (s.lon < minLon) minLon = s.lon; if (s.lon > maxLon) maxLon = s.lon; } }
     const kx = Math.cos(((minLat + maxLat) / 2) * Math.PI / 180);
-    const W = 1000, pad = 26;
-    const scale = (W - 2 * pad) / ((maxLon - minLon) * kx);
-    const H = Math.round((maxLat - minLat) * scale + 2 * pad);
-    return { W, H, X: (lon) => pad + (lon - minLon) * kx * scale, Y: (lat) => pad + (maxLat - lat) * scale };
+    const planar = (lat, lon) => [(lon - minLon) * kx, (maxLat - lat)];
+    let cx = 0, cy = 0, n = 0; // centre of mass ≈ central London (dense)
+    for (const id in net) { const st = net[id].stations; for (const sid in st) { const c = planar(st[sid].lat, st[sid].lon); cx += c[0]; cy += c[1]; n++; } }
+    cx /= n; cy /= n;
+    let R = 1e-6;
+    for (const id in net) { const st = net[id].stations; for (const sid in st) { const c = planar(st[sid].lat, st[sid].lon); R = Math.max(R, Math.hypot(c[0] - cx, c[1] - cy)); } }
+    const P = 0.5; // exponent < 1 → expand centre, compress edges
+    const warp = (lat, lon) => { const c = planar(lat, lon), dx = c[0] - cx, dy = c[1] - cy, r = Math.hypot(dx, dy);
+      if (r < 1e-9) return [cx, cy]; const s = Math.pow(r / R, P) * R / r; return [cx + dx * s, cy + dy * s]; };
+    let fMinX = 1e9, fMaxX = -1e9, fMinY = 1e9, fMaxY = -1e9;
+    for (const id in net) { const st = net[id].stations; for (const sid in st) { const w = warp(st[sid].lat, st[sid].lon);
+      if (w[0] < fMinX) fMinX = w[0]; if (w[0] > fMaxX) fMaxX = w[0]; if (w[1] < fMinY) fMinY = w[1]; if (w[1] > fMaxY) fMaxY = w[1]; } }
+    const W = 1000, pad = 40;
+    const scale = (W - 2 * pad) / (fMaxX - fMinX);
+    const H = Math.round((fMaxY - fMinY) * scale + 2 * pad);
+    return { W, H, project: (lat, lon) => { const w = warp(lat, lon); return [pad + (w[0] - fMinX) * scale, pad + (w[1] - fMinY) * scale]; } };
   }
 
   function buildGeoSvg(net, hi) {
@@ -959,7 +972,7 @@
     for (const id of order) { const line = net[id], dim = hi && id !== hi;
       const w = id === hi ? 4.4 : 2.4, op = dim ? 0.18 : 1;
       for (const br of line.branches) {
-        const pts = br.map((sid) => { const s = line.stations[sid]; return `${p.X(s.lon).toFixed(1)},${p.Y(s.lat).toFixed(1)}`; }).join(" ");
+        const pts = br.map((sid) => { const s = line.stations[sid], q = p.project(s.lat, s.lon); return `${q[0].toFixed(1)},${q[1].toFixed(1)}`; }).join(" ");
         paths += `<polyline points="${pts}" fill="none" stroke="${line.colour}" stroke-width="${w}" stroke-linejoin="round" stroke-linecap="round" opacity="${op}"/>`;
       }
     }
@@ -967,7 +980,7 @@
     let dots = ""; const drawn = new Set();
     for (const id of order) { const line = net[id], dim = hi && id !== hi;
       for (const sid in line.stations) { if (drawn.has(sid)) continue; drawn.add(sid);
-        const s = line.stations[sid], x = p.X(s.lon).toFixed(1), y = p.Y(s.lat).toFixed(1);
+        const s = line.stations[sid], q = p.project(s.lat, s.lon), x = q[0].toFixed(1), y = q[1].toFixed(1);
         const onHi = hi && slines[sid].indexOf(hi) >= 0, op = dim && !onHi ? 0.22 : 1, inter = slines[sid].length > 1;
         const title = `<title>${escapeHtml(s.n)} — ${escapeHtml(slines[sid].map((l) => net[l].name).join(", "))}</title>`;
         dots += inter
@@ -985,17 +998,17 @@
       let cum = 0; const tmap = {};
       for (let i = 0; i < br.length; i++) { if (i > 0) { const a = line.stations[br[i - 1]], b = line.stations[br[i]];
         cum += haversineKm([0, a.lat, a.lon], [0, b.lat, b.lon]) * ROAD_FACTOR; } tmap[br[i]] = cum; }
-      for (const sid in line.stations) { const s = line.stations[sid], x = +p.X(s.lon).toFixed(1), y = +p.Y(s.lat).toFixed(1);
-        labels += `<text class="geo-lbl" x="${x + 4}" y="${y + 2.5}">${escapeHtml(s.n)}</text>`;
+      for (const sid in line.stations) { const s = line.stations[sid], q = p.project(s.lat, s.lon), x = q[0], y = q[1];
+        labels += `<text class="geo-lbl" x="${(x + 4).toFixed(1)}" y="${(y + 2.5).toFixed(1)}">${escapeHtml(s.n)}</text>`;
         if (geoTimeMode !== "off" && tmap[sid] !== undefined)
-          labels += `<text class="geo-time" x="${x + 4}" y="${y + 9}" fill="${line.colour}">${fmtTime(tmap[sid] * perKm)}</text>`;
+          labels += `<text class="geo-time" x="${(x + 4).toFixed(1)}" y="${(y + 9).toFixed(1)}" fill="${line.colour}">${fmtTime(tmap[sid] * perKm)}</text>`;
       }
     }
 
     // Toilet pins (confirmed via TfL facility data).
     let wc = "";
     if (geoShowToilets && toiletSet) toiletSet.forEach((sid) => { const s = coord[sid]; if (!s) return;
-      const x = (p.X(s.lon) + 3.4).toFixed(1), y = (p.Y(s.lat) - 3.4).toFixed(1);
+      const q = p.project(s.lat, s.lon), x = (q[0] + 3.4).toFixed(1), y = (q[1] - 3.4).toFixed(1);
       wc += `<g class="geo-wc" transform="translate(${x},${y})"><circle r="3.6" fill="#00A499" stroke="#fff" stroke-width="1"/><text class="geo-wc-t" y="1.9">wc</text><title>${escapeHtml(s.n)} — toilets</title></g>`;
     });
 
@@ -1007,7 +1020,7 @@
     const svg = holder.querySelector("svg"); if (!svg) return;
     const p = geoProject(net), line = net[hi];
     let sx = 0, sy = 0, n = 0;
-    for (const sid in line.stations) { const s = line.stations[sid]; sx += p.X(s.lon); sy += p.Y(s.lat); n++; }
+    for (const sid in line.stations) { const s = line.stations[sid]; const q = p.project(s.lat, s.lon); sx += q[0]; sy += q[1]; n++; }
     if (!n) return;
     const r = svg.getBoundingClientRect();
     holder.scrollLeft = (sx / n / p.W) * r.width - holder.clientWidth / 2;
