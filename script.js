@@ -755,13 +755,16 @@
   let curMap = "standard";
   let curZoom = 1.6;
   let netData = null;         // data/tube-network.json, lazy-loaded
+  let toiletSet = null;       // Set of station ids with confirmed toilets
   let geoTimeMode = "run";    // run | walk | off — badge mode on the highlighted line
+  let geoShowToilets = true;  // toilet pins on the geographic map
   function defaultZoom(kind) { return kind === "geo" ? 1.7 : kind === "data" ? 1 : 1.6; }
   async function loadNetwork() {
     if (netData) return netData;
-    const res = await fetch("data/tube-network.json");
-    if (!res.ok) throw new Error("network data");
-    netData = await res.json();
+    const [nRes, tRes] = await Promise.all([fetch("data/tube-network.json"), fetch("data/station-toilets.json")]);
+    if (!nRes.ok) throw new Error("network data");
+    netData = await nRes.json();
+    toiletSet = new Set(tRes.ok ? await tRes.json() : []);
     return netData;
   }
 
@@ -911,9 +914,9 @@
 
   function buildGeoSvg(net, hi) {
     const p = geoProject(net);
-    // station id → line ids serving it (for interchange dots + tooltips)
-    const slines = {};
-    for (const id in net) { const st = net[id].stations; for (const sid in st) (slines[sid] || (slines[sid] = [])).push(id); }
+    // station id → line ids serving it (for interchange dots + tooltips) + a coord lookup
+    const slines = {}, coord = {};
+    for (const id in net) { const st = net[id].stations; for (const sid in st) { (slines[sid] || (slines[sid] = [])).push(id); if (!coord[sid]) coord[sid] = st[sid]; } }
     const order = Object.keys(net).sort((a, b) => (a === hi ? 1 : 0) - (b === hi ? 1 : 0)); // highlighted on top
 
     let paths = "";
@@ -953,8 +956,15 @@
       }
     }
 
+    // Toilet pins (confirmed via TfL facility data).
+    let wc = "";
+    if (geoShowToilets && toiletSet) toiletSet.forEach((sid) => { const s = coord[sid]; if (!s) return;
+      const x = (p.X(s.lon) + 3.4).toFixed(1), y = (p.Y(s.lat) - 3.4).toFixed(1);
+      wc += `<g class="geo-wc" transform="translate(${x},${y})"><circle r="3.6" fill="#00A499" stroke="#fff" stroke-width="1"/><text class="geo-wc-t" y="1.9">wc</text><title>${escapeHtml(s.n)} — toilets</title></g>`;
+    });
+
     return `<svg class="tm-svg geo-svg" viewBox="0 0 ${p.W} ${p.H}" xmlns="http://www.w3.org/2000/svg" style="width:${curZoom * 100}%">`
-      + `<rect x="0" y="0" width="${p.W}" height="${p.H}" fill="#f7f9fc"/>${paths}${dots}${labels}</svg>`;
+      + `<rect x="0" y="0" width="${p.W}" height="${p.H}" fill="#f7f9fc"/>${paths}${dots}${wc}${labels}</svg>`;
   }
 
   function centreGeoOn(holder, hi, net) {
@@ -971,15 +981,23 @@
   function geoCaption(cap, net, hi, holder) {
     if (!cap) return;
     const modes = hi ? `<span class="geo-modes">Times: ${["run", "walk", "off"].map((m) =>
-      `<button type="button" class="geo-mode${geoTimeMode === m ? " on" : ""}" data-mode="${m}">${m === "off" ? "Off" : m[0].toUpperCase() + m.slice(1)}</button>`).join("")}</span>` : "";
+      `<button type="button" class="geo-mode" data-mode="${m}"${geoTimeMode === m ? ' data-on="1"' : ""}>${m === "off" ? "Off" : m[0].toUpperCase() + m.slice(1)}</button>`).join("")}</span>` : "";
+    const wcBtn = `<button type="button" class="geo-mode geo-wc-btn" data-wc="1"${geoShowToilets ? ' data-on="1"' : ""}>🚻 Toilets</button>`;
     cap.innerHTML = (hi
       ? `<strong style="color:${net[hi].colour}">${escapeHtml(net[hi].name)} line</strong> lit up for the next run — every other line dimmed. `
-      : `Our own live map, built from open TfL data — zoom, drag and tap a station. `) + modes;
-    cap.querySelectorAll(".geo-mode").forEach((b) => b.addEventListener("click", () => {
+      : `Our own live map, built from open TfL data — zoom, drag and tap a station. `) + modes + " " + wcBtn;
+    cap.querySelectorAll(".geo-mode[data-on]").forEach((b) => b.classList.add("on"));
+    cap.querySelectorAll(".geo-mode[data-mode]").forEach((b) => b.addEventListener("click", () => {
       geoTimeMode = b.dataset.mode;
-      cap.querySelectorAll(".geo-mode").forEach((x) => x.classList.toggle("on", x === b));
+      cap.querySelectorAll(".geo-mode[data-mode]").forEach((x) => x.classList.toggle("on", x === b));
       holder.innerHTML = buildGeoSvg(net, hi); applyZoom();
     }));
+    const wb = cap.querySelector(".geo-wc-btn");
+    if (wb) wb.addEventListener("click", () => {
+      geoShowToilets = !geoShowToilets;
+      wb.classList.toggle("on", geoShowToilets);
+      holder.innerHTML = buildGeoSvg(net, hi); applyZoom();
+    });
   }
 
   async function renderGeoMap(holder, cap) {
