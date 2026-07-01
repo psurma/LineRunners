@@ -1227,3 +1227,10 @@ body {
 .bus-chip { font: 700 13px Inter, sans-serif; padding: 5px 12px; border-radius: 20px; border: 1px solid var(--tfl-red); background: #fff; color: var(--tfl-red); cursor: pointer; }
 .bus-chip:hover { background: var(--tfl-red); color: #fff; }
 .bus-none { color: var(--muted); font-size: 14px; }
+
+/* Keep the sticky header above the Leaflet maps (their panes use high z-indexes
+   that otherwise render over the header while scrolling). isolation scopes them. */
+.site-header { z-index: 1000; }
+.tube-map, .route-map, #tmMap, #routeMap, #busMap { isolation: isolate; }
+/* Scroll-spy: highlight the nav link for the section you're viewing */
+.nav a.active { color: var(--tfl-blue); font-weight: 800; background: rgba(0, 25, 168, 0.09); }

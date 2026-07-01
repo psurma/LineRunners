@@ -1890,4 +1890,32 @@
   renderGallery();
   wireSocials();
   loadWeather();
+  setupScrollSpy();
+
+  // Highlight the nav link for whichever section is currently in view.
+  function setupScrollSpy() {
+    const links = [...document.querySelectorAll('.nav a[href^="#"]')];
+    const byId = {};
+    const sections = [];
+    links.forEach((a) => {
+      const id = a.getAttribute("href").slice(1);
+      const sec = document.getElementById(id);
+      if (sec) { byId[id] = a; sections.push(sec); }
+    });
+    if (!("IntersectionObserver" in window) || !sections.length) return;
+    const setActive = (id) => links.forEach((a) => {
+      const on = a === byId[id];
+      a.classList.toggle("active", on);
+      if (on) a.setAttribute("aria-current", "true"); else a.removeAttribute("aria-current");
+    });
+    // Track which sections cross a thin band near the middle of the viewport, and
+    // activate the topmost one (document order) — deterministic as you scroll.
+    const visible = new Set();
+    const io = new IntersectionObserver((entries) => {
+      entries.forEach((e) => { if (e.isIntersecting) visible.add(e.target.id); else visible.delete(e.target.id); });
+      const cur = sections.find((s) => visible.has(s.id));
+      if (cur) setActive(cur.id);
+    }, { rootMargin: "-14% 0px -80% 0px", threshold: 0 });
+    sections.forEach((s) => io.observe(s));
+  }
 })();
