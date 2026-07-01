@@ -64,6 +64,7 @@
   const MEET_TIME = "09:00";
   const ROAD_FACTOR = 1.3;   // streets are longer than crow-flies between points
   const WALK_MIN_PER_KM = 12; // ~5 km/h walking pace
+  const CYCLE_MIN_PER_KM = 4; // ~15 km/h city cycling pace
   const LONDON = { lat: 51.5033, lon: -0.1145 };
 
   // Official-ish TfL line colours.
@@ -577,6 +578,7 @@
       <div class="cr-main"><span class="cr-km">${dist}</span></div>
       <div class="cr-times">
         <span class="cr-run">🏃 run ~${fmtTime(runMins)}</span>
+        <span class="cr-cycle">🚴 cycle ~${fmtTime(km * CYCLE_MIN_PER_KM)}</span>
         <span class="cr-walk">🚶 walk ~${fmtTime(walkMins)}</span>
       </div>
       <div class="cr-detail">
@@ -963,7 +965,7 @@
       result.innerHTML = `
         <div class="bus-summary">
           <div class="cr-main"><span class="cr-km">${km.toFixed(1)} km</span> <span class="bus-mi">${(km * MI_PER_KM).toFixed(1)} mi</span></div>
-          <div class="cr-times"><span class="cr-run">🏃 run ~${fmtTime(km * paceKm)}</span> <span class="cr-walk">🚶 walk ~${fmtTime(km * WALK_MIN_PER_KM)}</span></div>
+          <div class="cr-times"><span class="cr-run">🏃 run ~${fmtTime(km * paceKm)}</span> <span class="cr-cycle">🚴 cycle ~${fmtTime(km * CYCLE_MIN_PER_KM)}</span> <span class="cr-walk">🚶 walk ~${fmtTime(km * WALK_MIN_PER_KM)}</span></div>
           <div class="cr-detail">${escapeHtml(from)} → ${escapeHtml(to)} · ${wp.length} stops</div>
           <div class="cr-note">Distance along the stops × ${ROAD_FACTOR} for the road. Buses run on-road — mind the traffic and lights.</div>
         </div>
@@ -1014,15 +1016,16 @@
         <td>${(km * MI_PER_KM).toFixed(1)} mi<small>${km} km</small></td>
         <td>${stations}</td>
         <td>${fmtTime(km * 6.5)}</td>
+        <td>${fmtTime(km * CYCLE_MIN_PER_KM)}</td>
         <td>${fmtTime(km * WALK_MIN_PER_KM)}</td>
       </tr>`;
     }).join("");
     el.innerHTML = `
       <table class="ls-table">
-        <thead><tr><th>Line</th><th>Length</th><th>Stops</th><th>Run</th><th>Walk</th></tr></thead>
+        <thead><tr><th>Line</th><th>Length</th><th>Stops</th><th>Run</th><th>Cycle</th><th>Walk</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
-      <p class="ls-foot">Run times at a steady 6:30/km, walk at ~5 km/h, end to end. Longest = toughest tick; little Waterloo &amp; City is the gentlest.</p>`;
+      <p class="ls-foot">Run at a steady 6:30/km, cycle at ~15 km/h, walk at ~5 km/h, end to end. Longest = toughest tick; little Waterloo &amp; City is the gentlest.</p>`;
   }
 
   // --- Render: Line collector (two directions per line, saved per-visitor) --
