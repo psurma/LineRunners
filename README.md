@@ -19,7 +19,7 @@ Then open http://localhost:8000 (opening `index.html` via `file://` is blocked b
 - **Map** — tabbed viewer led by our own real geographic Leaflet map (next line lit up with running times), plus Running times, Walking times, Toilets, official Tube map, Overground and Rail connections
 - **Lines** — every Underground line ranked by length with run/walk times
 - **Schedule** — monthly runs, auto-dated to first Sundays, plus multi-day adventures
-- **Route ideas** — a library of group-friendly London routes
+- **Route ideas** — a library of group-friendly London routes, each traced on an interactive Leaflet map (tap a card to draw its route)
 - **Line collector** — gamified progress (both directions of every line)
 - Live-now banner, photo gallery, new-runner guide, friends/other clubs, join form, socials
 

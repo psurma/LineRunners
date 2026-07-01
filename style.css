@@ -659,6 +659,7 @@ body.tm-map-active .tm-zoom, body.tm-map-active .tm-scrollhint { display: none; 
 .cr-walk { color: #2e8b57; }
 
 /* ---------- Route ideas ---------- */
+.route-map { width: 100%; height: 440px; border-radius: 16px; overflow: hidden; border: 1px solid var(--line); box-shadow: var(--shadow); margin-bottom: 20px; background: #eef1f4; }
 .route-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
 .route-card {
   background: var(--card);
@@ -667,7 +668,14 @@ body.tm-map-active .tm-zoom, body.tm-map-active .tm-scrollhint { display: none; 
   border-radius: 14px;
   padding: 18px 20px;
   box-shadow: var(--shadow);
+  cursor: pointer;
+  transition: box-shadow 0.15s, transform 0.15s, border-color 0.15s;
 }
+.route-card:hover { transform: translateY(-2px); box-shadow: 0 8px 22px rgba(0, 0, 0, 0.12); }
+.route-card:focus-visible { outline: 2px solid var(--tfl-blue); outline-offset: 2px; }
+.route-card.on { box-shadow: 0 0 0 2px var(--tfl-blue), var(--shadow); }
+.rc-show { margin-top: 10px; font-size: 13px; font-weight: 700; color: var(--tfl-blue); }
+.route-card.on .rc-show { color: var(--ink); }
 .rc-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
 .rc-type { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; color: #fff; padding: 3px 10px; border-radius: 20px; }
 .rc-dist { font-weight: 700; font-size: 14px; color: var(--ink); }
