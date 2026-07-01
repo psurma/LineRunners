@@ -11,6 +11,7 @@
   --radius: 16px;
   --shadow: 0 10px 30px rgba(16, 19, 28, 0.08);
   --max: 1080px;
+  --font-display: "Hammersmith One", "Inter", system-ui, sans-serif;
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -787,4 +788,13 @@ body.tm-map-active .tm-zoom, body.tm-map-active .tm-scrollhint { display: none; 
   .wx-tag { margin-left: 0; }
   .nh-grid { grid-template-columns: 1fr; }
   .live-btns { margin-left: 0; }
+}
+
+/* Underground-style display type (Hammersmith One, Johnston-inspired) for headings and brand
+   marks; body text stays Inter for legibility. Single weight, so pin 400 to avoid faux-bold. */
+.brand-word, .eyebrow, .hero h1, .section-title,
+.next-body h3, .nh-col h3, .route-card h3,
+.strip-line, .line-tag, .cr-km {
+  font-family: var(--font-display);
+  font-weight: 400;
 }
