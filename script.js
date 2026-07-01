@@ -337,6 +337,30 @@
       </div>`;
   }
 
+  // --- Render: Journey board (vertical National-Rail-style calling points) ---
+  function renderJourneyBoard() {
+    const el = document.getElementById("journeyBoard");
+    if (!el || !nextRun) return;
+    const wp = WAYPOINTS[nextRun.key];
+    if (!wp || wp.length < 2) { el.innerHTML = ""; return; }
+    const c = nextRun.colour, paceKm = 6.5;
+    const rows = wp.map((p, i) => {
+      const mins = legDistanceKm(wp, 0, i) * paceKm;
+      const end = i === 0 || i === wp.length - 1;
+      const time = i === 0 ? `depart ${MEET_TIME}` : (i === wp.length - 1 ? `arrive ~${arrivalWindow(mins)}` : `~${arrivalWindow(mins)}`);
+      return `<li class="jb-stop${end ? " jb-end" : ""}">
+        <span class="jb-dot" style="border-color:${c}${end ? `;background:${c}` : ""}"></span>
+        <span class="jb-name">${escapeHtml(p[0])}${interchangeTags(p[0], nextRun.key)}</span>
+        <span class="jb-time">${time}</span>
+      </li>`;
+    }).join("");
+    el.innerHTML = `
+      <h3 class="jb-title">Journey board</h3>
+      <p class="jb-sub" style="color:${c}">${escapeHtml(nextRun.badge)} · ${escapeHtml(nextRun.leg)}</p>
+      <ol class="jb-list" style="--jb-col:${c}">${rows}</ol>
+      <p class="jb-foot">Expected arrival windows from a ${MEET_TIME} start at a steady 6:30/km — add time for regroups and photos.</p>`;
+  }
+
   // --- Render: Schedule --------------------------------------------------
   function hasDetails(r) { return r.days || r.exits || r.stay || r.notes || r.routeLink || WAYPOINTS[r.key]; }
 
@@ -525,7 +549,7 @@
     renderDiagram();
     update();
     // Enrich the strip with interchange tags once the network data loads.
-    loadNetwork().then((net) => { interchangeMap = buildInterchangeMap(net); renderDiagram(); renderList(); }).catch(() => {});
+    loadNetwork().then((net) => { interchangeMap = buildInterchangeMap(net); renderDiagram(); renderList(); renderJourneyBoard(); }).catch(() => {});
   }
 
   // Carriage-style strip map for a WAYPOINTS line. Interactive (planner) or read-only (schedule).
@@ -1986,6 +2010,7 @@
   renderTubeMap();
   renderLineStats();
   renderNext();
+  renderJourneyBoard();
   renderList();
   renderRoutes();
   setupPlanner();

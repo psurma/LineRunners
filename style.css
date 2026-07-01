@@ -857,11 +857,8 @@ body.tm-map-active .tm-zoom, body.tm-map-active .tm-scrollhint { display: none; 
 /* let the wide strip map scroll inside its column instead of stretching the page */
 .busrun-layout > * { min-width: 0; }
 .busrun-result { min-width: 0; }
-#busMap { height: min(70vh, 560px); border-radius: 12px; overflow: hidden; border: 1px solid var(--line); background: #eef0f4; }
-@media (min-width: 861px) {
-  .busrun-layout { grid-template-columns: 1.05fr 1fr; align-items: start; }
-  #busMap { position: sticky; top: 80px; }
-}
+/* Full-width map on top, the summary + strip below it. */
+#busMap { width: 100%; height: min(70vh, 560px); border-radius: 12px; overflow: hidden; border: 1px solid var(--line); background: #eef0f4; }
 .busrun-result { min-height: 40px; }
 .bus-summary { background: #fff; border: 1px solid var(--line); border-left: 4px solid var(--tfl-red); border-radius: 12px; padding: 14px 16px; margin-bottom: 14px; }
 .bus-summary .cr-main { display: flex; align-items: baseline; gap: 8px; }
@@ -1248,3 +1245,20 @@ body {
 .route-arrow { background: none; border: none; }
 .route-arrow span { display: block; font-size: 18px; line-height: 22px; text-align: center; text-shadow: 0 0 3px #fff, 0 0 3px #fff; }
 .tm-eta { color: var(--tfl-blue); font-weight: 700; }
+
+/* Journey board — vertical National-Rail-style calling points */
+.journey-board:empty { display: none; }
+.journey-board { margin-top: 22px; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 20px clamp(16px, 3vw, 26px); }
+.jb-title { font-size: 20px; font-weight: 800; }
+.jb-sub { font-weight: 700; font-size: 14px; margin-bottom: 12px; }
+.jb-list { list-style: none; margin: 0; padding: 0; max-height: 560px; overflow-y: auto; }
+.jb-stop { position: relative; display: grid; grid-template-columns: 26px 1fr auto; align-items: start; gap: 10px; padding: 7px 0; }
+.jb-stop::before { content: ""; position: absolute; left: 11px; top: 0; bottom: 0; width: 3px; background: var(--jb-col); opacity: 0.35; }
+.jb-stop:first-child::before { top: 50%; }
+.jb-stop:last-child::before { bottom: 50%; }
+.jb-dot { position: relative; z-index: 1; width: 14px; height: 14px; margin: 3px 5px; border-radius: 50%; border: 3px solid; background: #fff; }
+.jb-name { font-weight: 700; font-size: 15px; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.jb-time { font-weight: 700; font-size: 13px; color: var(--muted); white-space: nowrap; text-align: right; padding-top: 2px; }
+.jb-end .jb-name { font-weight: 800; }
+.jb-end .jb-time { color: var(--tfl-blue); }
+.jb-foot { margin-top: 12px; font-size: 12px; color: var(--muted); }
