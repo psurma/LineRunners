@@ -16,7 +16,7 @@ Then open http://localhost:8000 (opening `index.html` via `file://` is blocked b
 
 - **Next run** card with live weather (Open-Meteo) and a Google Maps meeting-point link
 - **Plan** — station-to-station distance/time planner with run + walk times and a km/miles toggle
-- **Map** — tabbed, zoomable viewer: Standard (next line highlighted), Running times, Walking times, Toilets, Overground, Rail connections
+- **Map** — tabbed viewer led by our own real geographic Leaflet map (next line lit up with running times), plus Running times, Walking times, Toilets, official Tube map, Overground and Rail connections
 - **Lines** — every Underground line ranked by length with run/walk times
 - **Schedule** — monthly runs, auto-dated to first Sundays, plus multi-day adventures
 - **Route ideas** — a library of group-friendly London routes
@@ -41,15 +41,16 @@ Bump the `?v=` query on the `style.css` / `script.js` links in `index.html` afte
 
 The map viewer (`#network`) has several tabs:
 
+- **Map** — *our own* real geographic map: a [Leaflet](https://leafletjs.com) slippy map on the openly-licensed CARTO Voyager basemap (streets, parks, the Thames, place names), with every tube line drawn over real geography from `data/tube-lines.geojson`. The next run's line is lit up with cumulative running (or walking) times at each stop; other lines dim back. Interchanges show as white rings, toilets as teal WC pins. Scroll to zoom, drag to pan, hover a station.
 - **Tube map** — the official TfL schematic (vector SVG) with the next line highlighted. TfL artwork, © Transport for London.
-- **Schematic ✦** — *our own* semantic Beck-style schematic (`data/schematic.json`), drawn from data so we control every station element: our labels, per-station run/walk times, precise line highlighting. Beta, central zone, expanding line by line.
-- **Geographic** — our own map from real coordinates (`data/tube-network.json`), with run/walk time badges and toilet pins.
 - **Running / Walking times, Toilets, Overground, Rail connections** — computed table and reference images.
 
 ### Data & attribution
 
-- `data/tube-network.json` — 11 lines / 272 stations with real coordinates, compiled from the [TfL Unified API](https://api.tfl.gov.uk) (open data).
+- `data/tube-network.json` — 11 lines / 272 stations with real coordinates, compiled from the [TfL Unified API](https://api.tfl.gov.uk) (open data). Drives station markers, interchange detection and running-time calculations.
+- `data/tube-lines.geojson` — real track geometry for all 11 lines (`MultiLineString` per line), drawn as the coloured line overlay on the Leaflet map.
 - `data/station-toilets.json` — stations with confirmed toilets, from TfL StopPoint facility data.
-- `data/schematic.json` — Beck-style schematic coordinates, seeded from [`d3-tube-map`](https://github.com/johnwalley/d3-tube-map) by John Walley (**MIT licence**), extended over time.
+- Basemap tiles © [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors, © [CARTO](https://carto.com/attributions); Leaflet is BSD-2-licensed.
+- `data/schematic.json` — Beck-style schematic coordinates (seeded from [`d3-tube-map`](https://github.com/johnwalley/d3-tube-map) by John Walley, **MIT licence**); retained for reference, not currently shown.
 
 Static image maps in `img/` were converted from PDFs with `pdftocairo`. TfL map artwork is © Transport for London — fine for club use, but a public deployment should prefer the openly-licensed / own-drawn maps above.

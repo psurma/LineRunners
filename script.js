@@ -814,7 +814,7 @@
     const holder = root.querySelector("#tmHolder");
     let drag = false, sx, sy, sl, st;
     holder.addEventListener("pointerdown", (e) => {
-      if (curMapKind() === "data") return; // let the table select/scroll normally
+      if (curMapKind() === "data" || curMapKind() === "geo") return; // table scrolls; Leaflet owns the map
       e.preventDefault(); // stop native image/text drag hijacking the pan
       drag = true; sx = e.clientX; sy = e.clientY; sl = holder.scrollLeft; st = holder.scrollTop;
       holder.setPointerCapture(e.pointerId); holder.style.cursor = "grabbing";
@@ -829,7 +829,7 @@
     holder.addEventListener("pointercancel", endDrag);
     // Cmd/Ctrl + wheel to zoom toward the cursor (trackpad pinch sends ctrl+wheel).
     holder.addEventListener("wheel", (e) => {
-      if (!(e.metaKey || e.ctrlKey) || curMapKind() === "data") return;
+      if (!(e.metaKey || e.ctrlKey) || curMapKind() === "data" || curMapKind() === "geo") return;
       const node = holder.querySelector("svg, img");
       if (!node) return;
       e.preventDefault();
@@ -851,6 +851,7 @@
     const cap = document.getElementById("tmCaption");
     const zoom = document.querySelector(".tm-zoom");
     const cfg = MAPS.find((m) => m.key === curMap);
+    if (cfg.kind !== "geo") { document.body.classList.remove("tm-map-active"); if (tmMap.map) { tmMap.map.remove(); tmMap.map = null; } }
     const active = cfg.highlight && nextRun && LINE_FILL[nextRun.key] ? nextRun.key : null;
     const CAPTIONS = {
       geo: `Our own live map, built from open TfL data — zoom, drag and tap a station.`,
@@ -937,125 +938,106 @@
   // Equirectangular projection of lat/lon → a 1000-wide viewBox.
   // Equirectangular projection with a radial "fisheye" that expands dense
   // central London and compresses the sparse edges, so labels stop colliding.
-  function geoProject(net) {
-    let minLat = 90, maxLat = -90, minLon = 180, maxLon = -180;
-    for (const id in net) { const st = net[id].stations; for (const sid in st) { const s = st[sid];
-      if (s.lat < minLat) minLat = s.lat; if (s.lat > maxLat) maxLat = s.lat;
-      if (s.lon < minLon) minLon = s.lon; if (s.lon > maxLon) maxLon = s.lon; } }
-    const kx = Math.cos(((minLat + maxLat) / 2) * Math.PI / 180);
-    const planar = (lat, lon) => [(lon - minLon) * kx, (maxLat - lat)];
-    let cx = 0, cy = 0, n = 0; // centre of mass ≈ central London (dense)
-    for (const id in net) { const st = net[id].stations; for (const sid in st) { const c = planar(st[sid].lat, st[sid].lon); cx += c[0]; cy += c[1]; n++; } }
-    cx /= n; cy /= n;
-    let R = 1e-6;
-    for (const id in net) { const st = net[id].stations; for (const sid in st) { const c = planar(st[sid].lat, st[sid].lon); R = Math.max(R, Math.hypot(c[0] - cx, c[1] - cy)); } }
-    const P = 0.5; // exponent < 1 → expand centre, compress edges
-    const warp = (lat, lon) => { const c = planar(lat, lon), dx = c[0] - cx, dy = c[1] - cy, r = Math.hypot(dx, dy);
-      if (r < 1e-9) return [cx, cy]; const s = Math.pow(r / R, P) * R / r; return [cx + dx * s, cy + dy * s]; };
-    let fMinX = 1e9, fMaxX = -1e9, fMinY = 1e9, fMaxY = -1e9;
-    for (const id in net) { const st = net[id].stations; for (const sid in st) { const w = warp(st[sid].lat, st[sid].lon);
-      if (w[0] < fMinX) fMinX = w[0]; if (w[0] > fMaxX) fMaxX = w[0]; if (w[1] < fMinY) fMinY = w[1]; if (w[1] > fMaxY) fMaxY = w[1]; } }
-    const W = 1000, pad = 40;
-    const scale = (W - 2 * pad) / (fMaxX - fMinX);
-    const H = Math.round((fMaxY - fMinY) * scale + 2 * pad);
-    return { W, H, project: (lat, lon) => { const w = warp(lat, lon); return [pad + (w[0] - fMinX) * scale, pad + (w[1] - fMinY) * scale]; } };
+  let linesGeo = null;
+  async function loadLines() {
+    if (linesGeo) return linesGeo;
+    const res = await fetch("data/tube-lines.geojson");
+    if (!res.ok) throw new Error("lines geojson");
+    linesGeo = await res.json();
+    return linesGeo;
+  }
+  const tmMap = { map: null };
+
+  // Cumulative running distance (km) to each stop along the highlighted line's longest branch.
+  function tmComputeKm(net, hi) {
+    const out = {};
+    if (!hi || !net[hi]) return out;
+    const line = net[hi], br = line.branches.reduce((a, b) => (b.length > a.length ? b : a), line.branches[0] || []);
+    let cum = 0;
+    for (let i = 0; i < br.length; i++) {
+      if (i > 0) { const a = line.stations[br[i - 1]], b = line.stations[br[i]]; cum += haversineKm([0, a.lat, a.lon], [0, b.lat, b.lon]) * ROAD_FACTOR; }
+      out[br[i]] = cum;
+    }
+    return out;
   }
 
-  function buildGeoSvg(net, hi) {
-    const p = geoProject(net);
-    // station id → line ids serving it (for interchange dots + tooltips) + a coord lookup
-    const slines = {}, coord = {};
-    for (const id in net) { const st = net[id].stations; for (const sid in st) { (slines[sid] || (slines[sid] = [])).push(id); if (!coord[sid]) coord[sid] = st[sid]; } }
-    const order = Object.keys(net).sort((a, b) => (a === hi ? 1 : 0) - (b === hi ? 1 : 0)); // highlighted on top
-
-    let paths = "";
-    for (const id of order) { const line = net[id], dim = hi && id !== hi;
-      const w = id === hi ? 4.4 : 2.4, op = dim ? 0.18 : 1;
-      for (const br of line.branches) {
-        const pts = br.map((sid) => { const s = line.stations[sid], q = p.project(s.lat, s.lon); return `${q[0].toFixed(1)},${q[1].toFixed(1)}`; }).join(" ");
-        paths += `<polyline points="${pts}" fill="none" stroke="${line.colour}" stroke-width="${w}" stroke-linejoin="round" stroke-linecap="round" opacity="${op}"/>`;
-      }
-    }
-
-    let dots = ""; const drawn = new Set();
-    for (const id of order) { const line = net[id], dim = hi && id !== hi;
-      for (const sid in line.stations) { if (drawn.has(sid)) continue; drawn.add(sid);
-        const s = line.stations[sid], q = p.project(s.lat, s.lon), x = q[0].toFixed(1), y = q[1].toFixed(1);
-        const onHi = hi && slines[sid].indexOf(hi) >= 0, op = dim && !onHi ? 0.22 : 1, inter = slines[sid].length > 1;
-        const title = `<title>${escapeHtml(s.n)} — ${escapeHtml(slines[sid].map((l) => net[l].name).join(", "))}</title>`;
-        dots += inter
-          ? `<circle cx="${x}" cy="${y}" r="${onHi ? 3.4 : 2.8}" fill="#fff" stroke="#111" stroke-width="1" opacity="${op}">${title}</circle>`
-          : `<circle cx="${x}" cy="${y}" r="1.7" fill="${line.colour}" opacity="${op}">${title}</circle>`;
-      }
-    }
-
-    // Labels + cumulative time badges on the highlighted line.
-    let labels = "";
-    if (hi) {
-      const line = net[hi];
-      const br = line.branches.reduce((a, b) => (b.length > a.length ? b : a), line.branches[0] || []);
-      const perKm = geoTimeMode === "walk" ? WALK_MIN_PER_KM : (parseFloat(paceSel && paceSel.value) || 6.5);
-      let cum = 0; const tmap = {};
-      for (let i = 0; i < br.length; i++) { if (i > 0) { const a = line.stations[br[i - 1]], b = line.stations[br[i]];
-        cum += haversineKm([0, a.lat, a.lon], [0, b.lat, b.lon]) * ROAD_FACTOR; } tmap[br[i]] = cum; }
-      for (const sid in line.stations) { const s = line.stations[sid], q = p.project(s.lat, s.lon), x = q[0], y = q[1];
-        labels += `<text class="geo-lbl" x="${(x + 4).toFixed(1)}" y="${(y + 2.5).toFixed(1)}">${escapeHtml(s.n)}</text>`;
-        if (geoTimeMode !== "off" && tmap[sid] !== undefined)
-          labels += `<text class="geo-time" x="${(x + 4).toFixed(1)}" y="${(y + 9).toFixed(1)}" fill="${line.colour}">${fmtTime(tmap[sid] * perKm)}</text>`;
-      }
-    }
-
-    // Toilet pins (confirmed via TfL facility data).
-    let wc = "";
-    if (geoShowToilets && toiletSet) toiletSet.forEach((sid) => { const s = coord[sid]; if (!s) return;
-      const q = p.project(s.lat, s.lon), x = (q[0] + 3.4).toFixed(1), y = (q[1] - 3.4).toFixed(1);
-      wc += `<g class="geo-wc" transform="translate(${x},${y})"><circle r="3.6" fill="#00A499" stroke="#fff" stroke-width="1"/><text class="geo-wc-t" y="1.9">wc</text><title>${escapeHtml(s.n)} — toilets</title></g>`;
-    });
-
-    return `<svg class="tm-svg geo-svg" viewBox="0 0 ${p.W} ${p.H}" xmlns="http://www.w3.org/2000/svg" style="width:${curZoom * 100}%">`
-      + `<rect x="0" y="0" width="${p.W}" height="${p.H}" fill="#f7f9fc"/>${paths}${dots}${wc}${labels}</svg>`;
-  }
-
-  function centreGeoOn(holder, hi, net) {
-    const svg = holder.querySelector("svg"); if (!svg) return;
-    const p = geoProject(net), line = net[hi];
-    let sx = 0, sy = 0, n = 0;
-    for (const sid in line.stations) { const s = line.stations[sid]; const q = p.project(s.lat, s.lon); sx += q[0]; sy += q[1]; n++; }
-    if (!n) return;
-    const r = svg.getBoundingClientRect();
-    holder.scrollLeft = (sx / n / p.W) * r.width - holder.clientWidth / 2;
-    holder.scrollTop = (sy / n / p.H) * r.height - holder.clientHeight / 2;
-  }
-
-  function geoCaption(cap, net, hi, holder) {
+  function geoCaption(cap, net, hi, redraw) {
     if (!cap) return;
     const modes = hi ? `<span class="geo-modes">Times: ${["run", "walk", "off"].map((m) =>
       `<button type="button" class="geo-mode" data-mode="${m}"${geoTimeMode === m ? ' data-on="1"' : ""}>${m === "off" ? "Off" : m[0].toUpperCase() + m.slice(1)}</button>`).join("")}</span>` : "";
     const wcBtn = `<button type="button" class="geo-mode geo-wc-btn" data-wc="1"${geoShowToilets ? ' data-on="1"' : ""}>🚻 Toilets</button>`;
     cap.innerHTML = (hi
-      ? `<strong style="color:${net[hi].colour}">${escapeHtml(net[hi].name)} line</strong> lit up for the next run — every other line dimmed. `
-      : `Our own live map, built from open TfL data — zoom, drag and tap a station. `) + modes + " " + wcBtn;
+      ? `<strong style="color:${net[hi].colour}">${escapeHtml(net[hi].name)} line</strong> lit up for the next run, with running times to each stop. `
+      : `Our own live map — real streets, parks and the Thames, with every tube line on top. `) + modes + " " + wcBtn;
     cap.querySelectorAll(".geo-mode[data-on]").forEach((b) => b.classList.add("on"));
     cap.querySelectorAll(".geo-mode[data-mode]").forEach((b) => b.addEventListener("click", () => {
       geoTimeMode = b.dataset.mode;
       cap.querySelectorAll(".geo-mode[data-mode]").forEach((x) => x.classList.toggle("on", x === b));
-      holder.innerHTML = buildGeoSvg(net, hi); applyZoom();
+      redraw();
     }));
     const wb = cap.querySelector(".geo-wc-btn");
-    if (wb) wb.addEventListener("click", () => {
-      geoShowToilets = !geoShowToilets;
-      wb.classList.toggle("on", geoShowToilets);
-      holder.innerHTML = buildGeoSvg(net, hi); applyZoom();
-    });
+    if (wb) wb.addEventListener("click", () => { geoShowToilets = !geoShowToilets; wb.classList.toggle("on", geoShowToilets); redraw(); });
   }
 
+  // Real geographic map: Leaflet + CARTO Voyager basemap + our tube overlays.
   async function renderGeoMap(holder, cap) {
-    const net = await loadNetwork();
+    if (typeof L === "undefined") { holder.innerHTML = `<p class="diagram-empty">The map library couldn't load — check your connection.</p>`; return; }
+    const [net, geo] = await Promise.all([loadNetwork(), loadLines()]);
     const hi = geoHighlightId(net);
-    geoCaption(cap, net, hi, holder);
-    holder.innerHTML = buildGeoSvg(net, hi);
-    applyZoom();
-    requestAnimationFrame(() => { if (hi) centreGeoOn(holder, hi, net); else centreContent(holder); });
+    document.body.classList.add("tm-map-active");
+    holder.innerHTML = `<div id="tmMap"></div>`;
+    if (tmMap.map) { tmMap.map.remove(); tmMap.map = null; }
+    const map = L.map("tmMap", { center: [51.509, -0.115], zoom: 11, preferCanvas: true });
+    tmMap.map = map;
+    L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+      subdomains: "abcd", maxZoom: 20,
+    }).addTo(map);
+
+    // Tube lines (real track geometry). Highlighted line bold & on top, others dimmed.
+    const lineLayer = L.geoJSON(geo, { style: (f) => { const on = hi && f.properties.line === hi;
+      return { color: f.properties.colour, weight: on ? 5 : 3, opacity: on ? 1 : (hi ? 0.3 : 0.9), lineJoin: "round", lineCap: "round" }; } }).addTo(map);
+    lineLayer.eachLayer((l) => { if (hi && l.feature.properties.line === hi) l.bringToFront(); });
+
+    // Station lookup: dedup by id, count lines per station (interchange), colour.
+    const count = {}, coordById = {}, colourById = {};
+    for (const id in net) { const st = net[id].stations; for (const sid in st) { count[sid] = (count[sid] || 0) + 1;
+      if (!coordById[sid]) { coordById[sid] = st[sid]; colourById[sid] = net[id].colour; } } }
+    const km = tmComputeKm(net, hi);
+
+    let stationGrp = null, toiletGrp = null;
+    function draw() {
+      if (stationGrp) map.removeLayer(stationGrp);
+      if (toiletGrp) map.removeLayer(toiletGrp);
+      const perKm = geoTimeMode === "walk" ? WALK_MIN_PER_KM : (parseFloat(paceSel && paceSel.value) || 6.5);
+      stationGrp = L.layerGroup();
+      for (const sid in coordById) { const s = coordById[sid], inter = count[sid] > 1, onHi = km[sid] !== undefined, dim = hi && !onHi;
+        const m = L.circleMarker([s.lat, s.lon], {
+          radius: inter ? (onHi ? 6 : 4.5) : 3, weight: inter ? 1.5 : 1,
+          color: inter ? "#111" : (dim ? "#9aa3ad" : colourById[sid]),
+          fillColor: inter ? "#fff" : (dim ? "#c4ccd4" : colourById[sid]),
+          fillOpacity: 1, opacity: dim ? 0.55 : 1,
+        });
+        if (onHi) {
+          const time = geoTimeMode !== "off" ? `<span style="color:${net[hi].colour}">${fmtTime(km[sid] * perKm)}</span>` : "";
+          m.bindTooltip(`<b>${escapeHtml(s.n)}</b>${time}`, { permanent: true, direction: "right", className: "tm-run-label", offset: [7, 0] });
+        } else { m.bindTooltip(escapeHtml(s.n), { direction: "top", className: "tm-hover-label" }); }
+        stationGrp.addLayer(m);
+      }
+      stationGrp.addTo(map);
+      toiletGrp = L.layerGroup();
+      if (geoShowToilets) toiletSet.forEach((sid) => { const s = coordById[sid]; if (!s) return;
+        L.marker([s.lat, s.lon], { icon: L.divIcon({ className: "tm-wc", html: "wc", iconSize: [15, 15], iconAnchor: [7, 7] }) })
+          .bindTooltip(escapeHtml(s.n) + " — toilets").addTo(toiletGrp); });
+      toiletGrp.addTo(map);
+    }
+    draw();
+    geoCaption(cap, net, hi, draw);
+
+    requestAnimationFrame(() => { map.invalidateSize(false);
+      if (hi) { const b = L.latLngBounds([]); lineLayer.eachLayer((l) => { if (l.feature.properties.line === hi) b.extend(l.getBounds()); });
+        if (b.isValid()) map.fitBounds(b, { padding: [28, 28] }); }
+      else map.fitBounds(lineLayer.getBounds(), { padding: [16, 16] }); });
   }
 
   // --- Our own SEMANTIC Beck-style schematic (data/schematic.json) --------
