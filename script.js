@@ -1008,7 +1008,7 @@
       if (stations === minSt) badges.push(["Fewest stops", ""]);
       const badgeHtml = badges.map(([t, cls]) => `<span class="ls-badge ${cls}">${t}</span>`).join("");
       return `<tr class="${name === active ? "ls-active" : ""}">
-        <td class="ls-name"><span class="ls-dot" style="background:${c}"></span>${escapeHtml(name)}${name === active ? ' <span class="ls-next">next run</span>' : ""}${badgeHtml}</td>
+        <td class="ls-name"><span class="ls-name-in"><span class="ls-dot" style="background:${c}"></span>${escapeHtml(name)}${name === active ? ' <span class="ls-next">next run</span>' : ""}${badgeHtml}</span></td>
         <td>${(km * MI_PER_KM).toFixed(1)} mi<small>${km} km</small></td>
         <td>${stations}</td>
         <td>${fmtTime(km * 6.5)}</td>
