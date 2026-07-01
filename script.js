@@ -667,8 +667,9 @@
 
     const mapEl = document.getElementById("routeMap");
     if (mapEl && typeof L !== "undefined") {
-      routeMap.map = L.map(mapEl, { center: [51.509, -0.115], zoom: 11, preferCanvas: true, scrollWheelZoom: false });
+      routeMap.map = L.map(mapEl, { center: [51.509, -0.115], zoom: 11, preferCanvas: true, zoomSnap: 0 });
       cartoBasemap().addTo(routeMap.map);
+      modifierWheelZoom(routeMap.map);
       requestAnimationFrame(() => { routeMap.map.invalidateSize(false); selectRoute(0); });
     }
   }
@@ -998,6 +999,17 @@
     });
   }
 
+  // Zoom to the cursor only while ⌘/Ctrl is held, so plain scroll still moves the page.
+  function modifierWheelZoom(map) {
+    map.scrollWheelZoom.disable();
+    map.getContainer().addEventListener("wheel", (e) => {
+      if (!(e.metaKey || e.ctrlKey)) return;
+      e.preventDefault();
+      const ll = map.containerPointToLatLng(map.mouseEventToContainerPoint(e));
+      map.setZoomAround(ll, map.getZoom() - e.deltaY * 0.008);
+    }, { passive: false });
+  }
+
   // Cumulative running distance (km) to each stop along the highlighted line's longest branch.
   function tmComputeKm(net, hi) {
     const out = {};
@@ -1037,9 +1049,10 @@
     document.body.classList.add("tm-map-active");
     holder.innerHTML = `<div id="tmMap"></div>`;
     if (tmMap.map) { tmMap.map.remove(); tmMap.map = null; }
-    const map = L.map("tmMap", { center: [51.509, -0.115], zoom: 11, preferCanvas: true });
+    const map = L.map("tmMap", { center: [51.509, -0.115], zoom: 11, preferCanvas: true, zoomSnap: 0 });
     tmMap.map = map;
     cartoBasemap().addTo(map);
+    modifierWheelZoom(map);
 
     // Tube lines (real track geometry). Highlighted line bold & on top, others dimmed.
     const lineLayer = L.geoJSON(geo, { style: (f) => { const on = hi && f.properties.line === hi;
