@@ -314,7 +314,7 @@
   }
 
   // --- Render: Schedule --------------------------------------------------
-  function hasDetails(r) { return r.days || r.exits || r.stay || r.notes || r.routeLink; }
+  function hasDetails(r) { return r.days || r.exits || r.stay || r.notes || r.routeLink || WAYPOINTS[r.key]; }
 
   function detailsHtml(r) {
     const days = r.days ? `<div class="d-block"><h4>Itinerary</h4>${r.days.map((d) => `
@@ -329,7 +329,10 @@
       `<li><a href="${escapeAttr(s.url)}" target="_blank" rel="noopener">${escapeHtml(s.name)} ↗</a></li>`).join("")}</ul></div>` : "";
     const link = routeLinksHtml(r);
     const notes = r.notes ? `<p class="d-notes">${escapeHtml(r.notes)}</p>` : "";
-    return `<div class="run-details">${notes}${days}${exits}${stay}${link}</div>`;
+    const stripLabel = r.type === "tube" ? `${r.key} line` : (r.badge || r.key);
+    const strip = WAYPOINTS[r.key]
+      ? `<div class="line-diagram strip run-strip" style="--line-col:${r.colour}">${stripMapHtml(r.key, r.colour, r.key, { bannerLabel: stripLabel })}</div>` : "";
+    return `<div class="run-details">${notes}${strip}${days}${exits}${stay}${link}</div>`;
   }
 
   function renderList() {
@@ -386,12 +389,63 @@
     }
     return m;
   }
-  function interchangeTags(name) {
-    if (!interchangeMap || !nextRun) return "";
-    const here = (interchangeMap[norm(name)] || []).filter((x) => norm(x.name) !== norm(nextRun.key));
-    if (!here.length) return "";
-    return `<span class="stn-tags">${here.map((x) =>
-      `<span class="stn-tag" style="background:${x.colour};color:${contrastText(x.colour)}">${escapeHtml(x.name)}</span>`).join("")}</span>`;
+  // Non-tube interchanges (Elizabeth line / Overground / DLR / National Rail), from the
+  // TfL hub data — the tube dataset only knows the 11 Underground lines. [bg, text] per brand.
+  const NON_TUBE_COLOURS = {
+    "Elizabeth line": ["#6950A1", "#fff"],
+    "Overground": ["#EE7C0E", "#10131c"],
+    "DLR": ["#00A4A7", "#fff"],
+    "National Rail": ["#C00000", "#fff"],
+    "Tram": ["#5FA524", "#10131c"],
+  };
+  const NON_TUBE_INTERCHANGES = {
+    "Amersham": ["National Rail"],
+    "Bank": ["DLR"],
+    "Blackhorse Road": ["Overground"],
+    "Bond Street": ["Elizabeth line"],
+    "Brixton": ["National Rail"],
+    "Chalfont & Latimer": ["National Rail"],
+    "Chorleywood": ["National Rail"],
+    "Ealing Broadway": ["Elizabeth line", "National Rail"],
+    "Euston": ["Overground", "National Rail"],
+    "Farringdon": ["Elizabeth line", "National Rail"],
+    "Finsbury Park": ["National Rail"],
+    "Greenford": ["National Rail"],
+    "Harrow-on-the-Hill": ["National Rail"],
+    "Highbury & Islington": ["Overground", "National Rail"],
+    "King's Cross St. Pancras": ["National Rail"],
+    "Liverpool Street": ["Elizabeth line", "Overground", "National Rail"],
+    "Moorgate": ["National Rail"],
+    "Rickmansworth": ["National Rail"],
+    "Seven Sisters": ["Overground", "National Rail"],
+    "Shepherd's Bush": ["Overground", "National Rail"],
+    "South Ruislip": ["National Rail"],
+    "Stratford": ["Elizabeth line", "Overground", "DLR", "National Rail"],
+    "Tottenham Court Road": ["Elizabeth line"],
+    "Tottenham Hale": ["National Rail"],
+    "Vauxhall": ["National Rail"],
+    "Victoria": ["National Rail"],
+    "Walthamstow Central": ["Overground"],
+    "West Ruislip": ["National Rail"],
+  };
+  let nonTubeByNorm = null;
+  function interchangeTags(name, lineName) {
+    const line = lineName || (nextRun && nextRun.key);
+    if (!line) return "";
+    if (!nonTubeByNorm) {
+      nonTubeByNorm = {};
+      for (const k in NON_TUBE_INTERCHANGES) nonTubeByNorm[norm(k)] = NON_TUBE_INTERCHANGES[k];
+    }
+    const key = norm(name);
+    const tube = interchangeMap ? (interchangeMap[key] || []).filter((x) => norm(x.name) !== norm(line)) : [];
+    const other = nonTubeByNorm[key] || [];
+    if (!tube.length && !other.length) return "";
+    const pills = tube.map((x) => `<span class="stn-tag" style="background:${x.colour};color:${contrastText(x.colour)}">${escapeHtml(x.name)}</span>`)
+      .concat(other.map((n) => {
+        const c = NON_TUBE_COLOURS[n] || ["#555", "#fff"];
+        return `<span class="stn-tag" style="background:${c[0]};color:${c[1]}">${escapeHtml(n)}</span>`;
+      }));
+    return `<span class="stn-tags">${pills.join("")}</span>`;
   }
 
   function fmtPace(minPerUnit) {
@@ -438,7 +492,29 @@
     renderDiagram();
     update();
     // Enrich the strip with interchange tags once the network data loads.
-    loadNetwork().then((net) => { interchangeMap = buildInterchangeMap(net); renderDiagram(); }).catch(() => {});
+    loadNetwork().then((net) => { interchangeMap = buildInterchangeMap(net); renderDiagram(); renderList(); }).catch(() => {});
+  }
+
+  // Carriage-style strip map for a WAYPOINTS line. Interactive (planner) or read-only (schedule).
+  function stripMapHtml(key, colour, lineName, opts = {}) {
+    const wp = WAYPOINTS[key];
+    if (!wp) return "";
+    const iact = !!opts.interactive;
+    const a = iact ? opts.a : 0, b = iact ? opts.b : wp.length - 1;
+    const from = iact ? opts.from : 0, to = iact ? opts.to : wp.length - 1;
+    const tag = iact ? "button" : "span";
+    const label = escapeHtml(opts.bannerLabel || `${lineName} line`);
+    const banner = `<div class="strip-line" style="background:${colour};color:${contrastText(colour)}">${label}${iact ? " · tap two stops" : ""}</div>`;
+    const track = wp.map((p, i) => {
+      const active = i >= a && i <= b;
+      const endpoint = i === from || i === to;
+      return `<${tag} class="stn${active ? " active" : ""}${endpoint ? " endpoint" : ""}"${iact ? ` data-i="${i}"` : ""} title="${escapeHtml(p[0])}" aria-label="${escapeHtml(p[0])}">
+                <span class="stn-name">${escapeHtml(p[0])}</span>
+                <span class="rail"><span class="dot"></span></span>
+                ${interchangeTags(p[0], lineName)}
+              </${tag}>`;
+    }).join("");
+    return banner + `<div class="line-track">${track}</div>`;
   }
 
   function renderDiagram() {
@@ -448,17 +524,8 @@
     if (a > b) [a, b] = [b, a];
     diagram.style.setProperty("--line-col", nextRun.colour);
     diagram.classList.add("strip");
-    const banner = `<div class="strip-line" style="background:${nextRun.colour};color:${contrastText(nextRun.colour)}">${escapeHtml(nextRun.key)} line · tap two stops</div>`;
-    diagram.innerHTML = banner + `<div class="line-track">${pts.map((p, i) => {
-      const active = i >= a && i <= b;
-      const endpoint = i === +fromSel.value || i === +toSel.value;
-      return `<button class="stn${active ? " active" : ""}${endpoint ? " endpoint" : ""}"
-                data-i="${i}" title="${escapeHtml(p[0])}" aria-label="${escapeHtml(p[0])}">
-                <span class="stn-name">${escapeHtml(p[0])}</span>
-                <span class="rail"><span class="dot"></span></span>
-                ${interchangeTags(p[0])}
-              </button>`;
-    }).join("")}</div>`;
+    diagram.innerHTML = stripMapHtml(nextRun.key, nextRun.colour, nextRun.key,
+      { interactive: true, a, b, from: +fromSel.value, to: +toSel.value });
     diagram.querySelectorAll(".stn").forEach((btn) => {
       btn.addEventListener("click", () => onStationClick(+btn.dataset.i));
     });
