@@ -632,7 +632,8 @@
     if (routeMap.layer) m.removeLayer(routeMap.layer);
     const grp = L.layerGroup();
     const pts = r.loop && r.path.length > 2 ? r.path.concat([r.path[0]]) : r.path;
-    L.polyline(pts, { color: c, weight: 5, opacity: 0.95, lineJoin: "round", lineCap: "round" }).addTo(grp);
+    L.polyline(pts, { color: c, weight: 5, opacity: 0.3, lineJoin: "round", lineCap: "round" }).addTo(grp);
+    L.polyline(pts, { renderer: L.svg(), color: c, weight: 5, opacity: 0.95, lineCap: "round", lineJoin: "round", className: "route-flow", dashArray: "2 13" }).addTo(grp);
     const first = r.path[0], last = r.path[r.path.length - 1];
     L.circleMarker(first, { radius: 6, color: "#fff", weight: 2, fillColor: c, fillOpacity: 1 })
       .bindTooltip("Start · " + escapeHtml(r.start), { direction: "top" }).addTo(grp);
@@ -1065,6 +1066,17 @@
     const lineLayer = L.geoJSON(geo, { style: (f) => { const on = hi && f.properties.line === hi;
       return { color: f.properties.colour, weight: on ? 5 : 3, opacity: on ? 1 : (hi ? 0.3 : 0.9), lineJoin: "round", lineCap: "round" }; } }).addTo(map);
     lineLayer.eachLayer((l) => { if (hi && l.feature.properties.line === hi) l.bringToFront(); });
+
+    // Animated run route from the next run's waypoints (start → finish) to show direction.
+    const wp = hi && nextRun ? WAYPOINTS[nextRun.key] : null;
+    if (wp && wp.length > 1) {
+      const wl = wp.map((s) => [s[1], s[2]]);
+      L.polyline(wl, { renderer: L.svg(), color: net[hi].colour, weight: 4, opacity: 0.95, lineCap: "round", lineJoin: "round", className: "route-flow", dashArray: "2 12" }).addTo(map);
+      L.circleMarker(wl[0], { radius: 6, color: "#fff", weight: 2, fillColor: net[hi].colour, fillOpacity: 1 })
+        .bindTooltip("Start · " + escapeHtml(wp[0][0]), { direction: "top" }).addTo(map);
+      L.marker(wl[wl.length - 1], { icon: L.divIcon({ className: "route-finish", html: "◉", iconSize: [15, 15], iconAnchor: [7, 7] }) })
+        .bindTooltip("Finish · " + escapeHtml(wp[wp.length - 1][0]), { direction: "top" }).addTo(map);
+    }
 
     // Station lookup: dedup by id, count lines per station (interchange), colour.
     const count = {}, coordById = {}, colourById = {};

@@ -633,6 +633,14 @@ body.tm-map-active .tm-zoom, body.tm-map-active .tm-scrollhint { display: none; 
   width: 15px; height: 15px; display: flex; align-items: center; justify-content: center;
   font: 800 8px Inter, sans-serif; text-transform: uppercase; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.15);
 }
+/* Animated "flowing dashes" that travel from start to finish, showing the run direction. */
+.route-flow { animation: route-flow 1s linear infinite; }
+@keyframes route-flow { to { stroke-dashoffset: -26; } }
+.route-finish {
+  color: #14171f; font-size: 15px; line-height: 15px; text-align: center;
+  text-shadow: 0 0 2px #fff, 0 0 2px #fff;
+}
+@media (prefers-reduced-motion: reduce) { .route-flow { animation: none; } }
 .geo-modes { display: inline-flex; align-items: center; gap: 4px; margin-left: 8px; }
 .geo-mode { font: 600 12px Inter, sans-serif; border: 1px solid var(--line); background: #fff; color: var(--muted); padding: 2px 9px; border-radius: 20px; cursor: pointer; }
 .geo-mode.on { background: var(--tfl-blue); border-color: var(--tfl-blue); color: #fff; }
