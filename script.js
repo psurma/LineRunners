@@ -1038,33 +1038,81 @@
     try { localStorage.setItem(LC_KEY, JSON.stringify([...set])); } catch (_) { /* private mode etc. */ }
   }
   let collectorDone = loadCollector();
+  // Line length (km) for collector distance totals.
+  const LINE_KM = {};
+  LINE_STATS.forEach(([nm, km]) => { LINE_KM[nm] = km; });
+
+  // Collectible achievement badges. Each test() runs against the collector context
+  // { count, km, linesAny, linesBoth, both(name) } so they light up as you tick lines.
+  const BADGES = [
+    { icon: "🚇", name: "First Steps", desc: "Your first line direction", test: (c) => c.count >= 1 },
+    { icon: "🎫", name: "Day Tripper", desc: "Run three different lines", test: (c) => c.linesAny >= 3 },
+    { icon: "🖐", name: "High Five", desc: "Five directions collected", test: (c) => c.count >= 5 },
+    { icon: "🔄", name: "There & Back", desc: "Any line, both ways", test: (c) => c.linesBoth >= 1 },
+    { icon: "🌗", name: "Round-Trip Regular", desc: "Five lines both ways", test: (c) => c.linesBoth >= 5 },
+    { icon: "🏃", name: "Halfway There", desc: "Eleven directions — half the network", test: (c) => c.count >= 11 },
+    { icon: "🏅", name: "Marathon Distance", desc: "Collect 42.2 km", test: (c) => c.km >= 42.195 },
+    { icon: "💯", name: "Century Club", desc: "Collect 100 km", test: (c) => c.km >= 100 },
+    { icon: "🗺", name: "Double Century", desc: "Collect 250 km", test: (c) => c.km >= 250 },
+    { icon: "💚", name: "Waterloo & City Whiz", desc: "The shortest line, both ways", test: (c) => c.both("Waterloo & City") },
+    { icon: "🔴", name: "Central Champion", desc: "The longest line, both ways", test: (c) => c.both("Central") },
+    { icon: "🟡", name: "Full Circle", desc: "The Circle line, both ways", test: (c) => c.both("Circle") },
+    { icon: "🟤", name: "Bakerloo Boss", desc: "The Bakerloo line, both ways", test: (c) => c.both("Bakerloo") },
+    { icon: "🟢", name: "District Distance", desc: "The District line, both ways", test: (c) => c.both("District") },
+    { icon: "🩷", name: "Hammersmith Hero", desc: "Hammersmith & City, both ways", test: (c) => c.both("Hammersmith & City") },
+    { icon: "⚪", name: "Jubilee Jumper", desc: "The Jubilee line, both ways", test: (c) => c.both("Jubilee") },
+    { icon: "🟣", name: "Metropolitan Master", desc: "The Metropolitan line, both ways", test: (c) => c.both("Metropolitan") },
+    { icon: "⚫", name: "Northern Soul", desc: "The Northern line, both ways", test: (c) => c.both("Northern") },
+    { icon: "🔵", name: "Piccadilly Pro", desc: "The Piccadilly line, both ways", test: (c) => c.both("Piccadilly") },
+    { icon: "💙", name: "Victoria Victor", desc: "The Victoria line, both ways", test: (c) => c.both("Victoria") },
+    { icon: "👑", name: "Tube Run Royalty", desc: "Every line, both ways", test: (c) => c.linesBoth >= 11 },
+  ];
 
   function renderLineCollector() {
     const el = document.getElementById("lineCollector");
     if (!el) return;
     const total = TUBE_LINES.length * 2;
-    let n = 0;
+    let n = 0, collectedKm = 0, linesAny = 0, linesBoth = 0;
 
     const rows = TUBE_LINES.map((name) => {
       const c = LINE_COLOURS[name] || "#0019A8";
       const dirs = LINE_DIRS[name] || ["→ one way", "→ the other"];
+      const lineKm = LINE_KM[name] || 0;
+      let doneHere = 0;
       const chips = dirs.map((label, i) => {
         const keyId = `${name}|${i}`;
         const isDone = collectorDone.has(keyId);
-        if (isDone) n++;
+        if (isDone) { n++; doneHere++; collectedKm += lineKm; }
         const style = isDone
           ? `background:${c};color:${contrastText(c)};border-color:${c}`
           : `color:#2b3140;border-color:${c}`;
         return `<button type="button" class="lc-dir${isDone ? " done" : ""}" data-key="${escapeHtml(keyId)}" aria-pressed="${isDone}" style="${style}">${isDone ? "✓ " : ""}${escapeHtml(label)}</button>`;
       }).join("");
+      if (doneHere >= 1) linesAny++;
+      if (doneHere >= 2) linesBoth++;
       return `<div class="lc-row">
-        <span class="lc-name" style="border-color:${c}"><i style="background:${c}"></i>${escapeHtml(name)}</span>
+        <span class="lc-name" style="border-color:${c}"><i style="background:${c}"></i>${escapeHtml(name)}<span class="lc-km">${lineKm} km each way</span></span>
         <span class="lc-dirs">${chips}</span>
+      </div>`;
+    }).join("");
+
+    const ctx = {
+      count: n, km: collectedKm, linesAny, linesBoth,
+      both: (nm) => collectorDone.has(`${nm}|0`) && collectorDone.has(`${nm}|1`),
+    };
+    const gotBadges = BADGES.filter((b) => b.test(ctx)).length;
+    const badgeCards = BADGES.map((b) => {
+      const got = b.test(ctx);
+      return `<div class="badge${got ? " got" : ""}">
+        <span class="badge-ic">${got ? b.icon : "🔒"}</span>
+        <span class="badge-nm">${escapeHtml(b.name)}</span>
+        <span class="badge-ds">${escapeHtml(b.desc)}</span>
       </div>`;
     }).join("");
 
     const pct = Math.round((n / total) * 100);
     const done = n === total;
+    const miles = (collectedKm * MI_PER_KM).toFixed(1);
     el.innerHTML = `
       <div class="lc-head">
         <span class="lc-count">${n} / ${total} directions run${done ? " · the whole network! 🎉" : ""}</span>
@@ -1072,7 +1120,11 @@
         ${n ? `<button type="button" class="lc-reset" id="lcReset">Reset</button>` : ""}
       </div>
       <p class="lc-hint"><strong>Tap a direction to tick off a line you've run</strong> — each counts twice, one each way. Your tally is saved in this browser. ${TUBE_LINES.length} lines, ${total} runs to collect them all.</p>
-      <div class="lc-rows">${rows}</div>`;
+      <div class="lc-dist"><span class="lc-dist-big">${miles} mi</span> collected so far <small>${collectedKm.toFixed(1)} km across ${n} direction${n === 1 ? "" : "s"}</small></div>
+      <div class="lc-rows">${rows}</div>
+      <div class="lc-badges-head"><h3>Badges</h3><span class="lc-badges-count">${gotBadges} / ${BADGES.length} earned</span></div>
+      <p class="lc-hint">Collect lines to unlock badges — from your first direction to the whole network, both ways.</p>
+      <div class="lc-badges">${badgeCards}</div>`;
 
     el.querySelectorAll(".lc-dir").forEach((b) => b.addEventListener("click", () => {
       const k = b.dataset.key;

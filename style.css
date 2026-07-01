@@ -874,3 +874,18 @@ body.tm-map-active .tm-zoom, body.tm-map-active .tm-scrollhint { display: none; 
 .leaflet-bar a.map-expand:hover { color: var(--tfl-red); }
 #routeMap:fullscreen, #busMap:fullscreen { width: 100%; height: 100%; border-radius: 0; }
 #routeMap:-webkit-full-screen, #busMap:-webkit-full-screen { width: 100%; height: 100%; border-radius: 0; }
+
+/* Collector distances + badge wall */
+.lc-km { font-size: 11px; font-weight: 600; color: var(--muted); margin-left: 8px; white-space: nowrap; }
+.lc-dist { margin: 18px 0 4px; font-size: 15px; color: var(--muted); }
+.lc-dist-big { font-size: 22px; font-weight: 800; color: var(--tfl-blue); }
+.lc-dist small { display: block; font-size: 13px; }
+.lc-badges-head { display: flex; align-items: baseline; gap: 12px; margin: 30px 0 6px; }
+.lc-badges-head h3 { font-size: 20px; font-weight: 800; }
+.lc-badges-count { font-size: 14px; font-weight: 700; color: var(--tfl-blue); }
+.lc-badges { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; margin-top: 8px; }
+.badge { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 5px; padding: 16px 10px; border: 1px solid var(--line); border-radius: 14px; background: #fff; opacity: 0.5; filter: grayscale(1); transition: opacity 0.15s, filter 0.15s, box-shadow 0.15s, border-color 0.15s; }
+.badge.got { opacity: 1; filter: none; border-color: var(--tfl-blue); box-shadow: var(--shadow); }
+.badge-ic { font-size: 30px; line-height: 1; }
+.badge-nm { font-size: 13px; font-weight: 800; }
+.badge-ds { font-size: 11px; color: var(--muted); line-height: 1.35; }
