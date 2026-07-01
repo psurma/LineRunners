@@ -1188,6 +1188,8 @@
   let toiletSet = null;       // Set of station ids with confirmed toilets
   let geoTimeMode = "run";    // run | walk | off — badge mode on the highlighted line
   let geoShowToilets = true;  // toilet pins on the geographic map
+  let geoDistUnit = "km";     // km | mi — distance unit shown alongside times
+  function geoDistStr(km) { return geoDistUnit === "mi" ? `${(km * MI_PER_KM).toFixed(1)} mi` : `${km.toFixed(1)} km`; }
   function defaultZoom(kind) { return kind === "geo" ? 1.4 : kind === "schematic" ? 1.3 : kind === "data" ? 1 : 1.6; }
   async function loadNetwork() {
     if (netData) return netData;
@@ -1478,14 +1480,21 @@
     if (!cap) return;
     const modes = hi ? `<span class="geo-modes">Times: ${["run", "walk", "off"].map((m) =>
       `<button type="button" class="geo-mode" data-mode="${m}"${geoTimeMode === m ? ' data-on="1"' : ""}>${m === "off" ? "Off" : m[0].toUpperCase() + m.slice(1)}</button>`).join("")}</span>` : "";
+    const units = hi ? `<span class="geo-modes">Dist: ${["km", "mi"].map((u) =>
+      `<button type="button" class="geo-mode geo-unit" data-unit="${u}"${geoDistUnit === u ? ' data-on="1"' : ""}>${u}</button>`).join("")}</span>` : "";
     const wcBtn = `<button type="button" class="geo-mode geo-wc-btn" data-wc="1"${geoShowToilets ? ' data-on="1"' : ""}>🚻 Toilets</button>`;
     cap.innerHTML = (hi
-      ? `<strong style="color:${net[hi].colour}">${escapeHtml(net[hi].name)} line</strong> lit up for the next run, with running times to each stop. `
-      : `Our own live map — real streets, parks and the Thames, with every tube line on top. `) + modes + " " + wcBtn;
+      ? `<strong style="color:${net[hi].colour}">${escapeHtml(net[hi].name)} line</strong> lit up for the next run, with running time and distance to each stop. `
+      : `Our own live map — real streets, parks and the Thames, with every tube line on top. `) + modes + " " + units + " " + wcBtn;
     cap.querySelectorAll(".geo-mode[data-on]").forEach((b) => b.classList.add("on"));
     cap.querySelectorAll(".geo-mode[data-mode]").forEach((b) => b.addEventListener("click", () => {
       geoTimeMode = b.dataset.mode;
       cap.querySelectorAll(".geo-mode[data-mode]").forEach((x) => x.classList.toggle("on", x === b));
+      redraw();
+    }));
+    cap.querySelectorAll(".geo-unit[data-unit]").forEach((b) => b.addEventListener("click", () => {
+      geoDistUnit = b.dataset.unit;
+      cap.querySelectorAll(".geo-unit[data-unit]").forEach((x) => x.classList.toggle("on", x === b));
       redraw();
     }));
     const wb = cap.querySelector(".geo-wc-btn");
@@ -1544,10 +1553,10 @@
           fillOpacity: 1, opacity: dim ? 0.55 : 1,
         });
         if (onHi && (!dense || inter)) {
-          const time = geoTimeMode !== "off" ? `<span>${fmtTime(km[sid] * perKm)}</span>` : "";
+          const time = geoTimeMode !== "off" ? `<span>${fmtTime(km[sid] * perKm)} · ${geoDistStr(km[sid])}</span>` : "";
           m.bindTooltip(`<b>${escapeHtml(s.n)}</b>${time}`, { permanent: true, direction: "right", className: "tm-run-label", offset: [7, 0] });
         } else {
-          const t = onHi && geoTimeMode !== "off" ? escapeHtml(s.n) + " · " + fmtTime(km[sid] * perKm) : escapeHtml(s.n);
+          const t = onHi && geoTimeMode !== "off" ? `${escapeHtml(s.n)} · ${fmtTime(km[sid] * perKm)} · ${geoDistStr(km[sid])}` : escapeHtml(s.n);
           m.bindTooltip(t, { direction: "top", className: "tm-hover-label" });
         }
         stationGrp.addLayer(m);
