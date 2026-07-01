@@ -659,8 +659,15 @@ body.tm-map-active .tm-zoom, body.tm-map-active .tm-scrollhint { display: none; 
 .cr-walk { color: #2e8b57; }
 
 /* ---------- Route ideas ---------- */
-.route-map { width: 100%; height: 440px; border-radius: 16px; overflow: hidden; border: 1px solid var(--line); box-shadow: var(--shadow); margin-bottom: 20px; background: #eef1f4; }
-.route-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
+.route-layout { display: grid; gap: 20px; }
+.route-map { width: 100%; height: 440px; border-radius: 16px; overflow: hidden; border: 1px solid var(--line); box-shadow: var(--shadow); background: #eef1f4; }
+.route-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; }
+/* Desktop: cards on the left, map pinned in view on the right so clicking a card never scrolls it off-screen. */
+@media (min-width: 861px) {
+  .route-layout { grid-template-columns: minmax(0, 1fr) minmax(340px, 460px); align-items: start; }
+  #routeList { grid-column: 1; grid-row: 1; }
+  #routeMap { grid-column: 2; grid-row: 1; position: sticky; top: 80px; height: min(78vh, 640px); }
+}
 .route-card {
   background: var(--card);
   border: 1px solid var(--line);
