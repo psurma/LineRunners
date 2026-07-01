@@ -889,3 +889,7 @@ body.tm-map-active .tm-zoom, body.tm-map-active .tm-scrollhint { display: none; 
 .badge-ic { font-size: 30px; line-height: 1; }
 .badge-nm { font-size: 13px; font-weight: 800; }
 .badge-ds { font-size: 11px; color: var(--muted); line-height: 1.35; }
+
+/* Planner ETA (group arrival time) */
+.cr-eta { margin-top: 10px; padding: 10px 14px; background: #eef1ff; border-left: 4px solid var(--tfl-blue); border-radius: 8px; font-size: 15px; color: var(--ink); }
+.cr-eta strong { color: var(--tfl-blue); }

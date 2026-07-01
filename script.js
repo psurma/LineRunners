@@ -382,7 +382,15 @@
   const toSel = document.getElementById("toStn");
   const paceSel = document.getElementById("pace");
   const unitsSel = document.getElementById("units");
+  const startSel = document.getElementById("startTime");
   const MI_PER_KM = 0.621371;
+  // Add minutes to a "HH:MM" clock time, returning "HH:MM" (wraps past midnight).
+  function addClock(hhmm, mins) {
+    const [h, m] = (hhmm || MEET_TIME).split(":").map(Number);
+    let t = (h * 60 + m + Math.round(mins)) % 1440;
+    if (t < 0) t += 1440;
+    return `${String(Math.floor(t / 60)).padStart(2, "0")}:${String(t % 60).padStart(2, "0")}`;
+  }
   let firstPick = true;
 
   // Interchange data for the carriage-style strip map: which tube lines meet at each stop.
@@ -498,7 +506,8 @@
     if (unitsSel) unitsSel.addEventListener("change", () => {
       try { localStorage.setItem("tuberun_units", unitsSel.value); } catch (_) { /* ignore */ }
     });
-    [fromSel, toSel, paceSel, unitsSel].filter(Boolean).forEach((s) => s.addEventListener("change", update));
+    if (startSel && !startSel.value) startSel.value = MEET_TIME;
+    [fromSel, toSel, paceSel, unitsSel, startSel].filter(Boolean).forEach((s) => s.addEventListener("input", update));
     renderDiagram();
     update();
     // Enrich the strip with interchange tags once the network data loads.
@@ -565,6 +574,12 @@
     const walkMins = km * WALK_MIN_PER_KM; // walking time at ~5 km/h
     const stops = Math.max(0, b - a - 1);
 
+    // Expected arrival clock time: running time from the route's actual start
+    // (index 0) to each picked station, added to the run's start time.
+    const startClock = (startSel && startSel.value) || MEET_TIME;
+    const etaFrom = addClock(startClock, legDistanceKm(pts, 0, a) * paceKm);
+    const etaTo = addClock(startClock, legDistanceKm(pts, 0, b) * paceKm);
+
     const unit = unitsSel ? unitsSel.value : "km";
     const dist = unit === "mi"
       ? `${(km * MI_PER_KM).toFixed(1)} mi`
@@ -586,7 +601,8 @@
         · ${b - a} leg${b - a > 1 ? "s" : ""}${stops ? ` · passes ${stops} stop${stops > 1 ? "s" : ""}` : ""}
         · at ${paceStr}
       </div>
-      <div class="cr-note">Estimate: crow-flies distance × ${ROAD_FACTOR} for streets. Add time for stops, photos and coffee.</div>`;
+      <div class="cr-eta">🕒 Starting ${startClock}, the group reaches <strong>${escapeHtml(pts[a][0])}</strong> at <strong>~${etaFrom}</strong>${b > a ? ` and <strong>${escapeHtml(pts[b][0])}</strong> at <strong>~${etaTo}</strong>` : ""}</div>
+      <div class="cr-note">Estimate: crow-flies distance × ${ROAD_FACTOR} for streets, running only — add time for regroups, photos and coffee, so arrive a little early.</div>`;
     renderDiagram();
   }
 
