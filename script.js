@@ -1168,19 +1168,33 @@
   }
 
   // --- Render: Gallery ---------------------------------------------------
-  function renderGallery() {
+  // Photos are curated in data/gallery.json (array of {src, caption}); drop
+  // images in img/gallery/ and list them there — no code changes needed.
+  function galleryPlaceholder(el) {
+    const tints = ["Victoria", "Central", "Piccadilly", "Northern", "Jubilee", "Bakerloo"];
+    el.innerHTML = tints.map((n) =>
+      `<div class="gal-item gal-empty" style="--t:${LINE_COLOURS[n]}"><span>Your photos here</span></div>`).join("") +
+      (CONNECT.instagram ? `<a class="gal-cta" href="${escapeAttr(CONNECT.instagram)}" target="_blank" rel="noopener">Tag <strong>#TubeRun</strong> on Instagram →</a>` : "");
+  }
+  async function renderGallery() {
     const el = document.getElementById("galleryGrid");
     if (!el) return;
-    if (GALLERY.length) {
-      el.innerHTML = GALLERY.map((g) => `<figure class="gal-item">
+    let items = GALLERY;
+    try {
+      const res = await fetch("data/gallery.json", { cache: "no-cache" });
+      if (res.ok) { const j = await res.json(); if (Array.isArray(j)) items = j; }
+    } catch (_) { /* fall back to placeholder below */ }
+    items = (items || []).filter((g) => g && g.src);
+    if (!items.length) { galleryPlaceholder(el); return; }
+    el.innerHTML = items.map((g) => `<figure class="gal-item">
         <img src="${attrVal(g.src)}" alt="${escapeHtml(g.caption || "")}" loading="lazy" />
         ${g.caption ? `<figcaption>${escapeHtml(g.caption)}</figcaption>` : ""}</figure>`).join("");
-    } else {
-      const tints = ["Victoria", "Central", "Piccadilly", "Northern", "Jubilee", "Bakerloo"];
-      el.innerHTML = tints.map((n) =>
-        `<div class="gal-item gal-empty" style="--t:${LINE_COLOURS[n]}"><span>Your photos here</span></div>`).join("") +
-        (CONNECT.instagram ? `<a class="gal-cta" href="${escapeAttr(CONNECT.instagram)}" target="_blank" rel="noopener">Tag <strong>#TubeRun</strong> on Instagram →</a>` : "");
-    }
+    // A broken/missing image removes just its tile; if none survive, show the placeholder.
+    el.querySelectorAll(".gal-item img").forEach((img) => img.addEventListener("error", () => {
+      const fig = img.closest(".gal-item");
+      if (fig) fig.remove();
+      if (!el.querySelector(".gal-item")) galleryPlaceholder(el);
+    }));
   }
 
   // --- Render: Standard tube map (real map, one line highlighted) --------
@@ -1546,6 +1560,7 @@
     modifierWheelZoom(map);
     observeMapSize(map);
     addZoomHint(map);
+    addFullscreenControl(map);
 
     // Tube lines (real track geometry). Highlighted line bold & on top, others dimmed.
     const lineLayer = L.geoJSON(geo, { style: (f) => { const on = hi && f.properties.line === hi;
