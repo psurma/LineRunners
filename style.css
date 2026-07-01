@@ -723,8 +723,13 @@ body.tm-map-active .tm-zoom, body.tm-map-active .tm-scrollhint { display: none; 
 .route-card:hover { transform: translateY(-2px); box-shadow: 0 8px 22px rgba(0, 0, 0, 0.12); }
 .route-card:focus-visible { outline: 2px solid var(--tfl-blue); outline-offset: 2px; }
 .route-card.on { box-shadow: 0 0 0 2px var(--tfl-blue), var(--shadow); }
-.rc-show { margin-top: 10px; font-size: 13px; font-weight: 700; color: var(--tfl-blue); }
-.route-card.on .rc-show { color: var(--ink); }
+.rc-actions { margin-top: 10px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.rc-hint { font-size: 13px; font-weight: 700; color: var(--tfl-blue); }
+.route-card.on .rc-hint { display: none; }
+.rc-reverse { display: none; font: 700 13px Inter, sans-serif; padding: 6px 13px; border-radius: 20px; border: 1px solid var(--tfl-blue); background: #fff; color: var(--tfl-blue); cursor: pointer; transition: all 0.12s; }
+.route-card.on .rc-reverse { display: inline-flex; align-items: center; gap: 5px; }
+.rc-reverse:hover { background: var(--tfl-blue); color: #fff; }
+.rc-reverse.on { background: var(--tfl-blue); color: #fff; }
 .rc-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
 .rc-type { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; color: #fff; padding: 3px 10px; border-radius: 20px; }
 .rc-dist { font-weight: 700; font-size: 14px; color: var(--ink); }

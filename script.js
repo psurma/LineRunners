@@ -783,7 +783,7 @@
     { name: "Thames Barrier Path", type: "river", leg: "Greenwich → the Thames Barrier", start: "Cutty Sark (DLR)", distance: "4.0 mi (6.5 km)", highlights: "Downriver from Greenwich past the O2 to the silver hoods of the Thames Barrier.", suitability: "Flat, open and breezy — a straightforward point-to-point along the river.", loop: false, path: [[51.4830, -0.0090], [51.4880, 0.0080], [51.4930, 0.0230], [51.4975, 0.0360]] },
   ];
 
-  const routeMap = { map: null, layer: null };
+  const routeMap = { map: null, layer: null, current: -1, reversed: false };
   // Real OSM route geometry (data/routes.geojson), keyed by slug in ROUTES order.
   const ROUTE_IDS = ["regents-canal", "hyde-kensington", "grand-tour", "regents-park", "diana-memorial", "victoria-park", "battersea-park", "greenwich-park", "hampstead-heath", "stjames-green", "southwark-docks", "wormwood-scrubs",
     "richmond-park", "bushy-park", "wimbledon-common", "clapham-common", "wandsworth-common", "brockwell-park", "dulwich-park", "crystal-palace-park", "alexandra-park", "finsbury-park", "parkland-walk", "grand-union-paddington", "lea-navigation", "olympic-park", "thames-putney-richmond", "thames-barrier"];
@@ -809,6 +809,8 @@
     } else if (r.path && r.path.length) {
       segs = [r.loop && r.path.length > 2 ? r.path.concat([r.path[0]]) : r.path];
     } else return;
+    // Reverse: flip the order of segments and the points within each.
+    if (routeMap.reversed) segs = segs.slice().reverse().map((s) => s.slice().reverse());
     if (routeMap.layer) m.removeLayer(routeMap.layer);
     const grp = L.layerGroup(), all = [];
     segs.forEach((seg) => {
@@ -817,10 +819,11 @@
       seg.forEach((p) => all.push(p));
     });
     const lastSeg = segs[segs.length - 1];
+    const startLabel = routeMap.reversed ? "Start · from the far end (reversed)" : "Start · " + escapeHtml(r.start);
     L.circleMarker(segs[0][0], { radius: 6, color: "#fff", weight: 2, fillColor: c, fillOpacity: 1 })
-      .bindTooltip("Start · " + escapeHtml(r.start), { direction: "top" }).addTo(grp);
+      .bindTooltip(startLabel, { direction: "top" }).addTo(grp);
     if (!r.loop) L.circleMarker(lastSeg[lastSeg.length - 1], { radius: 6, color: c, weight: 2, fillColor: "#fff", fillOpacity: 1 })
-      .bindTooltip("Finish", { direction: "top" }).addTo(grp);
+      .bindTooltip(routeMap.reversed ? "Finish · " + escapeHtml(r.start) : "Finish", { direction: "top" }).addTo(grp);
     grp.addTo(m);
     routeMap.layer = grp;
     m.fitBounds(L.latLngBounds(all), { padding: [34, 34] });
@@ -848,7 +851,10 @@
         <p class="rc-meta"><strong>Start</strong> ${escapeHtml(r.start)}</p>
         <p class="rc-hi">${escapeHtml(r.highlights)}</p>
         ${r.suitability ? `<p class="rc-suit">${escapeHtml(r.suitability)}</p>` : ""}
-        <p class="rc-show">Show on map →</p>
+        <div class="rc-actions">
+          <span class="rc-hint">Tap to trace on the map →</span>
+          <button type="button" class="rc-reverse" data-i="${i}">⇄ Reverse direction</button>
+        </div>
       </div>`;
   }
 
@@ -866,6 +872,8 @@
       const i = parseInt(card.dataset.i, 10);
       card.addEventListener("click", () => selectRoute(i));
       card.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); selectRoute(i); } });
+      const rev = card.querySelector(".rc-reverse");
+      if (rev) rev.addEventListener("click", (e) => { e.stopPropagation(); reverseRoute(i, rev); });
     });
     return visible[0].i;
   }
@@ -889,13 +897,24 @@
   }
 
   function selectRoute(i) {
+    routeMap.current = i;
+    routeMap.reversed = false; // a freshly-picked route starts in its forward direction
     document.querySelectorAll("#routeList .route-card").forEach((el) => {
       const on = +el.dataset.i === i;
       el.classList.toggle("on", on); el.setAttribute("aria-pressed", on ? "true" : "false");
+      const rev = el.querySelector(".rc-reverse");
+      if (rev) rev.classList.remove("on");
     });
     drawRoute(i);
     if (window.matchMedia("(max-width: 860px)").matches && routeMap.map)
       document.getElementById("routeMap").scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+
+  function reverseRoute(i, btn) {
+    if (routeMap.current !== i) { selectRoute(i); return; }
+    routeMap.reversed = !routeMap.reversed;
+    if (btn) btn.classList.toggle("on", routeMap.reversed);
+    drawRoute(i);
   }
 
   function renderRoutes() {
