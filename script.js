@@ -877,6 +877,7 @@
       cartoBasemap().addTo(routeMap.map);
       modifierWheelZoom(routeMap.map);
       observeMapSize(routeMap.map);
+      addFullscreenControl(routeMap.map);
       requestAnimationFrame(async () => { routeMap.map.invalidateSize(false); await loadRoutes(); selectRoute(first >= 0 ? first : 0); });
     }
   }
@@ -931,6 +932,7 @@
     cartoBasemap().addTo(busMapObj.map);
     modifierWheelZoom(busMapObj.map);
     observeMapSize(busMapObj.map);
+    addFullscreenControl(busMapObj.map);
     requestAnimationFrame(() => busMapObj.map.invalidateSize(false));
 
     async function trace() {
@@ -1348,6 +1350,40 @@
     }, { threshold: 0.05 });
     io.observe(map.getContainer());
   }
+  // Expand a map to full screen via the native Fullscreen API. Adds a top-right
+  // button and keeps Leaflet correctly sized as fullscreen enters/exits.
+  function addFullscreenControl(map) {
+    const container = map.getContainer();
+    const reqFs = container.requestFullscreen || container.webkitRequestFullscreen;
+    const exitFs = document.exitFullscreen || document.webkitExitFullscreen;
+    if (!reqFs || !exitFs) return; // unsupported browser — skip silently
+    const isFs = () => (document.fullscreenElement || document.webkitFullscreenElement) === container;
+    const ctl = L.control({ position: "topright" });
+    ctl.onAdd = () => {
+      const a = L.DomUtil.create("a", "leaflet-bar map-expand");
+      a.href = "#";
+      a.title = "Expand map to full screen";
+      a.setAttribute("role", "button");
+      a.setAttribute("aria-label", "Expand map to full screen");
+      a.innerHTML = "⤢";
+      L.DomEvent.on(a, "click", L.DomEvent.stop);
+      L.DomEvent.on(a, "click", () => { if (isFs()) exitFs.call(document); else reqFs.call(container); });
+      map._fsBtn = a;
+      return a;
+    };
+    ctl.addTo(map);
+    const onChange = () => {
+      const fs = isFs();
+      if (map._fsBtn) {
+        map._fsBtn.innerHTML = fs ? "✕" : "⤢";
+        map._fsBtn.title = fs ? "Exit full screen" : "Expand map to full screen";
+      }
+      setTimeout(() => map.invalidateSize(false), 80);
+    };
+    document.addEventListener("fullscreenchange", onChange);
+    document.addEventListener("webkitfullscreenchange", onChange);
+  }
+
   // Small persistent hint on the geo map so mouse users know how to zoom.
   function addZoomHint(map) {
     const c = L.control({ position: "bottomleft" });

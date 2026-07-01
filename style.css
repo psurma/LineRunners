@@ -864,3 +864,9 @@ body.tm-map-active .tm-zoom, body.tm-map-active .tm-scrollhint { display: none; 
 .bq-lbl { color: var(--muted); font-size: 13px; font-weight: 600; }
 .bq-chip { font: 600 13px Inter, sans-serif; padding: 5px 13px; border-radius: 20px; border: 1px solid var(--line); background: #fff; color: var(--tfl-blue); cursor: pointer; transition: all 0.12s; }
 .bq-chip:hover { border-color: var(--tfl-red); color: var(--tfl-red); }
+
+/* Expand-map (fullscreen) control */
+.leaflet-bar a.map-expand { font-size: 17px; font-weight: 700; color: var(--tfl-blue); display: flex; align-items: center; justify-content: center; }
+.leaflet-bar a.map-expand:hover { color: var(--tfl-red); }
+#routeMap:fullscreen, #busMap:fullscreen { width: 100%; height: 100%; border-radius: 0; }
+#routeMap:-webkit-full-screen, #busMap:-webkit-full-screen { width: 100%; height: 100%; border-radius: 0; }
