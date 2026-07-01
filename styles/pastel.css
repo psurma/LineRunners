@@ -1,0 +1,316 @@
+/* Theme: Soft Pastel */
+/* Soft, friendly and airy retheme — off-white base, gentle pastel tints,
+   very rounded cards, diffuse shadows, warm rounded sans type.
+   Loaded AFTER style.css as a full override. */
+
+@import url("https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&display=swap");
+
+:root {
+  /* Warm, friendly accents replacing the corporate TfL palette */
+  --tfl-blue: #6a80d6;   /* soft periwinkle — primary accent */
+  --tfl-red: #e88aa6;    /* blush pink — secondary accent */
+  --ink: #3a3550;        /* soft plum-charcoal, still AA on off-white */
+  --paper: #fbf8f4;      /* warm off-white base */
+  --muted: #6f6a80;      /* muted lavender-grey (AA on paper/card) */
+  --line: #ece6f0;       /* very gentle lilac hairline */
+  --card: #ffffff;
+  --radius: 26px;        /* very rounded cards */
+  --shadow: 0 18px 42px rgba(120, 110, 160, 0.16);
+  --font-display: "Baloo 2", "Inter", system-ui, sans-serif;
+  --accent: #6a80d6;
+
+  /* Pastel section tints */
+  --mint: #e4f4ec;
+  --blush: #fce8ee;
+  --sky: #e6f0fb;
+  --butter: #fdf3dc;
+  --lilac: #efeafa;
+}
+
+body {
+  background:
+    radial-gradient(1200px 600px at 12% -8%, #f3ecfb 0%, transparent 55%),
+    radial-gradient(1000px 520px at 92% 4%, #e9f5f0 0%, transparent 50%),
+    var(--paper);
+  background-attachment: fixed;
+  color: var(--ink);
+}
+
+/* Warm rounded display type across headings & brand */
+.brand-word, .eyebrow, .hero h1, .section-title,
+.next-body h3, .nh-col h3, .route-card h3,
+.strip-line, .line-tag, .cr-km {
+  font-family: var(--font-display);
+  font-weight: 800;
+  letter-spacing: 0.1px;
+}
+
+/* ---------- Header ---------- */
+.site-header {
+  background: rgba(251, 248, 244, 0.82);
+  backdrop-filter: blur(14px) saturate(1.2);
+  border-bottom: 1px solid var(--line);
+  box-shadow: 0 6px 20px rgba(120, 110, 160, 0.06);
+}
+.brand-icon { border-radius: 14px; box-shadow: 0 4px 12px rgba(120, 110, 160, 0.22); }
+.brand-word { color: var(--ink); }
+.nav a { color: var(--muted); font-weight: 600; }
+.nav a:hover { color: var(--tfl-blue); }
+@media (max-width: 720px) {
+  .nav a:hover, .nav a:focus { background: var(--lilac); }
+}
+
+/* ---------- Hero ---------- */
+.hero {
+  background:
+    radial-gradient(900px 500px at 80% -10%, #d9e6fb 0%, transparent 60%),
+    linear-gradient(135deg, #eadcf7 0%, #dce8fb 45%, #e0f3ea 100%);
+  color: var(--ink);
+}
+.hero .eyebrow { color: #7a6aa8; letter-spacing: 2.6px; }
+.hero h1 { color: var(--ink); letter-spacing: 0px; line-height: 1.05; }
+.hero h1 span { color: #d76d92; }
+.hero .lede { color: #4a4560; }
+/* gentle pastel ribbons across the hero */
+.hero-lines {
+  opacity: 0.55;
+  background-image:
+    linear-gradient(90deg, transparent 0, #f5b8cb 0),
+    linear-gradient(90deg, transparent 0, #a8d8c1 0),
+    linear-gradient(90deg, transparent 0, #f7dfa0 0),
+    linear-gradient(90deg, transparent 0, #b9ccf3 0);
+  background-size: 100% 8px, 100% 8px, 100% 8px, 100% 8px;
+  transform: skewY(-4deg) scale(1.2);
+}
+
+/* ---------- Buttons ---------- */
+.btn { border-radius: 40px; box-shadow: 0 8px 18px rgba(120, 110, 160, 0.14); }
+.btn-primary {
+  background: linear-gradient(135deg, #f6a8c1, #f2c088);
+  color: #4a2e3a;
+}
+.btn-primary:hover { background: linear-gradient(135deg, #f8b8cd, #f6cd9c); }
+.btn-ghost {
+  background: rgba(255, 255, 255, 0.6);
+  border-color: rgba(122, 106, 168, 0.4);
+  color: #4a4560;
+}
+.btn-ghost:hover { background: rgba(255, 255, 255, 0.9); border-color: var(--tfl-blue); color: var(--tfl-blue); }
+
+/* ---------- Section titles ---------- */
+.section-title { color: var(--ink); }
+.section-title::after {
+  width: 64px; height: 8px; border-radius: 8px;
+  background: linear-gradient(90deg, #f5a8c2, #b9c8f3);
+}
+.section-sub { color: var(--muted); }
+
+/* Tint alternating sections for an airy, pastel feel */
+#next, #network, #newhere, #routes, #about {
+  background: linear-gradient(180deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0) 100%);
+}
+.plan { background: var(--sky); border-radius: 34px; margin: 8px auto; }
+.stats-lines { background: var(--mint); border-radius: 34px; margin: 8px auto; }
+.schedule { background: var(--blush); border-radius: 34px; margin: 8px auto; }
+.collector { background: var(--butter); border-radius: 34px; margin: 8px auto; }
+.clubs { background: var(--lilac); border-radius: 34px; margin: 8px auto; }
+.gallery { background: var(--mint); border-radius: 34px; margin: 8px auto; }
+
+/* ---------- Next run card ---------- */
+.next-card {
+  border: 1px solid var(--line);
+  border-left: 12px solid var(--tfl-blue);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  background: var(--card);
+}
+.date-badge { background: var(--lilac); border-radius: 20px; }
+.date-badge .dow { color: #7a6aa8; }
+.date-badge .day { color: var(--tfl-blue); }
+.date-badge .mon { color: var(--ink); }
+.line-tag { border-radius: 30px; box-shadow: 0 4px 10px rgba(120,110,160,0.16); }
+.meet-link { color: var(--tfl-blue); }
+.meet-link:hover { color: #d76d92; }
+.route-link { color: var(--tfl-blue); }
+.route-link:hover { color: #d76d92; }
+
+/* multi-day emphasis + day list */
+.multiday-badge {
+  background: linear-gradient(135deg, #f2a0bb, #f0bb9a);
+  color: #4a2e3a; border-radius: 30px;
+}
+.nd-days li { background: var(--lilac); border-radius: 14px; border-left-width: 5px; }
+.nd-days li span { color: var(--muted); }
+
+/* weather chip */
+.weather { border-radius: 20px; background: var(--card); border-color: var(--line); }
+
+/* ---------- Plan / diagram / calculator ---------- */
+.line-diagram.strip { background: #fff; border: 1px solid var(--line); border-radius: 20px; }
+.strip-line { border-radius: 10px; }
+.stn .stn-name { color: var(--ink); }
+.stn-tag { border-radius: 8px; }
+.stn .dot { background: #fff; }
+.diagram-empty code { background: var(--lilac); border-radius: 8px; color: #4a4560; }
+
+.calc select {
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: #fff;
+}
+.calc select:focus { border-color: var(--tfl-blue); box-shadow: 0 0 0 4px rgba(106, 128, 214, 0.18); }
+.cr-km { color: var(--tfl-blue); }
+.cr-run { color: var(--tfl-blue); }
+.cr-walk { color: #2e8f5f; }
+.cr-detail, .rc-meta, .about-text p, .facts li, .nh-list li, .tm-caption { color: #4a4560; }
+
+/* ---------- Map containers ---------- */
+.tube-map, .route-map {
+  border-radius: 28px;
+  overflow: hidden;
+  box-shadow: var(--shadow);
+}
+.route-map { border: 1px solid var(--line); background: #eef3fb; }
+.tm-scroll { border: 1px solid var(--line); border-radius: 22px; background: #fff; }
+.tm-tab { border-radius: 30px; border-color: var(--line); color: var(--muted); background: #fff; }
+.tm-tab.on { background: var(--tfl-blue); border-color: var(--tfl-blue); color: #fff; }
+.tm-zbtn { border-radius: 12px; border-color: var(--line); color: var(--tfl-blue); background: #fff; }
+.tm-zbtn:hover { border-color: var(--tfl-blue); }
+.geo-mode { border-radius: 20px; border-color: var(--line); background: #fff; color: var(--muted); }
+.geo-mode.on { background: var(--tfl-blue); border-color: var(--tfl-blue); color: #fff; }
+#tmMap { background: #eef3fb; }
+.geo-svg { background: #f2f7fc; }
+.sch-svg { background: #fff; }
+
+/* running-times table */
+.rt-cum { color: var(--tfl-blue); }
+.rt-table th { background: #fff; }
+
+/* ---------- Line stats ---------- */
+.line-stats { background: transparent; }
+.ls-table th, .ls-table td { border-bottom-color: var(--line); }
+.ls-active { background: rgba(106, 128, 214, 0.09); }
+.ls-next { background: var(--tfl-blue); color: #fff; border-radius: 30px; }
+.ls-badge { background: var(--lilac); color: #4a4560; border-radius: 30px; }
+.ls-badge.tough { background: #fbe0e8; color: #b23b5c; }
+.ls-badge.easy { background: #dcefe4; color: #2e7d55; }
+
+/* ---------- Schedule rows ---------- */
+.run-row {
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: var(--card);
+  box-shadow: 0 8px 20px rgba(120, 110, 160, 0.08);
+}
+.run-row:hover { box-shadow: var(--shadow); }
+.run-row .r-swatch { border-radius: 8px; }
+.r-toggle { border-radius: 20px; border-color: var(--line); color: var(--tfl-blue); background: #fff; }
+.r-toggle:hover { border-color: var(--tfl-blue); }
+.r-loc { color: #c05c7e; border-radius: 30px; }
+.run-details-wrap { background: #fffdfb; border-color: var(--line); border-radius: 0 0 20px 20px; }
+.d-tag { background: var(--lilac); border-radius: 30px; color: #4a4560; }
+.d-list a { color: var(--tfl-blue); }
+
+/* ---------- Route ideas ---------- */
+.route-card {
+  border: 1px solid var(--line);
+  border-top: 5px solid var(--tfl-blue);
+  border-radius: 22px;
+  box-shadow: 0 10px 26px rgba(120, 110, 160, 0.1);
+  background: var(--card);
+}
+.route-card:hover { box-shadow: var(--shadow); }
+.route-card.on { box-shadow: 0 0 0 3px var(--tfl-blue), var(--shadow); }
+.route-card:focus-visible { outline-color: var(--tfl-blue); }
+.rc-type { border-radius: 30px; color: #fff; }
+.rc-dist { color: var(--ink); }
+.rc-leg, .rc-show { color: var(--tfl-blue); }
+.rc-hi { color: #4a4560; }
+
+/* route filter chips */
+.rf-chip {
+  border-radius: 30px;
+  border-color: var(--line);
+  background: #fff;
+  color: var(--muted);
+}
+.rf-chip:hover { border-color: var(--tfl-blue); color: var(--tfl-blue); background: var(--lilac); }
+.rf-chip.on {
+  background: linear-gradient(135deg, #7d92e0, #a7b7ee);
+  border-color: transparent;
+  color: #fff;
+}
+
+/* ---------- New here ---------- */
+.nh-col {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 24px;
+  padding: 26px;
+  box-shadow: 0 10px 26px rgba(120, 110, 160, 0.08);
+}
+.nh-list li::before { background: #e88aa6; }
+.nh-list.check li::before { color: #2e8f5f; background: none; }
+.nh-note { border-left: 4px solid #f2a0bb; color: var(--muted); }
+
+/* ---------- Line collector ---------- */
+.lc-count { color: var(--tfl-blue); }
+.lc-bar { background: #ece4f2; border-radius: 30px; }
+.lc-fill { background: linear-gradient(90deg, #f5a8c2, #7d92e0); border-radius: 30px; }
+.lc-name { background: #fff; border-radius: 12px; }
+.lc-dir { border-radius: 30px; background: #fff; }
+.lc-dir.done { box-shadow: var(--shadow); }
+
+/* ---------- About ---------- */
+.stat {
+  background: linear-gradient(135deg, #7d92e0, #a7b7ee);
+  border-radius: 22px;
+  color: #fff;
+  box-shadow: var(--shadow);
+}
+.stat-label { color: #eef1fc; }
+.facts li::before { background: #e88aa6; }
+.facts strong, .about-text strong { color: var(--ink); }
+
+/* ---------- Clubs ---------- */
+.club-card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  box-shadow: 0 6px 16px rgba(120, 110, 160, 0.07);
+}
+.club-card:hover { border-color: var(--tfl-blue); box-shadow: var(--shadow); }
+.club-card strong { color: var(--tfl-blue); }
+.club-card span { color: var(--muted); }
+.clubs-group { color: var(--muted); }
+
+/* ---------- Gallery ---------- */
+.gal-item { border-radius: 18px; }
+.gal-cta { color: var(--tfl-blue); }
+.gal-cta:hover { color: #d76d92; }
+
+/* ---------- Join ---------- */
+.field input { border: 1px solid var(--line); border-radius: 16px; background: #fff; }
+.field input:focus { border-color: var(--tfl-blue); box-shadow: 0 0 0 4px rgba(106, 128, 214, 0.18); }
+.connect-label { color: var(--muted); }
+
+/* ---------- Live banner ---------- */
+.live-banner {
+  background: linear-gradient(135deg, #ef8fab, #f0b48f);
+  color: #4a2e3a;
+}
+.live-dot { background: #4a2e3a; box-shadow: 0 0 0 0 rgba(74, 46, 58, 0.5); }
+@keyframes livePulse {
+  0% { box-shadow: 0 0 0 0 rgba(74, 46, 58, 0.5); }
+  70% { box-shadow: 0 0 0 10px rgba(74, 46, 58, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(74, 46, 58, 0); }
+}
+.live-btns a { background: #fff; color: #c05c7e; border-radius: 30px; }
+.live-btns a:hover { background: #fff2f6; }
+
+/* ---------- Footer ---------- */
+.site-footer {
+  border-top: 1px solid var(--line);
+  background: linear-gradient(180deg, transparent, #f1eafa);
+  color: var(--muted);
+}

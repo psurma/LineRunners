@@ -1,0 +1,413 @@
+/* Theme: Editorial */
+/* An understated magazine retheme: generous whitespace, large Fraunces serif
+   headings, a near-monochrome ink-on-paper palette with a single oxblood accent,
+   hairline rules and refined small-caps labels. Loaded AFTER style.css. */
+
+@import url("https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,400&display=swap");
+
+/* ---------- Palette ---------- */
+:root {
+  --tfl-blue: #1a1a1a;        /* re-cast as ink for inherited blue accents   */
+  --tfl-red: #7a2a24;         /* single restrained oxblood accent            */
+  --accent: #7a2a24;
+  --ink: #1a1712;             /* warm near-black                             */
+  --paper: #f4f1ea;           /* soft warm paper                            */
+  --muted: #6f6a60;           /* muted warm grey                            */
+  --line: #d9d3c7;            /* hairline                                   */
+  --card: #fbf9f4;            /* off-white card                            */
+  --radius: 3px;              /* almost square, editorial                  */
+  --shadow: 0 1px 0 rgba(26, 23, 18, 0.04);
+  --font-display: "Fraunces", Georgia, "Times New Roman", serif;
+}
+
+body {
+  font-family: "Fraunces", Georgia, serif;
+  background: var(--paper);
+  color: var(--ink);
+  line-height: 1.65;
+}
+
+/* Body prose uses a lighter optical setting; keep Fraunces but modest weight */
+body { font-optical-sizing: auto; font-weight: 400; }
+
+/* Serif display everywhere the heading classes appear */
+.brand-word, .eyebrow, .hero h1, .section-title,
+.next-body h3, .nh-col h3, .route-card h3,
+.strip-line, .line-tag, .cr-km {
+  font-family: var(--font-display);
+  font-weight: 600;
+}
+
+/* ---------- Header ---------- */
+.site-header {
+  background: rgba(244, 241, 234, 0.9);
+  border-bottom: 1px solid var(--line);
+  padding: 16px clamp(16px, 4vw, 48px);
+}
+.brand-icon {
+  border-radius: 2px;
+  box-shadow: none;
+  filter: grayscale(1) contrast(1.05);
+}
+.brand-word {
+  font-weight: 600;
+  font-size: 22px;
+  letter-spacing: 0.2px;
+  font-style: italic;
+  color: var(--ink);
+}
+.nav { font-family: "Fraunces", Georgia, serif; font-weight: 500; font-size: 14px; }
+.nav a {
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  font-size: 11.5px;
+  font-weight: 600;
+  transition: color 0.15s, border-color 0.15s;
+  border-bottom: 1px solid transparent;
+  padding-bottom: 2px;
+}
+.nav a:hover { color: var(--accent); border-bottom-color: var(--accent); }
+
+/* ---------- Hero ---------- */
+.hero {
+  background: var(--paper);
+  color: var(--ink);
+  border-bottom: 1px solid var(--line);
+  padding: clamp(64px, 13vw, 150px) clamp(16px, 4vw, 48px) clamp(56px, 11vw, 120px);
+}
+.hero .eyebrow {
+  color: var(--accent);
+  letter-spacing: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  font-family: "Fraunces", Georgia, serif;
+  margin-bottom: 26px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--line);
+  display: inline-block;
+}
+.hero h1 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: clamp(44px, 9vw, 96px);
+  line-height: 0.98;
+  letter-spacing: -1.5px;
+  color: var(--ink);
+}
+.hero h1 span { color: var(--accent); font-style: italic; font-weight: 500; }
+.hero .lede {
+  color: var(--muted);
+  font-size: clamp(17px, 2.2vw, 22px);
+  max-width: 640px;
+  margin: 30px 0 38px;
+  line-height: 1.55;
+}
+/* replace skewed coloured rails with a single restrained hairline motif */
+.hero-lines {
+  opacity: 1;
+  background-image:
+    linear-gradient(90deg, transparent 0, var(--line) 0),
+    linear-gradient(90deg, transparent 0, var(--line) 0),
+    linear-gradient(90deg, transparent 0, var(--accent) 0);
+  background-size: 100% 1px, 100% 1px, 46px 2px;
+  background-position: 0 32%, 0 70%, 0 51%;
+  background-repeat: no-repeat;
+  transform: none;
+}
+
+/* ---------- Buttons ---------- */
+.btn {
+  border-radius: 2px;
+  font-family: "Fraunces", Georgia, serif;
+  font-weight: 600;
+  font-size: 13px;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  padding: 14px 30px;
+  border-width: 1px;
+}
+.btn-primary { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+.btn-primary:hover { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn-ghost { border-color: var(--ink); color: var(--ink); background: transparent; }
+.btn-ghost:hover { background: var(--ink); color: var(--paper); }
+
+/* ---------- Sections & titles ---------- */
+section { padding: clamp(56px, 9vw, 104px) clamp(16px, 4vw, 48px); }
+.section-title {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: clamp(30px, 4.5vw, 46px);
+  letter-spacing: -0.5px;
+  margin-bottom: 14px;
+}
+/* restyle the accent bar: a thin oxblood hairline, not a fat rounded bar */
+.section-title::after {
+  width: 40px;
+  height: 2px;
+  border-radius: 0;
+  background: var(--accent);
+  margin-top: 18px;
+}
+.section-sub {
+  color: var(--muted);
+  font-size: 17px;
+  max-width: 660px;
+  margin-bottom: 36px;
+}
+
+/* ---------- Next run card ---------- */
+.next-card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-left: 2px solid var(--accent);
+  border-radius: var(--radius);
+  box-shadow: none;
+}
+.date-badge {
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+}
+.date-badge .dow { color: var(--muted); letter-spacing: 3px; }
+.date-badge .day { color: var(--ink); font-family: var(--font-display); font-weight: 600; }
+.date-badge .mon { color: var(--ink); letter-spacing: 2px; }
+.next-body h3 { font-family: var(--font-display); font-weight: 600; }
+.line-tag {
+  background: var(--ink) !important;
+  color: var(--paper);
+  border-radius: 2px;
+  font-family: "Fraunces", Georgia, serif;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-size: 11px;
+}
+.next-meta strong { color: var(--muted); letter-spacing: 1.5px; }
+.meet-link { color: var(--accent); }
+.meet-link:hover { color: var(--ink); }
+
+/* Multi-day badge */
+.multiday-badge {
+  background: var(--accent);
+  color: #fff;
+  border-radius: 2px;
+  font-family: "Fraunces", Georgia, serif;
+  letter-spacing: 1px;
+}
+.nd-days li {
+  background: var(--paper);
+  border-left: 2px solid var(--run-col, var(--accent));
+  border-radius: 2px;
+}
+.nd-days li strong { color: var(--ink); }
+
+/* ---------- Weather ---------- */
+.weather { background: var(--card); border: 1px solid var(--line); border-radius: 2px; }
+
+/* ---------- Route cards ---------- */
+.route-card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-top: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: none;
+  transition: border-color 0.15s, transform 0.15s;
+}
+.route-card:hover { transform: none; border-color: var(--ink); box-shadow: none; }
+.route-card.on { box-shadow: none; border-color: var(--accent); border-left: 2px solid var(--accent); }
+.route-card h3 { font-family: var(--font-display); font-weight: 600; }
+.rc-type {
+  background: var(--ink) !important;
+  color: var(--paper);
+  border-radius: 2px;
+  font-family: "Fraunces", Georgia, serif;
+  letter-spacing: 1.5px;
+  font-weight: 600;
+}
+.rc-dist { color: var(--ink); font-family: var(--font-display); font-weight: 600; }
+.rc-leg { color: var(--accent); }
+.rc-show { color: var(--accent); text-transform: uppercase; letter-spacing: 1.5px; font-size: 11px; }
+.route-card.on .rc-show { color: var(--ink); }
+.rc-meta strong { color: var(--muted); letter-spacing: 1px; }
+.rc-suit { border-left: 2px solid var(--line); }
+
+/* ---------- Route filter chips ---------- */
+.rf-chip {
+  font-family: "Fraunces", Georgia, serif;
+  border-radius: 2px;
+  border: 1px solid var(--line);
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-size: 11.5px;
+  font-weight: 600;
+}
+.rf-chip:hover { border-color: var(--ink); color: var(--ink); }
+.rf-chip.on { background: var(--ink); border-color: var(--ink); color: var(--paper); }
+
+/* ---------- Line diagram / strip ---------- */
+.line-diagram { --line-col: var(--ink); }
+.line-diagram.strip { background: var(--card); border: 1px solid var(--line); border-radius: 2px; }
+.strip-line {
+  background: var(--ink) !important;
+  color: var(--paper);
+  border-radius: 2px;
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: 1px;
+}
+.stn .dot { background: var(--paper); }
+.stn .stn-name { color: var(--ink); font-family: "Fraunces", Georgia, serif; font-weight: 500; }
+.stn.active .stn-name { font-weight: 700; }
+.stn-tag {
+  background: var(--paper);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  font-weight: 600;
+}
+.diagram-empty code { background: var(--card); border: 1px solid var(--line); }
+
+/* ---------- Calculator ---------- */
+.calc select, .field input {
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  background: var(--card);
+  font-family: "Fraunces", Georgia, serif;
+}
+.calc select:focus, .field input:focus {
+  border-color: var(--ink);
+  box-shadow: 0 0 0 2px rgba(122, 42, 36, 0.18);
+}
+.cr-main { font-family: var(--font-display); font-weight: 600; }
+.cr-km, .cr-run { color: var(--accent); }
+.cr-walk { color: var(--ink); }
+.cr-detail { color: var(--ink); }
+
+/* ---------- Map containers ---------- */
+.tube-map, .route-map {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: none;
+  background: #e9e4d9;
+}
+.tm-scroll { border: 1px solid var(--line); border-radius: var(--radius); background: var(--card); }
+.tm-tab {
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  background: var(--card);
+  color: var(--muted);
+  font-family: "Fraunces", Georgia, serif;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-size: 11.5px;
+  font-weight: 600;
+}
+.tm-tab.on { background: var(--ink); border-color: var(--ink); color: var(--paper); }
+.tm-zbtn { border: 1px solid var(--line); border-radius: 2px; color: var(--ink); background: var(--card); }
+.tm-zbtn:hover { border-color: var(--ink); }
+.geo-mode { border: 1px solid var(--line); border-radius: 2px; color: var(--muted); font-family: "Fraunces", Georgia, serif; }
+.geo-mode.on { background: var(--ink); border-color: var(--ink); color: var(--paper); }
+.geo-svg { background: #efeade; }
+.sch-svg { background: var(--card); }
+#tmMap { background: #e9e4d9; }
+.rt-cum { color: var(--accent); }
+
+/* ---------- Line stats table ---------- */
+.ls-table th { color: var(--muted); letter-spacing: 1.5px; font-family: "Fraunces", Georgia, serif; }
+.ls-table td, .ls-table th { border-bottom: 1px solid var(--line); }
+.ls-active { background: rgba(122, 42, 36, 0.06); }
+.ls-next {
+  background: var(--accent);
+  color: #fff;
+  border-radius: 2px;
+  font-family: "Fraunces", Georgia, serif;
+  letter-spacing: 0.8px;
+}
+.ls-badge { background: var(--paper); color: var(--ink); border: 1px solid var(--line); border-radius: 2px; }
+.ls-badge.tough { background: rgba(122, 42, 36, 0.1); color: #7a2a24; border-color: rgba(122, 42, 36, 0.3); }
+.ls-badge.easy { background: rgba(46, 74, 46, 0.08); color: #2f4a2f; border-color: rgba(46, 74, 46, 0.25); }
+
+/* ---------- Schedule ---------- */
+.run-row {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  transition: border-color 0.15s;
+}
+.run-row:hover { box-shadow: none; transform: none; border-color: var(--ink); }
+.run-row .r-swatch { border-radius: 1px; }
+.run-row .r-title { font-family: var(--font-display); font-weight: 600; }
+.r-loc { color: var(--accent); border-radius: 2px; letter-spacing: 1px; }
+.r-toggle {
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  background: var(--card);
+  color: var(--ink);
+  font-family: "Fraunces", Georgia, serif;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-size: 11px;
+}
+.r-toggle:hover { border-color: var(--ink); }
+.run-details-wrap { background: var(--paper); border: 1px solid var(--line); border-top: none; }
+.d-block h4 { color: var(--muted); letter-spacing: 2px; font-family: "Fraunces", Georgia, serif; }
+.d-tag { background: var(--card); border: 1px solid var(--line); border-radius: 2px; }
+.d-list a, .route-link { color: var(--accent); border-bottom-color: var(--accent); }
+.route-link:hover { color: var(--ink); }
+
+/* ---------- New here ---------- */
+.nh-col h3 { font-family: var(--font-display); font-weight: 600; font-size: 24px; }
+.nh-list li::before { background: var(--accent); }
+.nh-list.check li::before { color: var(--accent); background: none; }
+.nh-note { border-left: 2px solid var(--accent); color: var(--muted); }
+
+/* ---------- Line collector ---------- */
+.lc-count { color: var(--accent); font-family: var(--font-display); font-weight: 600; }
+.lc-bar { background: var(--line); border-radius: 2px; }
+.lc-fill { background: var(--ink); border-radius: 2px; }
+.lc-name { background: var(--card); border-radius: 2px; }
+.lc-dir { border-radius: 2px; background: var(--card); }
+
+/* ---------- About ---------- */
+.about-text p, .facts li { color: #3a352c; }
+.facts li::before { background: var(--accent); }
+.stat { background: var(--ink); color: var(--paper); border-radius: var(--radius); }
+.stat-num { font-family: var(--font-display); font-weight: 600; }
+.stat-label { color: #cfc7b6; }
+
+/* ---------- Clubs ---------- */
+.clubs-group { color: var(--muted); letter-spacing: 3px; font-family: "Fraunces", Georgia, serif; }
+.club-card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); transition: border-color 0.15s; }
+.club-card:hover { transform: none; box-shadow: none; border-color: var(--ink); }
+.club-card strong { color: var(--accent); font-family: var(--font-display); font-weight: 600; }
+
+/* ---------- Live banner ---------- */
+.live-banner { background: var(--ink); color: var(--paper); }
+.live-btns a { background: var(--paper); color: var(--ink); border-radius: 2px; }
+.live-btns a:hover { background: #fff; color: var(--accent); }
+
+/* ---------- Social / connect ---------- */
+.btn-social { border-radius: 2px; }
+
+/* ---------- Gallery ---------- */
+.gal-item { border-radius: var(--radius); }
+.gal-cta { color: var(--accent); font-family: "Fraunces", Georgia, serif; }
+.gal-cta:hover { color: var(--ink); }
+
+/* ---------- Footer ---------- */
+.site-footer {
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  background: var(--card);
+  padding: 48px clamp(16px, 4vw, 48px);
+  font-family: "Fraunces", Georgia, serif;
+}
+.site-footer p:first-child {
+  font-size: 16px;
+  font-style: italic;
+  color: var(--ink);
+  letter-spacing: 0.2px;
+}

@@ -1,0 +1,349 @@
+/* Theme: Glass Modern */
+/* Modern glassmorphism override — loaded AFTER style.css.
+   Colourful gradient page, frosted translucent cards, vibrant gradient buttons,
+   airy spacing, strong text contrast over glass. */
+
+@import url("https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&display=swap");
+
+/* ---------- Palette / tokens ---------- */
+:root {
+  --tfl-blue: #4f46e5;      /* indigo accent */
+  --tfl-red: #db2777;       /* magenta accent */
+  --accent: #6d28d9;
+  --ink: #1a1633;           /* deep violet-ink, high contrast on frost */
+  --paper: transparent;     /* page bg comes from the gradient below */
+  --muted: #4d5573;
+  --line: rgba(255, 255, 255, 0.55);
+  --card: rgba(255, 255, 255, 0.42);
+  --radius: 22px;
+  --shadow: 0 18px 50px rgba(60, 40, 120, 0.16);
+  --font-display: "Sora", "Inter", system-ui, sans-serif;
+
+  --glass: rgba(255, 255, 255, 0.42);
+  --glass-strong: rgba(255, 255, 255, 0.62);
+  --glass-border: rgba(255, 255, 255, 0.6);
+  --grad-brand: linear-gradient(120deg, #6366f1 0%, #a855f7 45%, #ec4899 100%);
+  --grad-warm: linear-gradient(120deg, #f59e0b 0%, #ec4899 100%);
+}
+
+/* ---------- Page background: colourful soft gradient ---------- */
+body {
+  font-family: "Sora", "Inter", system-ui, -apple-system, sans-serif;
+  color: var(--ink);
+  background:
+    radial-gradient(1100px 720px at 8% -10%, rgba(129, 140, 248, 0.55), transparent 60%),
+    radial-gradient(1000px 680px at 100% 0%, rgba(236, 72, 153, 0.42), transparent 55%),
+    radial-gradient(900px 900px at 50% 120%, rgba(45, 212, 191, 0.38), transparent 60%),
+    linear-gradient(160deg, #eef2ff 0%, #fdf2f8 45%, #ecfeff 100%);
+  background-attachment: fixed;
+  min-height: 100vh;
+}
+
+/* ---------- Header ---------- */
+.site-header {
+  background: rgba(255, 255, 255, 0.5);
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  border-bottom: 1px solid var(--glass-border);
+  box-shadow: 0 8px 30px rgba(60, 40, 120, 0.08);
+}
+.brand-icon { border-radius: 12px; box-shadow: 0 4px 14px rgba(99, 102, 241, 0.35); }
+.brand-word {
+  font-family: var(--font-display);
+  font-weight: 800;
+  background: var(--grad-brand);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.nav a { color: var(--muted); font-weight: 600; }
+.nav a:hover { color: var(--tfl-blue); }
+
+/* ---------- Hero ---------- */
+.hero {
+  background:
+    radial-gradient(700px 400px at 15% 10%, rgba(255, 255, 255, 0.28), transparent 60%),
+    linear-gradient(125deg, #4338ca 0%, #7c3aed 50%, #db2777 100%);
+  color: #fff;
+}
+.hero-inner {
+  padding: clamp(28px, 5vw, 52px);
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 28px;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 30px 70px rgba(40, 20, 90, 0.35);
+}
+.hero h1 {
+  font-family: var(--font-display);
+  font-weight: 800;
+  letter-spacing: -2px;
+}
+.hero h1 span {
+  background: linear-gradient(90deg, #fde68a, #fbcfe8);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.eyebrow { color: #e9d5ff; letter-spacing: 3px; }
+.lede { color: #f1ecff; }
+.hero-cta { gap: 16px; }
+
+/* soften the decorative rails so they read as light streaks on the gradient */
+.hero-lines { opacity: 0.35; mix-blend-mode: screen; }
+
+/* ---------- Buttons ---------- */
+.btn {
+  border-radius: 40px;
+  border: 1px solid transparent;
+  transition: transform 0.14s ease, box-shadow 0.18s ease, filter 0.18s ease;
+}
+.btn-primary {
+  background: var(--grad-warm);
+  color: #fff;
+  box-shadow: 0 10px 26px rgba(236, 72, 153, 0.45);
+}
+.btn-primary:hover { background: var(--grad-warm); filter: brightness(1.06); transform: translateY(-2px); box-shadow: 0 16px 34px rgba(236, 72, 153, 0.5); }
+.btn-ghost {
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.7);
+  color: #fff;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+.btn-ghost:hover { background: rgba(255, 255, 255, 0.26); transform: translateY(-2px); }
+
+/* ---------- Section titles ---------- */
+.section-title {
+  font-family: var(--font-display);
+  font-weight: 800;
+  color: var(--ink);
+}
+.section-title::after {
+  width: 72px;
+  height: 6px;
+  border-radius: 6px;
+  background: var(--grad-brand);
+}
+.section-sub { color: var(--muted); }
+
+/* Shared frosted-card recipe */
+.next-card,
+.weather,
+.club-card,
+.run-row,
+.route-card,
+.line-diagram.strip,
+.stat,
+.calc select,
+.field input,
+.run-details-wrap {
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+  backdrop-filter: blur(16px) saturate(150%);
+  -webkit-backdrop-filter: blur(16px) saturate(150%);
+}
+
+/* ---------- Next run card ---------- */
+.next-card {
+  border-left: 10px solid transparent;
+  border-image: var(--grad-brand) 1;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+.date-badge {
+  background: var(--grad-brand);
+  color: #fff;
+  border-radius: 16px;
+  box-shadow: 0 10px 24px rgba(124, 58, 237, 0.4);
+}
+.date-badge .dow { color: rgba(255, 255, 255, 0.85); }
+.date-badge .day { color: #fff; }
+.date-badge .mon { color: #fff; }
+.date-badge .cd { color: rgba(255, 255, 255, 0.85); }
+.line-tag { box-shadow: 0 6px 16px rgba(0, 0, 0, 0.18); }
+.next-meta strong { color: var(--ink); }
+.meet-link { color: var(--tfl-blue); }
+.meet-link:hover { color: var(--tfl-red); }
+
+.multiday-badge { background: var(--grad-warm); box-shadow: 0 6px 16px rgba(236, 72, 153, 0.4); }
+.nd-days li {
+  background: var(--glass-strong);
+  border-left: 4px solid var(--run-col, var(--tfl-blue));
+  border-radius: 12px;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+.nd-days li span { color: var(--muted); }
+
+/* ---------- Planner ---------- */
+.line-diagram.strip { border-radius: 16px; }
+.stn .stn-name { color: var(--ink); }
+.stn-tag { background: var(--glass-strong); color: var(--ink); }
+.strip-line { color: #fff; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2); }
+.calc select, .field input { color: var(--ink); border-radius: 12px; }
+.calc select:focus, .field input:focus {
+  outline: none;
+  border-color: var(--tfl-blue);
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.25);
+}
+.cr-km { color: var(--tfl-blue); }
+.cr-run { color: var(--tfl-blue); }
+.cr-walk { color: #0f766e; }
+.cr-detail { color: var(--ink); }
+
+/* ---------- Map containers ---------- */
+.tube-map, .route-map {
+  border-radius: var(--radius);
+  overflow: hidden;
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--shadow);
+}
+.tm-scroll, .tm-tab, .tm-zbtn, .geo-mode {
+  background: var(--glass);
+  backdrop-filter: blur(12px) saturate(150%);
+  -webkit-backdrop-filter: blur(12px) saturate(150%);
+  border: 1px solid var(--glass-border);
+}
+.tm-scroll { border-radius: 18px; }
+.tm-tab { color: var(--muted); }
+.tm-tab.on, .geo-mode.on { background: var(--grad-brand); border-color: transparent; color: #fff; }
+.tm-zbtn { color: var(--tfl-blue); }
+.tm-caption { color: var(--ink); }
+
+/* ---------- Line stats ---------- */
+.line-stats {
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius);
+  padding: 8px clamp(8px, 2vw, 18px);
+  backdrop-filter: blur(16px) saturate(150%);
+  -webkit-backdrop-filter: blur(16px) saturate(150%);
+  box-shadow: var(--shadow);
+}
+.ls-table th { color: var(--muted); }
+.ls-table th, .ls-table td { border-bottom: 1px solid rgba(120, 100, 180, 0.18); }
+.ls-active { background: rgba(79, 70, 229, 0.1); }
+.ls-next { background: var(--grad-brand); }
+.ls-badge { background: var(--glass-strong); color: var(--ink); }
+.ls-badge.tough { background: rgba(219, 39, 119, 0.16); color: #9d174d; }
+.ls-badge.easy { background: rgba(16, 185, 129, 0.16); color: #065f46; }
+.rt-cum { color: var(--tfl-blue); }
+
+/* ---------- New here ---------- */
+.nh-col {
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius);
+  padding: clamp(20px, 3vw, 30px);
+  backdrop-filter: blur(16px) saturate(150%);
+  -webkit-backdrop-filter: blur(16px) saturate(150%);
+  box-shadow: var(--shadow);
+}
+.nh-col h3 { font-family: var(--font-display); color: var(--ink); }
+.nh-list li { color: #2a2542; }
+.nh-list li::before { background: var(--accent); }
+.nh-list.check li::before { background: none; color: var(--tfl-blue); }
+.nh-note { color: var(--muted); border-left: 3px solid var(--tfl-red); }
+
+/* ---------- Schedule ---------- */
+.run-row {
+  border-radius: 16px;
+  box-shadow: 0 10px 26px rgba(60, 40, 120, 0.1);
+}
+.run-row:hover { box-shadow: var(--shadow); transform: translateY(-2px); }
+.run-row .r-swatch { border-radius: 6px; box-shadow: 0 3px 8px rgba(0, 0, 0, 0.18); }
+.run-row .r-title small, .run-row .r-date small { color: var(--muted); }
+.r-toggle {
+  background: var(--glass-strong);
+  border: 1px solid var(--glass-border);
+  color: var(--tfl-blue);
+}
+.r-toggle:hover { border-color: var(--tfl-blue); }
+.run-details-wrap { border-radius: 0 0 16px 16px; }
+.d-tag { background: var(--glass-strong); color: var(--ink); }
+.d-list a { color: var(--tfl-blue); }
+.route-link { color: var(--tfl-blue); }
+.route-link:hover { color: var(--tfl-red); }
+
+/* ---------- Route ideas ---------- */
+.route-card {
+  border-top: 4px solid transparent;
+  border-image: var(--grad-brand) 1;
+  border-radius: 18px;
+  box-shadow: var(--shadow);
+}
+.route-card:hover { transform: translateY(-3px); box-shadow: 0 22px 50px rgba(60, 40, 120, 0.22); }
+.route-card.on { box-shadow: 0 0 0 2px var(--accent), var(--shadow); }
+.route-card h3 { font-family: var(--font-display); color: var(--ink); }
+.rc-type { background: var(--grad-brand); box-shadow: 0 4px 12px rgba(124, 58, 237, 0.4); }
+.rc-dist { color: var(--ink); }
+.rc-leg { color: var(--tfl-blue); }
+.rc-show { color: var(--tfl-blue); }
+.rc-meta, .rc-hi { color: #2a2542; }
+
+/* Route filter chips */
+.rf-chip {
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+  color: var(--muted);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+.rf-chip:hover { border-color: var(--tfl-blue); color: var(--tfl-blue); }
+.rf-chip.on { background: var(--grad-brand); border-color: transparent; color: #fff; }
+
+/* ---------- Clubs ---------- */
+.club-card { border-radius: 16px; box-shadow: 0 10px 26px rgba(60, 40, 120, 0.08); }
+.club-card:hover { transform: translateY(-3px); box-shadow: var(--shadow); border-color: rgba(124, 58, 237, 0.6); }
+.club-card strong { color: var(--tfl-blue); }
+.club-card span { color: var(--muted); }
+.clubs-group { color: var(--muted); }
+
+/* ---------- About / stats ---------- */
+.about-text p, .facts li { color: #2a2542; }
+.facts li::before { background: var(--tfl-red); }
+.stat {
+  background: var(--grad-brand);
+  color: #fff;
+  border-radius: 18px;
+  box-shadow: 0 14px 34px rgba(124, 58, 237, 0.4);
+}
+.stat-label { color: rgba(255, 255, 255, 0.9); }
+
+/* ---------- Line collector ---------- */
+.lc-count { color: var(--tfl-blue); }
+.lc-bar { background: rgba(120, 100, 180, 0.2); }
+.lc-fill { background: var(--grad-brand); }
+.lc-name { background: var(--glass); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+.lc-dir { background: var(--glass); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+
+/* ---------- Gallery ---------- */
+.gal-item { border-radius: 16px; box-shadow: var(--shadow); }
+.gal-cta { color: var(--tfl-blue); }
+.gal-cta:hover { color: var(--tfl-red); }
+
+/* ---------- Live banner ---------- */
+.live-banner {
+  background: var(--grad-warm);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+.live-btns a { color: var(--tfl-red); }
+
+/* ---------- Footer ---------- */
+.site-footer {
+  background: rgba(255, 255, 255, 0.4);
+  backdrop-filter: blur(16px) saturate(150%);
+  -webkit-backdrop-filter: blur(16px) saturate(150%);
+  border-top: 1px solid var(--glass-border);
+  color: var(--muted);
+}
+
+/* Headings pick up the display face */
+.brand-word, .eyebrow, .hero h1, .section-title,
+.next-body h3, .nh-col h3, .route-card h3 {
+  font-family: var(--font-display);
+  font-weight: 800;
+}

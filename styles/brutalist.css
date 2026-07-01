@@ -1,0 +1,502 @@
+/* Theme: Brutalist */
+/* Neo-brutalist override for Tube Run. Flat bold colours, thick black borders,
+   zero radius, hard offset drop-shadows, chunky grotesque + mono type.
+   Loaded AFTER style.css — everything here wins. */
+
+@import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Space+Mono:wght@400;700&display=swap");
+
+:root {
+  --tfl-blue: #0026ff;
+  --tfl-red: #ff2b1c;
+  --ink: #000000;
+  --paper: #ffef4a;      /* acid poster yellow */
+  --muted: #1a1a1a;
+  --line: #000000;
+  --card: #ffffff;
+  --radius: 0px;
+  --shadow: 6px 6px 0 #000000;
+  --accent: #ff2b1c;
+  --font-display: "Space Grotesk", "Arial Black", system-ui, sans-serif;
+
+  /* semantic brutalist extras */
+  --b-border: 3px solid #000;
+  --b-border-thin: 2px solid #000;
+  --b-shadow: 6px 6px 0 #000;
+  --b-shadow-sm: 4px 4px 0 #000;
+  --b-lime: #b6ff3a;
+  --b-pink: #ff5ecb;
+  --b-cyan: #3ae0ff;
+}
+
+* { border-radius: 0 !important; }
+
+body {
+  font-family: "Space Grotesk", "Arial", system-ui, sans-serif;
+  background: var(--paper);
+  color: var(--ink);
+  background-image:
+    linear-gradient(90deg, rgba(0,0,0,0.06) 1px, transparent 1px),
+    linear-gradient(rgba(0,0,0,0.06) 1px, transparent 1px);
+  background-size: 26px 26px;
+}
+
+/* ---------- Header ---------- */
+.site-header {
+  background: var(--paper);
+  backdrop-filter: none;
+  border-bottom: 4px solid #000;
+  padding: 14px clamp(16px, 4vw, 40px);
+}
+.brand-icon { border: 3px solid #000; box-shadow: 3px 3px 0 #000; }
+.brand-word {
+  font-family: var(--font-display);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0;
+  font-size: 22px;
+  color: #000;
+}
+.nav { font-family: "Space Mono", monospace; font-weight: 700; gap: 8px clamp(8px, 1.6vw, 16px); }
+.nav a {
+  color: #000;
+  text-transform: uppercase;
+  font-size: 13px;
+  padding: 6px 10px;
+  border: 2px solid transparent;
+  transition: none;
+}
+.nav a:hover { color: #fff; background: #000; border-color: #000; }
+
+/* ---------- Hero ---------- */
+.hero {
+  background: var(--tfl-blue);
+  color: #fff;
+  border-bottom: 5px solid #000;
+  padding: clamp(56px, 12vw, 120px) clamp(16px, 4vw, 40px) clamp(64px, 12vw, 130px);
+}
+.eyebrow {
+  display: inline-block;
+  font-family: "Space Mono", monospace;
+  color: #000;
+  background: var(--b-lime);
+  border: 3px solid #000;
+  box-shadow: 4px 4px 0 #000;
+  padding: 6px 12px;
+  letter-spacing: 2px;
+  margin-bottom: 22px;
+}
+.hero h1 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: -1px;
+  line-height: 0.95;
+  text-shadow: 5px 5px 0 #000;
+}
+.hero h1 span {
+  color: var(--paper);
+  background: var(--tfl-red);
+  border: 4px solid #000;
+  box-shadow: 6px 6px 0 #000;
+  padding: 0 10px;
+  display: inline-block;
+  text-shadow: none;
+}
+.lede {
+  color: #fff;
+  background: #000;
+  border: 3px solid #000;
+  box-shadow: 6px 6px 0 var(--b-lime);
+  padding: 16px 18px;
+  font-weight: 500;
+}
+.hero-cta { gap: 16px; }
+.hero-lines { opacity: 0.9; }
+
+/* ---------- Buttons ---------- */
+.btn {
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  border: 3px solid #000;
+  border-radius: 0;
+  box-shadow: 5px 5px 0 #000;
+  letter-spacing: 0.5px;
+  transition: transform 0.08s, box-shadow 0.08s;
+}
+.btn:hover { transform: translate(-2px, -2px); box-shadow: 7px 7px 0 #000; }
+.btn:active { transform: translate(2px, 2px); box-shadow: 2px 2px 0 #000; }
+.btn-primary { background: var(--b-lime); color: #000; }
+.btn-primary:hover { background: var(--b-lime); }
+.btn-ghost { background: #fff; color: #000; border-color: #000; }
+.btn-ghost:hover { background: var(--b-pink); color: #000; }
+
+/* ---------- Section titles ---------- */
+.section-title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: -0.5px;
+  display: inline-block;
+  background: #000;
+  color: #fff;
+  padding: 6px 16px;
+  box-shadow: 6px 6px 0 var(--tfl-red);
+  margin-bottom: 18px;
+}
+.section-title::after {
+  content: "";
+  display: block;
+  width: 100%;
+  height: 6px;
+  border-radius: 0;
+  background: var(--accent);
+  margin-top: 8px;
+}
+.section-sub {
+  color: #000;
+  font-weight: 500;
+  border-left: 5px solid #000;
+  padding-left: 14px;
+}
+
+/* ---------- Next run card ---------- */
+.next-card {
+  background: var(--card);
+  border: var(--b-border);
+  border-left: 12px solid var(--tfl-blue);
+  box-shadow: 8px 8px 0 #000;
+}
+.date-badge {
+  background: var(--tfl-red);
+  border: 3px solid #000;
+  box-shadow: 5px 5px 0 #000;
+  color: #fff;
+}
+.date-badge .dow { color: #fff; }
+.date-badge .day { color: #fff; font-family: var(--font-display); }
+.date-badge .mon { color: #fff; }
+.date-badge .cd { color: #fff; }
+.next-body h3 { font-family: var(--font-display); text-transform: uppercase; }
+.line-tag {
+  border: 3px solid #000;
+  box-shadow: 3px 3px 0 #000;
+  border-radius: 0;
+  font-family: "Space Mono", monospace;
+  text-transform: uppercase;
+}
+.next-meta strong { color: #000; }
+.multiday-badge {
+  background: var(--tfl-red);
+  color: #fff;
+  border: 3px solid #000;
+  box-shadow: 3px 3px 0 #000;
+  border-radius: 0;
+  font-family: "Space Mono", monospace;
+}
+.nd-days li {
+  background: #fff;
+  border: 2px solid #000;
+  border-left: 6px solid var(--run-col, var(--tfl-blue));
+  box-shadow: 3px 3px 0 #000;
+}
+.nd-days li span { color: #1a1a1a; }
+.meet-link { color: var(--tfl-blue); }
+.meet-link:hover { color: var(--tfl-red); }
+
+/* ---------- Weather chip ---------- */
+.weather {
+  background: var(--b-cyan);
+  border: 3px solid #000;
+  box-shadow: 5px 5px 0 #000;
+}
+.wx-sub, .wx-tag, .wx-soft { color: #1a1a1a; }
+
+/* ---------- Plan / line diagram strip ---------- */
+.line-diagram.strip {
+  background: #fff;
+  border: 3px solid #000;
+  box-shadow: 6px 6px 0 #000;
+}
+.stn .dot { border-radius: 50% !important; border-color: #000; }
+.stn.active .dot { border-color: var(--line-col); }
+.stn .stn-name { color: #000; font-weight: 700; }
+.stn-tag {
+  border: 2px solid #000;
+  border-radius: 0;
+  font-family: "Space Mono", monospace;
+  background: #fff;
+}
+.strip-line {
+  border: 3px solid #000;
+  box-shadow: 4px 4px 0 #000;
+  border-radius: 0;
+  font-family: var(--font-display);
+  text-transform: uppercase;
+}
+.diagram-empty code { background: var(--b-lime); border: 2px solid #000; border-radius: 0; }
+
+/* ---------- Distance calculator ---------- */
+.calc select, .field input {
+  border: 3px solid #000;
+  border-radius: 0;
+  box-shadow: 3px 3px 0 #000;
+  background: #fff;
+  font-family: "Space Mono", monospace;
+}
+.calc select:focus, .field input:focus {
+  outline: none;
+  border-color: #000;
+  box-shadow: 5px 5px 0 var(--tfl-red);
+}
+.field label { font-weight: 700; text-transform: uppercase; font-size: 13px; }
+.cr-main { font-family: var(--font-display); }
+.cr-km, .cr-run { color: var(--tfl-blue); }
+.cr-walk { color: #157a3c; }
+.calc-result { border: 3px solid #000; box-shadow: 6px 6px 0 #000; background: #fff; padding: 18px; }
+
+/* ---------- Network / route map containers ---------- */
+.tube-map, #tubeMap {
+  border: 4px solid #000;
+  box-shadow: 8px 8px 0 #000;
+  background: #fff;
+}
+.tm-scroll {
+  border: 3px solid #000;
+  box-shadow: 6px 6px 0 #000;
+  border-radius: 0;
+}
+.tm-tab {
+  border: 3px solid #000;
+  border-radius: 0;
+  box-shadow: 3px 3px 0 #000;
+  font-family: "Space Mono", monospace;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #000;
+  background: #fff;
+}
+.tm-tab.on { background: var(--tfl-blue); color: #fff; }
+.tm-zbtn, .geo-mode {
+  border: 3px solid #000;
+  border-radius: 0;
+  box-shadow: 3px 3px 0 #000;
+  color: #000;
+  background: #fff;
+  font-weight: 700;
+}
+.geo-mode.on { background: var(--tfl-blue); color: #fff; }
+.tm-caption { color: #000; font-weight: 500; }
+.route-map, #routeMap {
+  border: 4px solid #000;
+  box-shadow: 8px 8px 0 #000;
+  border-radius: 0;
+  background: #fff;
+}
+.rt-cum { color: var(--tfl-blue); }
+
+/* ---------- Line stats table ---------- */
+.line-stats {
+  border: 3px solid #000;
+  box-shadow: 6px 6px 0 #000;
+  background: #fff;
+  padding: 4px;
+}
+.ls-table th {
+  color: #fff;
+  background: #000;
+  font-family: "Space Mono", monospace;
+}
+.ls-table th, .ls-table td { border-bottom: 2px solid #000; }
+.ls-active { background: var(--b-lime); }
+.ls-next {
+  background: var(--tfl-red);
+  color: #fff;
+  border: 2px solid #000;
+  border-radius: 0;
+  font-family: "Space Mono", monospace;
+}
+.ls-badge { background: #fff; border: 2px solid #000; border-radius: 0; color: #000; }
+.ls-badge.tough { background: var(--tfl-red); color: #fff; }
+.ls-badge.easy { background: var(--b-lime); color: #000; }
+
+/* ---------- Schedule ---------- */
+.run-row {
+  background: var(--card);
+  border: 3px solid #000;
+  box-shadow: 5px 5px 0 #000;
+  transition: transform 0.08s, box-shadow 0.08s;
+}
+.run-row:hover { transform: translate(-2px, -2px); box-shadow: 7px 7px 0 #000; }
+.run-row .r-swatch { border: 2px solid #000; border-radius: 0; }
+.run-row .r-title, .run-row .r-date { font-weight: 700; }
+.r-loc {
+  color: #fff;
+  background: var(--tfl-red);
+  border: 2px solid #000;
+  border-radius: 0;
+  font-family: "Space Mono", monospace;
+}
+.r-toggle {
+  border: 3px solid #000;
+  border-radius: 0;
+  box-shadow: 3px 3px 0 #000;
+  color: #000;
+  font-weight: 700;
+  background: #fff;
+}
+.r-toggle:hover { background: var(--b-lime); }
+.run-details-wrap {
+  background: #fff;
+  border: 3px solid #000;
+  border-top: none;
+  box-shadow: 5px 5px 0 #000;
+}
+.d-tag { background: var(--b-cyan); border: 2px solid #000; border-radius: 0; }
+.d-list a, .route-link { color: var(--tfl-blue); }
+.route-link:hover { color: var(--tfl-red); }
+
+/* ---------- Route ideas ---------- */
+.route-filters { gap: 10px; }
+.rf-chip {
+  border: 3px solid #000;
+  border-radius: 0;
+  box-shadow: 3px 3px 0 #000;
+  color: #000;
+  background: #fff;
+  font-family: "Space Mono", monospace;
+  font-weight: 700;
+  text-transform: uppercase;
+  transition: transform 0.08s;
+}
+.rf-chip:hover { color: #000; background: var(--b-pink); border-color: #000; transform: translate(-1px, -1px); }
+.rf-chip.on { background: var(--tfl-blue); border-color: #000; color: #fff; }
+.route-card {
+  background: var(--card);
+  border: 3px solid #000;
+  border-top: 8px solid var(--tfl-blue);
+  box-shadow: 6px 6px 0 #000;
+  transition: transform 0.08s, box-shadow 0.08s;
+}
+.route-card:hover { transform: translate(-3px, -3px); box-shadow: 9px 9px 0 #000; }
+.route-card.on { box-shadow: 6px 6px 0 var(--tfl-red); border-color: #000; }
+.route-card:focus-visible { outline: 3px solid var(--tfl-red); outline-offset: 3px; }
+.route-card h3 { font-family: var(--font-display); text-transform: uppercase; }
+.rc-type {
+  border: 2px solid #000;
+  border-radius: 0;
+  font-family: "Space Mono", monospace;
+  box-shadow: 2px 2px 0 #000;
+}
+.rc-dist {
+  color: #000;
+  background: var(--b-lime);
+  border: 2px solid #000;
+  padding: 2px 8px;
+  font-family: "Space Mono", monospace;
+}
+.rc-leg { color: var(--tfl-blue); }
+.rc-suit { border-left: 4px solid #000; color: #1a1a1a; }
+
+/* ---------- New here ---------- */
+.nh-col {
+  background: #fff;
+  border: 3px solid #000;
+  box-shadow: 6px 6px 0 #000;
+  padding: 20px;
+}
+.nh-col:nth-child(2) { box-shadow: 6px 6px 0 var(--tfl-blue); }
+.nh-col h3 {
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  background: #000;
+  color: #fff;
+  display: inline-block;
+  padding: 4px 12px;
+}
+.nh-list li { color: #000; }
+.nh-list li::before { border-radius: 0; background: var(--tfl-red); }
+.nh-list.check li::before { color: var(--tfl-blue); background: none; }
+.nh-note {
+  border-left: 5px solid var(--tfl-red);
+  background: var(--paper);
+  border: 2px solid #000;
+  border-left: 6px solid var(--tfl-red);
+  padding: 12px 14px;
+  color: #000;
+}
+
+/* ---------- Line collector ---------- */
+.lc-bar { border: 3px solid #000; background: #fff; box-shadow: 3px 3px 0 #000; }
+.lc-fill { background: var(--tfl-blue); }
+.lc-count { color: #000; font-family: var(--font-display); }
+.lc-name { border: 2px solid #000; box-shadow: 3px 3px 0 #000; background: #fff; }
+.lc-dir { border: 2px solid #000; border-radius: 0; background: #fff; color: #000; font-family: "Space Mono", monospace; }
+.lc-dir.done { box-shadow: 3px 3px 0 #000; }
+
+/* ---------- About ---------- */
+.about-text p { color: #000; }
+.facts li { color: #000; }
+.facts li::before { border-radius: 0; background: var(--tfl-red); }
+.stat {
+  background: var(--tfl-blue);
+  color: #fff;
+  border: 3px solid #000;
+  box-shadow: 6px 6px 0 #000;
+}
+.stat:nth-child(2) { background: var(--tfl-red); box-shadow: 6px 6px 0 #000; }
+.stat:nth-child(3) { background: #000; box-shadow: 6px 6px 0 var(--b-lime); }
+.stat-num { font-family: var(--font-display); }
+.stat-label { color: #f0f0f0; }
+
+/* ---------- Clubs ---------- */
+.clubs-group {
+  color: #000;
+  font-family: "Space Mono", monospace;
+  font-weight: 700;
+}
+.club-card {
+  background: var(--card);
+  border: 3px solid #000;
+  box-shadow: 5px 5px 0 #000;
+  transition: transform 0.08s, box-shadow 0.08s;
+}
+.club-card:hover { transform: translate(-2px, -2px); box-shadow: 7px 7px 0 var(--tfl-red); border-color: #000; }
+.club-card strong { color: var(--tfl-blue); }
+.club-card span { color: #1a1a1a; }
+
+/* ---------- Gallery ---------- */
+.gal-item { border: 3px solid #000; box-shadow: 5px 5px 0 #000; }
+.gal-cta { color: var(--tfl-blue); }
+.gal-cta:hover { color: var(--tfl-red); }
+
+/* ---------- Join ---------- */
+.btn-social { box-shadow: 4px 4px 0 #000; }
+.connect-label { color: #000; font-weight: 700; }
+
+/* ---------- Live banner ---------- */
+.live-banner {
+  background: var(--tfl-red);
+  color: #fff;
+  border-top: 4px solid #000;
+  border-bottom: 4px solid #000;
+  font-family: "Space Mono", monospace;
+  font-weight: 700;
+}
+.live-btns a {
+  background: #fff;
+  color: #000;
+  border: 3px solid #000;
+  box-shadow: 3px 3px 0 #000;
+  border-radius: 0;
+  font-weight: 700;
+}
+.live-btns a:hover { background: var(--b-lime); }
+
+/* ---------- Footer ---------- */
+.site-footer {
+  background: #000;
+  color: #fff;
+  border-top: 5px solid var(--tfl-red);
+  font-family: "Space Mono", monospace;
+}
+.site-footer .fine { color: #cfcfcf; opacity: 1; }
