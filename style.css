@@ -587,14 +587,24 @@ section { max-width: var(--max); margin: 0 auto; padding: clamp(48px, 8vw, 88px)
 .lc-name i { width: 10px; height: 10px; border-radius: 50%; }
 .lc-dirs { display: flex; flex-wrap: wrap; gap: 8px; }
 .lc-dir {
+  font: inherit;
   font-weight: 600;
   font-size: 13px;
   padding: 6px 14px;
   border-radius: 30px;
   border: 2px solid;
   background: #fff;
+  cursor: pointer;
+  transition: transform 0.1s, box-shadow 0.15s;
 }
+.lc-dir:hover { transform: translateY(-1px); box-shadow: 0 2px 8px rgba(16, 19, 28, 0.12); }
+.lc-dir:active { transform: translateY(0); }
 .lc-dir.done { box-shadow: var(--shadow); }
+.lc-reset {
+  font: inherit; font-weight: 600; font-size: 13px; color: var(--muted);
+  background: none; border: none; cursor: pointer; text-decoration: underline; padding: 4px;
+}
+.lc-reset:hover { color: var(--tfl-red); }
 
 /* ---------- Full network map ---------- */
 .tm-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }

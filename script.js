@@ -53,8 +53,8 @@
     Victoria: ["→ Walthamstow Central", "→ Brixton"],
     "Waterloo & City": ["→ Bank", "→ Waterloo"],
   };
-  // Tick off directions you've run, as "Line|0" or "Line|1" (index into LINE_DIRS).
-  const LINES_DONE = ["Victoria|0", "Central|0", "Jubilee|0"]; // TODO: set your real tally
+  // Personal line-collector progress ("Line|0"/"Line|1", index into LINE_DIRS) is kept
+  // per-visitor in the browser (localStorage) — see loadCollector/renderLineCollector.
 
   // --- GALLERY -----------------------------------------------------------
   // Drop in photos: { src: "photos/xyz.jpg", caption: "..." }. Leave empty to
@@ -917,7 +917,7 @@
     fetch("data/bus-routes.json").then((r) => r.ok ? r.json() : []).then((ids) => {
       busIds = ids;
       const dl = document.getElementById("busList");
-      if (dl) dl.innerHTML = ids.map((id) => `<option value="${escapeAttr(id)}"></option>`).join("");
+      if (dl) dl.innerHTML = ids.map((id) => `<option value="${escapeHtml(id)}"></option>`).join("");
     }).catch(() => { busIds = []; });
 
     busMapObj.map = L.map(mapEl, { center: [51.509, -0.115], zoom: 11, preferCanvas: true, zoomSnap: 0 });
@@ -1005,11 +1005,20 @@
       <p class="ls-foot">Run times at a steady 6:30/km, walk at ~5 km/h, end to end. Longest = toughest tick; little Waterloo &amp; City is the gentlest.</p>`;
   }
 
-  // --- Render: Line collector (two directions per line) -----------------
+  // --- Render: Line collector (two directions per line, saved per-visitor) --
+  const LC_KEY = "tuberun_collector";
+  function loadCollector() {
+    try { const s = JSON.parse(localStorage.getItem(LC_KEY)); return new Set(Array.isArray(s) ? s : []); }
+    catch (_) { return new Set(); }
+  }
+  function saveCollector(set) {
+    try { localStorage.setItem(LC_KEY, JSON.stringify([...set])); } catch (_) { /* private mode etc. */ }
+  }
+  let collectorDone = loadCollector();
+
   function renderLineCollector() {
     const el = document.getElementById("lineCollector");
     if (!el) return;
-    const done = new Set(LINES_DONE);
     const total = TUBE_LINES.length * 2;
     let n = 0;
 
@@ -1017,12 +1026,13 @@
       const c = LINE_COLOURS[name] || "#0019A8";
       const dirs = LINE_DIRS[name] || ["→ one way", "→ the other"];
       const chips = dirs.map((label, i) => {
-        const isDone = done.has(`${name}|${i}`);
+        const keyId = `${name}|${i}`;
+        const isDone = collectorDone.has(keyId);
         if (isDone) n++;
         const style = isDone
           ? `background:${c};color:${contrastText(c)};border-color:${c}`
           : `color:#2b3140;border-color:${c}`;
-        return `<span class="lc-dir${isDone ? " done" : ""}" style="${style}">${isDone ? "✓ " : ""}${escapeHtml(label)}</span>`;
+        return `<button type="button" class="lc-dir${isDone ? " done" : ""}" data-key="${escapeHtml(keyId)}" aria-pressed="${isDone}" style="${style}">${isDone ? "✓ " : ""}${escapeHtml(label)}</button>`;
       }).join("");
       return `<div class="lc-row">
         <span class="lc-name" style="border-color:${c}"><i style="background:${c}"></i>${escapeHtml(name)}</span>
@@ -1031,13 +1041,24 @@
     }).join("");
 
     const pct = Math.round((n / total) * 100);
+    const done = n === total;
     el.innerHTML = `
       <div class="lc-head">
-        <span class="lc-count">${n} / ${total} directions run</span>
+        <span class="lc-count">${n} / ${total} directions run${done ? " · the whole network! 🎉" : ""}</span>
         <div class="lc-bar"><div class="lc-fill" style="width:${pct}%"></div></div>
+        ${n ? `<button type="button" class="lc-reset" id="lcReset">Reset</button>` : ""}
       </div>
-      <p class="lc-hint">Each line counts twice &mdash; once each way. ${TUBE_LINES.length} lines, ${total} runs to collect them all.</p>
+      <p class="lc-hint"><strong>Tap a direction to tick off a line you've run</strong> — each counts twice, one each way. Your tally is saved in this browser. ${TUBE_LINES.length} lines, ${total} runs to collect them all.</p>
       <div class="lc-rows">${rows}</div>`;
+
+    el.querySelectorAll(".lc-dir").forEach((b) => b.addEventListener("click", () => {
+      const k = b.dataset.key;
+      if (collectorDone.has(k)) collectorDone.delete(k); else collectorDone.add(k);
+      saveCollector(collectorDone);
+      renderLineCollector();
+    }));
+    const reset = document.getElementById("lcReset");
+    if (reset) reset.addEventListener("click", () => { collectorDone = new Set(); saveCollector(collectorDone); renderLineCollector(); });
   }
 
   // --- Render: Gallery ---------------------------------------------------
