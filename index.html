@@ -6,10 +6,10 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: https://*.basemaps.cartocdn.com; connect-src 'self' https://api.open-meteo.com https://api.tfl.gov.uk; object-src 'none'; base-uri 'self'" />
   <title>Tube Run &middot; Running London's Underground, above ground</title>
   <meta name="description" content="Tube Run is a London running group that runs above ground, tracing the Underground line by line, on the first Sunday of every month." />
-  <link rel="stylesheet" href="vendor/fonts/fonts.css?v=158" />
+  <link rel="stylesheet" href="vendor/fonts/fonts.css?v=159" />
   <link rel="stylesheet" href="vendor/leaflet/leaflet.css" />
   <script src="vendor/leaflet/leaflet.js" defer></script>
-  <link rel="stylesheet" href="style.css?v=158" />
+  <link rel="stylesheet" href="style.css?v=159" />
 </head>
 <body>
   <header class="site-header">
@@ -42,17 +42,20 @@
     <!-- HERO -->
     <section class="hero">
       <div class="hero-inner">
-        <p class="eyebrow">London &middot; Free social running club &middot; #TubeRun</p>
-        <h1>We run the Tube.<br /><span>Above ground.</span></h1>
-        <p class="lede">
-          Tube Run traces the course of a London Underground line on foot &mdash; staying as close
-          as we can to the track above the surface. One line at a time, once a month (sometimes more),
-          rain or shine. Free, sociable, all paces welcome.
-        </p>
-        <div class="hero-cta">
-          <a class="btn btn-primary" href="#next">See the next run</a>
-          <a class="btn btn-ghost" href="#join">Join the group</a>
+        <div class="hero-copy">
+          <p class="eyebrow">London &middot; Free social running club &middot; #TubeRun</p>
+          <h1>We run the Tube.<br /><span>Above ground.</span></h1>
+          <p class="lede">
+            Tube Run traces the course of a London Underground line on foot &mdash; staying as close
+            as we can to the track above the surface. One line at a time, once a month (sometimes more),
+            rain or shine. Free, sociable, all paces welcome.
+          </p>
+          <div class="hero-cta">
+            <a class="btn btn-primary" href="#next">See the next run</a>
+            <a class="btn btn-ghost" href="#join">Join the group</a>
+          </div>
         </div>
+        <aside class="hero-card" id="heroCard" aria-label="Next run at a glance" hidden></aside>
       </div>
       <div class="hero-night" aria-hidden="true">
         <div class="tline" style="--c:#e32017; top:14%; --t:6s; --d:0s"></div>
@@ -343,6 +346,6 @@
     <p class="fine">Not affiliated with Transport for London. Roundel-inspired branding used with affection, not endorsement.</p>
   </footer>
 
-  <script src="script.js?v=158" defer></script>
+  <script src="script.js?v=159" defer></script>
 </body>
 </html>

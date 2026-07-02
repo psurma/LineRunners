@@ -227,6 +227,7 @@
   // Turn a RUN_PLAN entry into a uniform shape the UI can render.
   function normalise(entry) {
     const rich = {
+      type: entry.type,
       location: entry.location || "London",
       map: entry.map || null,            // optional explicit Google Maps URL for the meeting point
       routeLink: entry.routeLink || null,
@@ -361,6 +362,40 @@
         }</li>`).join("")}</ol>` : ""}
         ${routeLinksHtml(nextRun)}
       </div>`;
+  }
+
+  // --- Render: Next-run card in the hero (compact, above the fold) -------
+  function renderHeroCard() {
+    const el = document.getElementById("heroCard");
+    if (!el || !nextRun) return;
+    const c = nextRun.colour, tc = contrastText(c);
+    const md = nextRun.days && nextRun.days.length > 1 ? nextRun.days : null;
+    const endDate = md ? new Date(nextRun.date.getTime() + (md.length - 1) * 86400000) : null;
+    const when = md && endDate.getMonth() !== nextRun.date.getMonth()
+      ? `${DOW[nextRun.date.getDay()]} ${nextRun.date.getDate()} ${MON[nextRun.date.getMonth()]} – ${DOW[endDate.getDay()]} ${endDate.getDate()} ${MON[endDate.getMonth()]}`
+      : md
+        ? `${DOW[nextRun.date.getDay()]} ${nextRun.date.getDate()}–${endDate.getDate()} ${MON[nextRun.date.getMonth()]}`
+        : `${DOW[nextRun.date.getDay()]} ${nextRun.date.getDate()} ${MON[nextRun.date.getMonth()]}`;
+    const bail = nextRun.type === "tube"
+      ? "No-drop: regroup at every station — bail at any of them and take the train back."
+      : nextRun.exits && nextRun.exits.length
+        ? "Escape points along the way — join for as much as you like."
+        : "All paces welcome — join for as much as you like.";
+    el.style.setProperty("--run-col", c);
+    el.innerHTML = `
+      <div class="hc-top">
+        <span class="line-tag" style="background:${c};color:${tc}">${escapeHtml(nextRun.badge)}</span>
+        <span class="hc-cd">${countdownText(nextRun.date)}</span>
+      </div>
+      <div class="hc-when">${when} · meet ${MEET_TIME}</div>
+      <div class="hc-leg">${escapeHtml(nextRun.leg)}</div>
+      <div class="hc-meta">
+        <span>📍 <a href="${escapeAttr(meetMapUrl(nextRun))}" target="_blank" rel="noopener">${escapeHtml(nextRun.start)}</a></span>
+        <span>📏 ${escapeHtml(distText(nextRun.distance))}</span>
+      </div>
+      <p class="hc-bail">${bail}</p>
+      <a class="hc-more" href="#next">Full details &darr;</a>`;
+    el.hidden = false;
   }
 
   // --- Render: Journey board (vertical National-Rail-style calling points) ---
@@ -2312,6 +2347,7 @@
   renderTubeMap();
   renderLineStats();
   renderNext();
+  renderHeroCard();
   renderJourneyBoard();
   renderList();
   renderRoutes();
@@ -2337,6 +2373,7 @@
       try { localStorage.setItem("tuberun_units", distUnit); } catch (_) { /* private mode */ }
       sync();
       renderNext();
+      renderHeroCard(); // its distance line shows units too
       renderJourneyBoard();
       renderList();
       renderRouteCards(); // cards only — renderRoutes() would re-init its Leaflet map
