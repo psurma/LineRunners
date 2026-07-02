@@ -1758,7 +1758,7 @@
   function wtSaveZoom() { if (curMap !== "walking") return; try { localStorage.setItem("tuberun_tmzoom", String(curZoom)); } catch (_) { /* private mode */ } }
   async function loadWalkTimes() {
     if (wtData) return wtData;
-    const res = await fetch("data/walk-times.json");
+    const res = await fetch("data/walk-times.json", { cache: "no-cache" });
     if (!res.ok) throw new Error("walk times");
     wtData = await res.json();
     return wtData;
