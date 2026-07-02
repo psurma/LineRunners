@@ -1613,13 +1613,14 @@
       <p class="tm-scrollhint">Drag to pan · ⌘/Ctrl + scroll to zoom to the cursor · or use +/&minus;.</p>`;
     root.querySelectorAll(".tm-tab").forEach((b) => b.addEventListener("click", () => {
       curMap = b.dataset.map;
-      curZoom = defaultZoom(curMapKind());
+      curZoom = curMap === "walking" ? wtSavedZoom() : defaultZoom(curMapKind());
       root.querySelectorAll(".tm-tab").forEach((x) => { const on = x === b; x.classList.toggle("on", on); x.setAttribute("aria-selected", on ? "true" : "false"); });
       loadMap();
     }));
     root.querySelectorAll(".tm-zbtn").forEach((b) => b.addEventListener("click", () => {
       const z = b.dataset.z;
       curZoom = z === "in" ? Math.min(5, curZoom + 0.3) : z === "out" ? Math.max(0.8, curZoom - 0.3) : defaultZoom(curMapKind());
+      wtSaveZoom();
       applyZoom();
     }));
     // Drag-to-pan inside the map viewport.
@@ -1650,6 +1651,7 @@
       const px = holder.scrollLeft + ox, py = holder.scrollTop + oy;
       const before = curZoom;
       curZoom = Math.min(6, Math.max(0.5, curZoom * (e.deltaY < 0 ? 1.12 : 1 / 1.12)));
+      wtSaveZoom();
       applyZoom();
       const scale = curZoom / before;
       holder.scrollLeft = px * scale - ox;
@@ -1672,7 +1674,7 @@
       geo: `Our own live map, built from open TfL data — zoom, drag and tap a station.`,
       standard: active ? `<strong style="color:${LINE_COLOURS[active]}">${escapeHtml(active)} line</strong> highlighted for the next run — zoom in to trace it.` : `The official London Underground map.`,
       running: `Estimated running time to each stop on the next run's line.`,
-      walking: `Walking minutes between stations — handy for short hops.`,
+      walking: `Minutes between stations on the official walking map — flip to Run and every number becomes a running time at your pace.`,
       toilets: `Stations with toilets — plan your pit stops.`,
       overground: `The London Overground network — great for orbital, out-of-centre routes.`,
       connections: `The geographic rail-connections map — every line where it really runs.`,
@@ -1692,11 +1694,17 @@
     // renderer handles the whole document reliably (inline injection mis-renders
     // huge SVGs). draggable=false so our drag-to-pan isn't hijacked.
     if (cfg.kind === "img") {
+      if (cfg.key === "walking" && cap) walkControls(cap);
       const img = document.createElement("img");
       img.className = "tm-svg";
       img.draggable = false;
       img.alt = cfg.label + " map";
-      img.addEventListener("load", () => { if (stale()) return; applyZoom(); requestAnimationFrame(() => centreContent(holder)); });
+      img.addEventListener("load", () => {
+        if (stale()) return;
+        applyZoom();
+        if (cfg.key === "walking") buildWalkOverlay(holder, img, stale);
+        requestAnimationFrame(() => centreContent(holder));
+      });
       img.addEventListener("error", () => { if (!stale()) holder.innerHTML = `<p class="diagram-empty">Couldn't load the map right now.</p>`; });
       holder.innerHTML = "";
       holder.appendChild(img);
@@ -1732,11 +1740,87 @@
   }
 
   function applyZoom() {
-    const node = document.querySelector("#tmHolder svg, #tmHolder img");
+    // The walking map's overlay wrapper takes the zoom width so the marker
+    // layer scales with the image; other maps size the svg/img directly.
+    const node = document.querySelector("#tmHolder .wt-wrap, #tmHolder svg, #tmHolder img");
     if (node) node.style.width = (curZoom * 100) + "%";
   }
 
   function curMapKind() { return (MAPS.find((m) => m.key === curMap) || {}).kind; }
+
+  // --- Walking map: live walk/run minute overlay --------------------------
+  // data/walk-times.json holds the printed walking-minute numbers OCR'd off
+  // the TfL map with their positions (% of the image). In Run mode each one
+  // is covered and re-rendered as a running time at the chosen pace.
+  let wtMode = (() => { try { return localStorage.getItem("tuberun_walkmode") === "run" ? "run" : "walk"; } catch (_) { return "walk"; } })();
+  let wtData = null;
+  function wtSavedZoom() { try { const z = parseFloat(localStorage.getItem("tuberun_tmzoom")); return z >= 0.5 && z <= 6 ? z : defaultZoom("img"); } catch (_) { return defaultZoom("img"); } }
+  function wtSaveZoom() { if (curMap !== "walking") return; try { localStorage.setItem("tuberun_tmzoom", String(curZoom)); } catch (_) { /* private mode */ } }
+  async function loadWalkTimes() {
+    if (wtData) return wtData;
+    const res = await fetch("data/walk-times.json");
+    if (!res.ok) throw new Error("walk times");
+    wtData = await res.json();
+    return wtData;
+  }
+  function wtRunMinutes(walkMin) {
+    const walkingPaceSecondsPerKm = (wtData && wtData.walkingPaceSecondsPerKm) || 720; // 12:00/km
+    const runPaceSecondsPerKm = rtPace * 60;
+    const distanceKm = (walkMin * 60) / walkingPaceSecondsPerKm;
+    return Math.max(1, Math.round((distanceKm * runPaceSecondsPerKm) / 60));
+  }
+  function wtApply() {
+    // Walk mode shows the untouched printed map; Run mode covers each verified
+    // number and renders the equivalent running time in its place.
+    const layer = document.querySelector(".wt-layer");
+    if (layer) layer.style.display = wtMode === "run" ? "" : "none";
+    if (wtMode !== "run") return;
+    document.querySelectorAll(".wt-mark").forEach((el) => {
+      el.textContent = wtRunMinutes(+el.dataset.walk);
+    });
+  }
+  async function buildWalkOverlay(holder, img, stale) {
+    try { await loadWalkTimes(); } catch (_) { return; } // no data — plain map still shows
+    if (stale() || !img.isConnected) return;
+    const wrap = document.createElement("div");
+    wrap.className = "wt-wrap";
+    img.replaceWith(wrap);
+    wrap.appendChild(img);
+    const layer = document.createElement("div");
+    layer.className = "wt-layer";
+    // Pad each box slightly so the white cover fully hides the printed digit;
+    // font sizes use container-query units so text scales with the zoom.
+    layer.innerHTML = wtData.markers.map((m) =>
+      `<span class="wt-mark" data-walk="${m.walk}" style="left:${(m.x - m.width * 0.3).toFixed(3)}%;top:${(m.y - m.height * 0.25).toFixed(3)}%;width:${(m.width * 1.6).toFixed(3)}%;height:${(m.height * 1.5).toFixed(3)}%;font-size:${(m.height * 1.05 * 2029 / 2351).toFixed(3)}cqw">${m.walk}</span>`).join("");
+    wrap.appendChild(layer);
+    applyZoom();
+    wtApply();
+  }
+  function walkControls(cap) {
+    if (!cap) return;
+    const box = document.createElement("span");
+    box.className = "wt-controls geo-modes";
+    box.innerHTML = ` Show: <button type="button" class="geo-mode" data-wtm="walk">🚶 Walk</button><button type="button" class="geo-mode" data-wtm="run">🏃 Run</button>
+      <label class="wt-pace"><input type="range" min="4" max="9" step="0.25" value="${rtPace}" aria-label="Running pace, minutes per kilometre" /><b class="wt-pace-lbl">${fmtPace(rtPace)} /km · ${fmtPace(rtPace / MI_PER_KM)} /mi</b></label>`;
+    cap.appendChild(box);
+    const syncBtns = () => box.querySelectorAll("[data-wtm]").forEach((b) => b.classList.toggle("on", b.dataset.wtm === wtMode));
+    const paceLbl = box.querySelector(".wt-pace-lbl");
+    const paceWrap = box.querySelector(".wt-pace");
+    const syncPaceVis = () => { paceWrap.style.display = wtMode === "run" ? "" : "none"; };
+    syncBtns(); syncPaceVis();
+    box.querySelectorAll("[data-wtm]").forEach((b) => b.addEventListener("click", () => {
+      wtMode = b.dataset.wtm;
+      try { localStorage.setItem("tuberun_walkmode", wtMode); } catch (_) { /* private mode */ }
+      syncBtns(); syncPaceVis(); wtApply();
+    }));
+    const slider = box.querySelector("input[type=range]");
+    slider.addEventListener("input", () => {
+      rtPace = parseFloat(slider.value) || 6.5;
+      try { localStorage.setItem("tuberun_rtpace", String(rtPace)); } catch (_) { /* private mode */ }
+      paceLbl.textContent = `${fmtPace(rtPace)} /km · ${fmtPace(rtPace / MI_PER_KM)} /mi`;
+      wtApply();
+    });
+  }
 
   // --- Our own geographic tube map (data/tube-network.json) ---------------
   // Resolve the next run's line to a network id (tube runs only).

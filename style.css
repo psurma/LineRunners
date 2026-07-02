@@ -1298,3 +1298,13 @@ body {
 .bp-stop { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px; }
 .bp-name { font-weight: 700; font-size: 14px; min-width: 180px; }
 .bp-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+
+/* Walking map: walk/run overlay */
+.wt-wrap { position: relative; width: fit-content; container-type: inline-size; }
+.wt-wrap img.tm-svg { width: 100% !important; display: block; }
+.wt-layer { position: absolute; inset: 0; pointer-events: none; }
+.wt-mark { position: absolute; display: flex; align-items: center; justify-content: center; background: #fff; border-radius: 18%; color: #007229; font-weight: 800; line-height: 1; font-family: Inter, sans-serif; }
+.wt-controls { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.wt-pace { display: inline-flex; align-items: center; gap: 8px; }
+.wt-pace input[type="range"] { width: min(180px, 30vw); accent-color: var(--tfl-blue); }
+.wt-pace-lbl { font-size: 13px; color: var(--tfl-blue); white-space: nowrap; }
