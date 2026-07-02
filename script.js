@@ -2075,6 +2075,7 @@
 
   // Per-station running times — any line, at an adjustable pace.
   let rtLine = null; // selected line for the running-times view (defaults to the next run's)
+  let rtReversed = false; // direction of travel along the selected line
   let rtPace = (() => { try { const v = parseFloat(localStorage.getItem("tuberun_rtpace")); return v >= 4 && v <= 9 ? v : 6.5; } catch (_) { return 6.5; } })();
 
   // Ordered [name, lat, lon] stops for a line: the real run route when we have
@@ -2097,8 +2098,9 @@
     if (curMap !== "running") return; // user switched tabs while the data loaded
     const lines = net ? Object.values(net).map((l) => l.name).sort() : Object.keys(WAYPOINTS).filter((k) => LINE_COLOURS[k]);
     if (!rtLine || !lines.includes(rtLine)) rtLine = nextRun && lines.includes(nextRun.key) ? nextRun.key : lines[0];
-    const stns = net ? rtStations(net, rtLine) : WAYPOINTS[rtLine];
+    let stns = net ? rtStations(net, rtLine) : WAYPOINTS[rtLine];
     if (!stns || stns.length < 2) { holder.innerHTML = `<p class="diagram-empty">No station data for this line yet.</p>`; return; }
+    if (rtReversed) stns = stns.slice().reverse();
     const c = LINE_COLOURS[rtLine] || "#0019A8";
     let cumKm = 0;
     const rows = stns.map((s, i) => {
@@ -2116,6 +2118,7 @@
         <label class="rt-line-pick">Line
           <select id="rtLinePick">${lines.map((n) => `<option value="${escapeHtml(n)}"${n === rtLine ? " selected" : ""}>${escapeHtml(n)}</option>`).join("")}</select>
         </label>
+        <button type="button" id="rtReverse" class="rt-reverse${rtReversed ? " on" : ""}" aria-pressed="${rtReversed}" title="Swap the direction of travel">⇄ Reverse</button>
         <label class="rt-pace-pick">Pace
           <input type="range" id="rtPaceSlider" min="4" max="9" step="0.25" value="${rtPace}" aria-label="Running pace, minutes per kilometre" />
           <span class="rt-pace-lbl" id="rtPaceLbl">${rtPaceLabel()}</span>
@@ -2130,7 +2133,8 @@
         <tbody>${rows}</tbody>
       </table>
       <p class="rt-foot">Cumulative running time from the start at the pace above. Add time for regroups, photos and breaks.</p>`;
-    holder.querySelector("#rtLinePick").addEventListener("input", (e) => { rtLine = e.target.value; renderRunningTimes(holder); });
+    holder.querySelector("#rtLinePick").addEventListener("input", (e) => { rtLine = e.target.value; rtReversed = false; renderRunningTimes(holder); });
+    holder.querySelector("#rtReverse").addEventListener("click", () => { rtReversed = !rtReversed; renderRunningTimes(holder); });
     const slider = holder.querySelector("#rtPaceSlider");
     slider.addEventListener("input", () => {
       rtPace = parseFloat(slider.value) || 6.5;

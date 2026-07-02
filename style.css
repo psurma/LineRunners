@@ -1368,3 +1368,7 @@ body {
 .wt-pace input[type="range"] { width: min(180px, 30vw); accent-color: var(--tfl-blue); }
 .wt-pace-lbl { font-size: 13px; color: var(--tfl-blue); white-space: nowrap; }
 .wt-pace.off { opacity: 0.4; }
+
+/* Running times: direction reverse button */
+.rt-reverse { appearance: none; font: inherit; font-weight: 700; font-size: 14px; padding: 8px 16px; border: 1.5px solid var(--tfl-blue); border-radius: 20px; background: #fff; color: var(--tfl-blue); cursor: pointer; }
+.rt-reverse.on, .rt-reverse:hover { background: var(--tfl-blue); color: #fff; }
