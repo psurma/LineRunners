@@ -11,7 +11,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800;900&family=Hammersmith+One&family=Inter:wght@400;500;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="vendor/leaflet/leaflet.css" />
   <script src="vendor/leaflet/leaflet.js" defer></script>
-  <link rel="stylesheet" href="style.css?v=74" />
+  <link rel="stylesheet" href="style.css?v=75" />
 </head>
 <body>
   <header class="site-header">
@@ -65,8 +65,26 @@
       <svg width="0" height="0" style="position:absolute" aria-hidden="true">
         <defs>
           <g id="runner-shape" fill="currentColor">
-            <circle cx="62" cy="16" r="9" />
-            <path d="M57 27 L44 34 L33 48 L39 52 L48 41 L53 38 L49 56 L34 68 L20 88 L28 92 L42 74 L54 65 L58 78 L56 95 L65 95 L68 76 L63 58 L66 44 L74 52 L88 56 L90 48 L78 44 L69 34 Z" />
+            <g class="rn-body">
+              <circle cx="60" cy="15" r="8.5" />
+              <rect x="46" y="21" width="12" height="34" rx="6" transform="rotate(14 52 38)" />
+              <g class="rn-arm rn-armF">
+                <rect x="51" y="26" width="7" height="17" rx="3.5" />
+                <g class="rn-fore"><rect x="51" y="41" width="6.5" height="15" rx="3.2" /></g>
+              </g>
+              <g class="rn-arm rn-armB">
+                <rect x="51" y="26" width="7" height="17" rx="3.5" />
+                <g class="rn-fore"><rect x="51" y="41" width="6.5" height="15" rx="3.2" /></g>
+              </g>
+              <g class="rn-leg rn-legF">
+                <rect x="44" y="51" width="8.5" height="22" rx="4.2" />
+                <g class="rn-shin"><rect x="44.5" y="71" width="7.5" height="21" rx="3.7" /></g>
+              </g>
+              <g class="rn-leg rn-legB">
+                <rect x="44" y="51" width="8.5" height="22" rx="4.2" />
+                <g class="rn-shin"><rect x="44.5" y="71" width="7.5" height="21" rx="3.7" /></g>
+              </g>
+            </g>
           </g>
         </defs>
       </svg>
@@ -320,6 +338,6 @@
     <p class="fine">Not affiliated with Transport for London. Roundel-inspired branding used with affection, not endorsement.</p>
   </footer>
 
-  <script src="script.js?v=74" defer></script>
+  <script src="script.js?v=75" defer></script>
 </body>
 </html>

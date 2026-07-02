@@ -152,18 +152,33 @@ a { color: inherit; text-decoration: none; }
     to { transform: skewY(-4deg) scale(1.32) translate3d(-2.5%, 1.5%, 0); }
   }
   .h-runner { animation: hero-run var(--run-t, 26s) linear infinite; animation-delay: var(--run-d, 0s); }
-  .h-runner use { transform-origin: 50% 60%; animation: hero-bob 0.55s ease-in-out infinite alternate; }
-  .h-runner.r1 { --run-t: 26s; --run-d: -6s; }
-  .h-runner.r2 { --run-t: 31s; --run-d: -16s; }
-  .h-runner.r3 { --run-t: 37s; --run-d: -27s; }
+  .h-runner.r1 { --run-t: 26s; --run-d: -6s; --gait: 0.55s; }
+  .h-runner.r2 { --run-t: 31s; --run-d: -16s; --gait: 0.62s; }
+  .h-runner.r3 { --run-t: 37s; --run-d: -27s; --gait: 0.7s; }
   @keyframes hero-run {
     from { transform: translateX(-10vw); }
     to { transform: translateX(110vw); }
   }
-  @keyframes hero-bob {
-    from { transform: translateY(0) rotate(-3deg); }
-    to { transform: translateY(-7px) rotate(4deg); }
-  }
+  /* Articulated run cycle: legs counter-swing from the hip with knee bend,
+     arms pump opposite the legs, whole body bounces per stride. */
+  .rn-body { transform-box: fill-box; transform-origin: 50% 45%; animation: rn-bounce calc(var(--gait, 0.6s) / 2) ease-in-out infinite alternate; }
+  .rn-leg, .rn-shin, .rn-arm, .rn-fore { transform-box: fill-box; }
+  .rn-leg { transform-origin: 50% 8%; }
+  .rn-shin { transform-origin: 50% 5%; }
+  .rn-arm { transform-origin: 50% 10%; }
+  .rn-fore { transform-origin: 50% 8%; }
+  .rn-legF { animation: rn-stride var(--gait, 0.6s) ease-in-out infinite alternate; }
+  .rn-legB { animation: rn-stride var(--gait, 0.6s) ease-in-out infinite alternate-reverse; }
+  .rn-legF .rn-shin { animation: rn-kneeF var(--gait, 0.6s) ease-in-out infinite alternate; }
+  .rn-legB .rn-shin { animation: rn-kneeF var(--gait, 0.6s) ease-in-out infinite alternate-reverse; }
+  .rn-armF { animation: rn-swing var(--gait, 0.6s) ease-in-out infinite alternate-reverse; }
+  .rn-armB { animation: rn-swing var(--gait, 0.6s) ease-in-out infinite alternate; }
+  .rn-fore { animation: rn-elbow var(--gait, 0.6s) ease-in-out infinite alternate; transform: rotate(-55deg); }
+  @keyframes rn-stride { from { transform: rotate(-42deg); } to { transform: rotate(38deg); } }
+  @keyframes rn-kneeF { from { transform: rotate(18deg); } to { transform: rotate(80deg); } }
+  @keyframes rn-swing { from { transform: rotate(-38deg); } to { transform: rotate(42deg); } }
+  @keyframes rn-elbow { from { transform: rotate(-70deg); } to { transform: rotate(-40deg); } }
+  @keyframes rn-bounce { from { transform: translateY(0); } to { transform: translateY(-5px); } }
 }
 
 /* ---------- Buttons ---------- */
