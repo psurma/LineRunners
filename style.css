@@ -1308,3 +1308,4 @@ body {
 .wt-pace { display: inline-flex; align-items: center; gap: 8px; }
 .wt-pace input[type="range"] { width: min(180px, 30vw); accent-color: var(--tfl-blue); }
 .wt-pace-lbl { font-size: 13px; color: var(--tfl-blue); white-space: nowrap; }
+.wt-pace.off { opacity: 0.4; }

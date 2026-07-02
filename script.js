@@ -1806,7 +1806,11 @@
     const syncBtns = () => box.querySelectorAll("[data-wtm]").forEach((b) => b.classList.toggle("on", b.dataset.wtm === wtMode));
     const paceLbl = box.querySelector(".wt-pace-lbl");
     const paceWrap = box.querySelector(".wt-pace");
-    const syncPaceVis = () => { paceWrap.style.display = wtMode === "run" ? "" : "none"; };
+    // Keep the pace control visible in Walk mode (just inert) so it's discoverable.
+    const syncPaceVis = () => {
+      paceWrap.classList.toggle("off", wtMode !== "run");
+      paceWrap.querySelector("input").disabled = wtMode !== "run";
+    };
     syncBtns(); syncPaceVis();
     box.querySelectorAll("[data-wtm]").forEach((b) => b.addEventListener("click", () => {
       wtMode = b.dataset.wtm;
