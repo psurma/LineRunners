@@ -1,5 +1,7 @@
 {
  "walkingPaceSecondsPerKm": 720,
+ "imageWidth": 2351,
+ "imageHeight": 2029,
  "markers": [
   {
    "walk": 12,
