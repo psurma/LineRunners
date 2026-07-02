@@ -159,26 +159,55 @@ a { color: inherit; text-decoration: none; }
     from { transform: translateX(-10vw); }
     to { transform: translateX(110vw); }
   }
-  /* Articulated run cycle: legs counter-swing from the hip with knee bend,
-     arms pump opposite the legs, whole body bounces per stride. */
-  .rn-body { transform-box: fill-box; transform-origin: 50% 45%; animation: rn-bounce calc(var(--gait, 0.6s) / 2) ease-in-out infinite alternate; }
-  .rn-leg, .rn-shin, .rn-arm, .rn-fore { transform-box: fill-box; }
-  .rn-leg { transform-origin: 50% 8%; }
-  .rn-shin { transform-origin: 50% 5%; }
-  .rn-arm { transform-origin: 50% 10%; }
-  .rn-fore { transform-origin: 50% 8%; }
-  .rn-legF { animation: rn-stride var(--gait, 0.6s) ease-in-out infinite alternate; }
-  .rn-legB { animation: rn-stride var(--gait, 0.6s) ease-in-out infinite alternate-reverse; }
-  .rn-legF .rn-shin { animation: rn-kneeF var(--gait, 0.6s) ease-in-out infinite alternate; }
-  .rn-legB .rn-shin { animation: rn-kneeF var(--gait, 0.6s) ease-in-out infinite alternate-reverse; }
-  .rn-armF { animation: rn-swing var(--gait, 0.6s) ease-in-out infinite alternate-reverse; }
-  .rn-armB { animation: rn-swing var(--gait, 0.6s) ease-in-out infinite alternate; }
-  .rn-fore { animation: rn-elbow var(--gait, 0.6s) ease-in-out infinite alternate; transform: rotate(-55deg); }
-  @keyframes rn-stride { from { transform: rotate(-42deg); } to { transform: rotate(38deg); } }
-  @keyframes rn-kneeF { from { transform: rotate(18deg); } to { transform: rotate(80deg); } }
-  @keyframes rn-swing { from { transform: rotate(-38deg); } to { transform: rotate(42deg); } }
-  @keyframes rn-elbow { from { transform: rotate(-70deg); } to { transform: rotate(-40deg); } }
-  @keyframes rn-bounce { from { transform: translateY(0); } to { transform: translateY(-5px); } }
+  /* Articulated run cycle. One full cycle = two steps (0.66s). Phases per leg:
+     0% knee drive high in front → 25% leg extends to foot-strike →
+     50% push-off behind → 75% heel kicks up, knee tucks → back to drive.
+     The far-side leg/arm run the same cycle half a phase later and sit
+     dimmed behind the torso for depth. Arms pump opposite their legs with
+     elbows held ~90°. The body dips at each foot-strike (twice a cycle). */
+  .rn-armB, .rn-legB { opacity: 0.5; }
+  /* Fixed joint pivots in viewBox coordinates — fill-box origins drift as
+     the limbs move, which mushes the stride. */
+  .rn-body, .rn-leg, .rn-shin, .rn-arm, .rn-fore { transform-box: view-box; }
+  .rn-body { transform-origin: 50px 45px; animation: rn-bounce 0.66s linear infinite; }
+  .rn-leg { transform-origin: 48px 54px; animation: rn-hip 0.66s linear infinite; }
+  .rn-shin { transform-origin: 48px 74px; animation: rn-knee 0.66s linear infinite; }
+  .rn-arm { transform-origin: 56px 30px; animation: rn-shoulder 0.66s linear infinite; }
+  .rn-fore { transform-origin: 56px 44px; animation: rn-elbow 0.66s linear infinite; }
+  .rn-legB, .rn-legB .rn-shin, .rn-armB, .rn-armB .rn-fore { animation-delay: -0.33s; }
+  .rn-armF, .rn-armF .rn-fore { animation-delay: -0.33s; } /* near arm counters the near leg */
+  .rn-armB, .rn-armB .rn-fore { animation-delay: 0s; }
+  @keyframes rn-hip {
+    0%   { transform: rotate(-52deg); }  /* knee driving high in front */
+    25%  { transform: rotate(-12deg); }  /* extending down to strike */
+    50%  { transform: rotate(38deg); }   /* push-off behind */
+    75%  { transform: rotate(14deg); }   /* heel-up recovery */
+    100% { transform: rotate(-52deg); }
+  }
+  @keyframes rn-knee {
+    0%   { transform: rotate(62deg); }   /* tucked under the drive */
+    25%  { transform: rotate(10deg); }   /* near-straight at strike */
+    50%  { transform: rotate(28deg); }   /* bending off the ground */
+    75%  { transform: rotate(112deg); }  /* heel kicked right up */
+    100% { transform: rotate(62deg); }
+  }
+  @keyframes rn-shoulder {
+    0%   { transform: rotate(-34deg); }
+    50%  { transform: rotate(38deg); }
+    100% { transform: rotate(-34deg); }
+  }
+  @keyframes rn-elbow {
+    0%   { transform: rotate(-88deg); }
+    50%  { transform: rotate(-64deg); }
+    100% { transform: rotate(-88deg); }
+  }
+  @keyframes rn-bounce {
+    0%   { transform: translateY(-4px) rotate(0deg); }
+    25%  { transform: translateY(1.5px) rotate(1.5deg); }
+    50%  { transform: translateY(-4px) rotate(0deg); }
+    75%  { transform: translateY(1.5px) rotate(-1.5deg); }
+    100% { transform: translateY(-4px) rotate(0deg); }
+  }
 }
 
 /* ---------- Buttons ---------- */
