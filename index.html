@@ -11,7 +11,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800;900&family=Hammersmith+One&family=Inter:wght@400;500;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="vendor/leaflet/leaflet.css" />
   <script src="vendor/leaflet/leaflet.js" defer></script>
-  <link rel="stylesheet" href="style.css?v=68" />
+  <link rel="stylesheet" href="style.css?v=69" />
 </head>
 <body>
   <header class="site-header">
@@ -186,7 +186,13 @@
           </select>
         </div>
         <button type="button" id="busGo" class="btn btn-primary">Trace it</button>
+        <div class="field bus-place-field">
+          <label for="busPlace">Or search by location</label>
+          <input id="busPlace" placeholder="e.g. Camden, Brixton, Angel…" autocomplete="off" />
+        </div>
+        <button type="button" id="busPlaceGo" class="btn btn-outline">Find routes</button>
       </div>
+      <div id="busPlaceResults" class="bus-place-results" aria-live="polite"></div>
       <div id="busQuick" class="bus-quick"></div>
       <div class="busrun-layout">
         <div id="busMap" class="route-map"></div>
@@ -301,6 +307,6 @@
     <p class="fine">Not affiliated with Transport for London. Roundel-inspired branding used with affection, not endorsement.</p>
   </footer>
 
-  <script src="script.js?v=68" defer></script>
+  <script src="script.js?v=69" defer></script>
 </body>
 </html>

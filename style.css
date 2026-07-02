@@ -1289,3 +1289,12 @@ body {
 .rt-controls select { font: inherit; padding: 8px 12px; border: 1.5px solid var(--line); border-radius: 10px; background: #fff; }
 .rt-pace-pick input[type="range"] { width: min(240px, 40vw); accent-color: var(--tfl-blue); }
 .rt-pace-lbl { font-weight: 700; font-size: 14px; color: var(--tfl-blue); white-space: nowrap; }
+
+/* Bus search-by-location results */
+.bus-place-field { min-width: 200px; }
+.bus-place-results:empty { display: none; }
+.bus-place-results { margin-top: 14px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
+.bp-head { font-size: 14px; color: var(--muted); }
+.bp-stop { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px; }
+.bp-name { font-weight: 700; font-size: 14px; min-width: 180px; }
+.bp-chips { display: flex; flex-wrap: wrap; gap: 6px; }

@@ -1298,6 +1298,50 @@
         pick.value = b.dataset.route; dir.value = "outbound"; trace();
       }));
     }
+
+    // Find routes by place: TfL StopPoint search → bus lines serving the nearest stops.
+    const placeIn = document.getElementById("busPlace");
+    const placeGo = document.getElementById("busPlaceGo");
+    const placeOut = document.getElementById("busPlaceResults");
+    let placeSeq = 0;
+    async function findByPlace() {
+      const q = (placeIn.value || "").trim();
+      if (!q || !placeOut) return;
+      const mySeq = ++placeSeq;
+      placeOut.innerHTML = `<p class="bus-loading">Searching stops near “${escapeHtml(q)}”…</p>`;
+      try {
+        const sRes = await fetch(`https://api.tfl.gov.uk/StopPoint/Search/${encodeURIComponent(q)}?modes=bus&maxResults=8`);
+        if (!sRes.ok) throw new Error("search");
+        const found = ((await sRes.json()).matches || []).slice(0, 6);
+        if (mySeq !== placeSeq) return;
+        if (!found.length) { placeOut.innerHTML = `<p class="bus-error">No bus stops found for <strong>${escapeHtml(q)}</strong> — try a station, road or area name.</p>`; return; }
+        const dRes = await fetch(`https://api.tfl.gov.uk/StopPoint/${found.map((m) => encodeURIComponent(m.id)).join(",")}`);
+        if (!dRes.ok) throw new Error("detail");
+        let detail = await dRes.json();
+        if (mySeq !== placeSeq) return;
+        if (!Array.isArray(detail)) detail = [detail];
+        const rows = detail.map((sp) => {
+          const buses = (sp.lineModeGroups || []).find((g) => g.modeName === "bus");
+          const ids = buses ? buses.lineIdentifier || [] : [];
+          if (!ids.length) return "";
+          return `<div class="bp-stop"><span class="bp-name">${escapeHtml(sp.commonName || "")}</span>
+            <span class="bp-chips">${ids.map((id) => `<button type="button" class="bq-chip" data-route="${escapeHtml(id)}">${escapeHtml(id)}</button>`).join("")}</span></div>`;
+        }).filter(Boolean);
+        placeOut.innerHTML = rows.length
+          ? `<p class="bp-head">Bus routes near <strong>${escapeHtml(q)}</strong> — tap one to trace it:</p>` + rows.join("")
+          : `<p class="bus-error">No bus routes found at those stops — try another name.</p>`;
+        placeOut.querySelectorAll(".bq-chip").forEach((b) => b.addEventListener("click", () => {
+          pick.value = b.dataset.route; dir.value = "outbound"; trace();
+          mapEl.scrollIntoView({ behavior: "smooth", block: "center" });
+        }));
+      } catch (_) {
+        if (mySeq === placeSeq) placeOut.innerHTML = `<p class="bus-error">Couldn't search right now — check your connection and try again.</p>`;
+      }
+    }
+    if (placeGo && placeIn) {
+      placeGo.addEventListener("click", findByPlace);
+      placeIn.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); findByPlace(); } });
+    }
     renderBusProgress();
   }
 
