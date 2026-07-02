@@ -102,22 +102,68 @@ a { color: inherit; text-decoration: none; }
 }
 .hero-cta { display: flex; flex-wrap: wrap; gap: 14px; }
 
-/* decorative tube lines running across the hero */
+/* decorative tube lines running across the hero — vibrant, flowing "trains" */
 .hero-lines {
   position: absolute;
-  inset: 0;
+  inset: -12%;
   z-index: 1;
-  opacity: 0.6;
+  opacity: 0.85;
   background-image:
-    linear-gradient(90deg, transparent 0, #dc241f 0) ,
-    linear-gradient(90deg, transparent 0, #00782a 0),
-    linear-gradient(90deg, transparent 0, #ffd329 0),
-    linear-gradient(90deg, transparent 0, #f3a9bb 0);
-  background-repeat: no-repeat;
-  background-size: 100% 6px, 100% 6px, 100% 6px, 100% 6px;
-  background-position: 0 22%, 0 42%, 0 66%, 0 84%;
+    repeating-linear-gradient(90deg, rgba(255,255,255,0.85) 0 26px, transparent 26px 190px),
+    repeating-linear-gradient(90deg, rgba(255,255,255,0.85) 0 26px, transparent 26px 230px),
+    repeating-linear-gradient(90deg, rgba(255,255,255,0.85) 0 26px, transparent 26px 150px),
+    linear-gradient(90deg, #e32017 0, #e32017 100%),
+    linear-gradient(90deg, #00782a 0, #00782a 100%),
+    linear-gradient(90deg, #ffd329 0, #ffd329 100%),
+    linear-gradient(90deg, #f386a1 0, #f386a1 100%),
+    linear-gradient(90deg, #00a4a7 0, #00a4a7 100%),
+    linear-gradient(90deg, #b36305 0, #b36305 100%);
+  background-repeat: repeat-x, repeat-x, repeat-x, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat;
+  background-size:
+    380px 4px, 460px 4px, 300px 4px,
+    100% 7px, 100% 7px, 100% 7px, 100% 6px, 100% 5px, 100% 6px;
+  background-position:
+    0 calc(22% + 1px), 0 calc(48% + 1px), 0 calc(84% + 1px),
+    0 22%, 0 48%, 0 84%, 0 36%, 0 64%, 0 94%;
   transform: skewY(-4deg) scale(1.2);
   pointer-events: none;
+}
+
+/* runners crossing the hero along the lines */
+.hero-runners { position: absolute; inset: 0; z-index: 1; pointer-events: none; overflow: hidden; }
+.h-runner { position: absolute; left: -8%; color: #fff; opacity: 0.9; filter: drop-shadow(0 2px 6px rgba(0, 0, 25, 0.45)); }
+.h-runner.r1 { width: 54px; height: 54px; top: 38%; }
+.h-runner.r2 { width: 42px; height: 42px; top: 42%; color: #ffd34e; }
+.h-runner.r3 { width: 34px; height: 34px; top: 45%; opacity: 0.75; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .hero-lines {
+    animation: hero-drift 42s linear infinite, hero-kenburns 26s ease-in-out infinite alternate;
+  }
+  @keyframes hero-drift {
+    to {
+      background-position:
+        -1520px calc(22% + 1px), -920px calc(48% + 1px), -2100px calc(84% + 1px),
+        0 22%, 0 48%, 0 84%, 0 36%, 0 64%, 0 94%;
+    }
+  }
+  @keyframes hero-kenburns {
+    from { transform: skewY(-4deg) scale(1.2) translate3d(0, 0, 0); }
+    to { transform: skewY(-4deg) scale(1.32) translate3d(-2.5%, 1.5%, 0); }
+  }
+  .h-runner { animation: hero-run var(--run-t, 26s) linear infinite; animation-delay: var(--run-d, 0s); }
+  .h-runner use { transform-origin: 50% 60%; animation: hero-bob 0.55s ease-in-out infinite alternate; }
+  .h-runner.r1 { --run-t: 26s; --run-d: -6s; }
+  .h-runner.r2 { --run-t: 31s; --run-d: -16s; }
+  .h-runner.r3 { --run-t: 37s; --run-d: -27s; }
+  @keyframes hero-run {
+    from { transform: translateX(-10vw); }
+    to { transform: translateX(110vw); }
+  }
+  @keyframes hero-bob {
+    from { transform: translateY(0) rotate(-3deg); }
+    to { transform: translateY(-7px) rotate(4deg); }
+  }
 }
 
 /* ---------- Buttons ---------- */
