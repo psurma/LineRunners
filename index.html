@@ -11,7 +11,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800;900&family=Hammersmith+One&family=Inter:wght@400;500;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="vendor/leaflet/leaflet.css" />
   <script src="vendor/leaflet/leaflet.js" defer></script>
-  <link rel="stylesheet" href="style.css?v=76" />
+  <link rel="stylesheet" href="style.css?v=77" />
 </head>
 <body>
   <header class="site-header">
@@ -56,11 +56,15 @@
           <a class="btn btn-ghost" href="#join">Join the group</a>
         </div>
       </div>
-      <div class="hero-lines" aria-hidden="true"></div>
+      <div class="hero-night" aria-hidden="true">
+        <div class="tline" style="--c:#e32017; top:14%; --t:6s; --d:0s"></div>
+        <div class="tline" style="--c:#00a4a7; top:26%; --t:8.5s; --d:-3s"></div>
+        <div class="tline" style="--c:#ffd329; top:64%; --t:5.2s; --d:-1.4s"></div>
+        <div class="tline" style="--c:#f386a1; top:76%; --t:9.5s; --d:-5s"></div>
+        <div class="tline" style="--c:#00782a; top:88%; --t:7.2s; --d:-2.6s"></div>
+      </div>
       <div class="hero-runners" aria-hidden="true">
-        <svg class="h-runner r1" viewBox="0 0 100 100"><use href="#runner-shape" /></svg>
-        <svg class="h-runner r2" viewBox="0 0 100 100"><use href="#runner-shape" /></svg>
-        <svg class="h-runner r3" viewBox="0 0 100 100"><use href="#runner-shape" /></svg>
+        <svg class="h-runner" viewBox="0 0 100 100"><use href="#runner-shape" /></svg>
       </div>
       <svg width="0" height="0" style="position:absolute" aria-hidden="true">
         <defs>
@@ -341,6 +345,6 @@
     <p class="fine">Not affiliated with Transport for London. Roundel-inspired branding used with affection, not endorsement.</p>
   </footer>
 
-  <script src="script.js?v=76" defer></script>
+  <script src="script.js?v=77" defer></script>
 </body>
 </html>
