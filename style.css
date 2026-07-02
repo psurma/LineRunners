@@ -1249,7 +1249,7 @@ body {
 .jb-title { font-size: 20px; font-weight: 800; }
 .jb-sub { font-weight: 700; font-size: 14px; margin-bottom: 12px; }
 .jb-list { list-style: none; margin: 0; padding: 0; max-height: 560px; overflow-y: auto; }
-.jb-stop { position: relative; display: grid; grid-template-columns: 26px 1fr auto; align-items: start; gap: 10px; padding: 7px 0; }
+.jb-stop, .jb-cols { position: relative; display: grid; grid-template-columns: 26px 1fr 72px 74px 84px minmax(120px, auto); align-items: start; gap: 10px; padding: 7px 0; }
 .jb-stop::before { content: ""; position: absolute; left: 11px; top: 0; bottom: 0; width: 3px; background: var(--jb-col); opacity: 0.35; }
 .jb-stop:first-child::before { top: 50%; }
 .jb-stop:last-child::before { bottom: 50%; }
@@ -1268,3 +1268,24 @@ body {
 /* Journey board: per-day sections for multi-day events */
 .jb-section + .jb-section { margin-top: 22px; padding-top: 20px; border-top: 1px dashed var(--line); }
 .jb-day { font-weight: 800; font-size: 16px; margin-bottom: 2px; }
+
+/* Journey board extra columns (leg / elapsed / from start) */
+.jb-cols { padding: 2px 0 6px; font-size: 11px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); border-bottom: 1px solid var(--line); margin-bottom: 4px; }
+.jb-cols span:last-child { text-align: right; }
+.jb-leg, .jb-elapsed, .jb-dist { font-size: 13px; font-weight: 600; color: var(--muted); padding-top: 2px; white-space: nowrap; }
+@media (max-width: 720px) {
+  .jb-stop, .jb-cols { grid-template-columns: 26px 1fr minmax(110px, auto); }
+  .jb-leg, .jb-elapsed, .jb-dist, .jb-cols span:nth-child(3), .jb-cols span:nth-child(4), .jb-cols span:nth-child(5) { display: none; }
+}
+
+/* Header km/mi toggle */
+.unit-toggle { display: inline-flex; border: 1.5px solid var(--tfl-blue); border-radius: 20px; overflow: hidden; flex: none; }
+.unit-toggle button { appearance: none; border: none; background: none; font: inherit; font-size: 13px; font-weight: 700; color: var(--tfl-blue); padding: 4px 12px; cursor: pointer; }
+.unit-toggle button.on { background: var(--tfl-blue); color: #fff; }
+
+/* Running-times controls (line picker + pace slider) */
+.rt-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 14px 26px; margin-bottom: 14px; }
+.rt-controls label { display: inline-flex; align-items: center; gap: 10px; font-weight: 700; font-size: 14px; }
+.rt-controls select { font: inherit; padding: 8px 12px; border: 1.5px solid var(--line); border-radius: 10px; background: #fff; }
+.rt-pace-pick input[type="range"] { width: min(240px, 40vw); accent-color: var(--tfl-blue); }
+.rt-pace-lbl { font-weight: 700; font-size: 14px; color: var(--tfl-blue); white-space: nowrap; }

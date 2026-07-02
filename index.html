@@ -11,7 +11,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800;900&family=Hammersmith+One&family=Inter:wght@400;500;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="vendor/leaflet/leaflet.css" />
   <script src="vendor/leaflet/leaflet.js" defer></script>
-  <link rel="stylesheet" href="style.css?v=67" />
+  <link rel="stylesheet" href="style.css?v=68" />
 </head>
 <body>
   <header class="site-header">
@@ -32,6 +32,10 @@
       <a href="#clubs">Clubs</a>
       <a href="#join">Come run</a>
     </nav>
+    <div class="unit-toggle" role="group" aria-label="Distance units">
+      <button type="button" data-u="km">km</button>
+      <button type="button" data-u="mi">mi</button>
+    </div>
   </header>
 
   <main id="top">
@@ -95,13 +99,6 @@
             <option value="6.5" selected>Steady &middot; 6:30 /km</option>
             <option value="6">Moderate &middot; 6:00 /km</option>
             <option value="5.25">Brisk &middot; 5:15 /km</option>
-          </select>
-        </div>
-        <div class="field">
-          <label for="units">Units</label>
-          <select id="units">
-            <option value="km" selected>Kilometres</option>
-            <option value="mi">Miles</option>
           </select>
         </div>
       </div>
@@ -304,6 +301,6 @@
     <p class="fine">Not affiliated with Transport for London. Roundel-inspired branding used with affection, not endorsement.</p>
   </footer>
 
-  <script src="script.js?v=67" defer></script>
+  <script src="script.js?v=68" defer></script>
 </body>
 </html>

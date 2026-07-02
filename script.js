@@ -320,7 +320,9 @@
         <div class="dow">${md ? DOW[nextRun.date.getDay()] + "–" + DOW[endDate.getDay()] : DOW[nextRun.date.getDay()]}</div>
         <div class="day">${md ? nextRun.date.getDate() + "–" + endDate.getDate() : nextRun.date.getDate()}</div>
         <div class="mon">${md && endDate.getMonth() !== nextRun.date.getMonth()
-          ? `${MON[nextRun.date.getMonth()]}–${MON[endDate.getMonth()]} ${endDate.getFullYear()}`
+          ? (endDate.getFullYear() !== nextRun.date.getFullYear()
+            ? `${MON[nextRun.date.getMonth()]} ${nextRun.date.getFullYear()}–${MON[endDate.getMonth()]} ${endDate.getFullYear()}`
+            : `${MON[nextRun.date.getMonth()]}–${MON[endDate.getMonth()]} ${endDate.getFullYear()}`)
           : `${MON[nextRun.date.getMonth()]} ${nextRun.date.getFullYear()}`}</div>
         <div class="cd">${countdownText(nextRun.date)}</div>
       </div>
@@ -331,12 +333,12 @@
         <h3>${escapeHtml(nextRun.leg)}</h3>
         <div class="next-meta">
           <div><strong>Meet</strong> ${MEET_TIME} · <a class="meet-link" href="${escapeAttr(meetMapUrl(nextRun))}" target="_blank" rel="noopener">${escapeHtml(nextRun.start)} ↗</a></div>
-          <div><strong>Distance</strong> ${escapeHtml(nextRun.distance)}</div>
+          <div><strong>Distance</strong> ${escapeHtml(distText(nextRun.distance))}</div>
           ${nextRun.location !== "London" ? `<div><strong>Where</strong> ${escapeHtml(nextRun.location)}</div>` : ""}
         </div>
         ${md ? `<ol class="nd-days">${md.map((d) => `<li><strong>${escapeHtml(d.title)}</strong>${
-          [d.start && "Start " + d.start, d.distance, d.finish && "Finish " + d.finish].filter(Boolean).length
-            ? `<span>${[d.start && "Start " + d.start, d.distance, d.finish && "Finish " + d.finish].filter(Boolean).map(escapeHtml).join(" · ")}</span>` : ""
+          [d.start && "Start " + d.start, distText(d.distance), d.finish && "Finish " + d.finish].filter(Boolean).length
+            ? `<span>${[d.start && "Start " + d.start, distText(d.distance), d.finish && "Finish " + d.finish].filter(Boolean).map(escapeHtml).join(" · ")}</span>` : ""
         }</li>`).join("")}</ol>` : ""}
         ${routeLinksHtml(nextRun)}
       </div>`;
@@ -353,7 +355,14 @@
       const n = norm(name);
       if (!n) return -1;
       let i = wp.findIndex((p) => norm(p[0]) === n);
-      if (i < 0) i = wp.findIndex((p) => (tail ? n.endsWith(norm(p[0])) : n.startsWith(norm(p[0]))));
+      if (i < 0) {
+        // Prefer the LONGEST partial match so "Northwood Hills" never binds to "Northwood".
+        let bestLen = 0;
+        wp.forEach((p, j) => {
+          const w = norm(p[0]);
+          if (w.length > bestLen && (tail ? n.endsWith(w) : n.startsWith(w))) { bestLen = w.length; i = j; }
+        });
+      }
       return i;
     };
     const days = nextRun.days;
@@ -375,19 +384,26 @@
   function journeyBoardSection(wp, seg, c, paceKm) {
     const rows = [];
     for (let j = seg.from; j <= seg.to; j++) {
-      const mins = legDistanceKm(wp, seg.from, j) * paceKm;
+      const kmFromStart = legDistanceKm(wp, seg.from, j);
+      const legKm = j === seg.from ? 0 : legDistanceKm(wp, j - 1, j);
+      const mins = kmFromStart * paceKm;
       const isStart = j === seg.from, isEnd = j === seg.to, end = isStart || isEnd;
       const time = isStart ? `depart ${seg.start}` : (isEnd ? `arrive ~${arrivalWindow(mins, seg.start)}` : `~${arrivalWindow(mins, seg.start)}`);
       rows.push(`<li class="jb-stop${end ? " jb-end" : ""}">
         <span class="jb-dot" style="border-color:${c}${end ? `;background:${c}` : ""}"></span>
         <span class="jb-name">${escapeHtml(wp[j][0])}${interchangeTags(wp[j][0], nextRun.key)}</span>
+        <span class="jb-leg">${isStart ? "—" : "+" + fmtTime(legKm * paceKm)}</span>
+        <span class="jb-elapsed">${isStart ? "start" : fmtTime(mins)}</span>
+        <span class="jb-dist">${fmtKm(kmFromStart, 1)}</span>
         <span class="jb-time">${time}</span>
       </li>`);
     }
     const head = seg.label
       ? `<p class="jb-day">${escapeHtml(seg.label)}</p><p class="jb-sub" style="color:${c}">${escapeHtml(seg.leg)}</p>`
       : `<p class="jb-sub" style="color:${c}">${escapeHtml(nextRun.badge)} · ${escapeHtml(seg.leg)}</p>`;
-    return `<div class="jb-section">${head}<ol class="jb-list" style="--jb-col:${c}">${rows.join("")}</ol></div>`;
+    return `<div class="jb-section">${head}
+      <div class="jb-cols" aria-hidden="true"><span></span><span>Station</span><span>Leg</span><span>Elapsed</span><span>From start</span><span>Group arrives</span></div>
+      <ol class="jb-list" style="--jb-col:${c}">${rows.join("")}</ol></div>`;
   }
 
   function renderJourneyBoard() {
@@ -411,7 +427,7 @@
     const days = r.days ? `<div class="d-block"><h4>Itinerary</h4>${r.days.map((d) => `
       <div class="d-day">
         <strong>${escapeHtml(d.title)}</strong>
-        <span>${[d.start && `Start: ${d.start}`, d.distance, d.pitstops, d.finish && `Finish: ${d.finish}`]
+        <span>${[d.start && `Start: ${d.start}`, distText(d.distance), d.pitstops, d.finish && `Finish: ${d.finish}`]
           .filter(Boolean).map(escapeHtml).join(" · ")}</span>
       </div>`).join("")}</div>` : "";
     const exits = r.exits ? `<div class="d-block"><h4>Escape points</h4>
@@ -441,7 +457,7 @@
         <div class="r-title">${escapeHtml(r.badge)} ${loc}
           <small>${escapeHtml(r.leg)}</small>
         </div>
-        <div class="r-dist">${escapeHtml(r.distance)}${toggle}</div>
+        <div class="r-dist">${escapeHtml(distText(r.distance))}${toggle}</div>
       </div>
       ${hasDetails(r) ? `<div class="run-details-wrap" id="det-${i}" hidden>${detailsHtml(r)}</div>` : ""}`;
     }).join("");
@@ -462,9 +478,24 @@
   const fromSel = document.getElementById("fromStn");
   const toSel = document.getElementById("toStn");
   const paceSel = document.getElementById("pace");
-  const unitsSel = document.getElementById("units");
   const startSel = document.getElementById("startTime");
   const MI_PER_KM = 0.621371;
+  // Site-wide distance unit, driven by the header km/mi toggle.
+  let distUnit = (() => { try { return localStorage.getItem("tuberun_units") === "mi" ? "mi" : "km"; } catch (_) { return "km"; } })();
+  function fmtKm(km, dp) {
+    const v = distUnit === "mi" ? km * MI_PER_KM : km;
+    return `${v.toFixed(dp !== undefined ? dp : (v >= 20 ? 0 : 1))} ${distUnit}`;
+  }
+  // Convert distance mentions inside free text (e.g. "9.3 mi (15 km)", "~13 km",
+  // "46 miles") to a single value in the active unit. Pace strings ("6:00/km")
+  // don't match — the digits must be separated from the unit by whitespace only.
+  function distText(s) {
+    if (!s) return s;
+    s = String(s)
+      .replace(/([\d.]+)\s*mi(?:les)?\s*\(\s*[\d.]+\s*km\s*\)/gi, (_, mi) => fmtKm(mi * 1.609344))
+      .replace(/([\d.]+)\s*km\s*\(\s*[\d.]+\s*mi(?:les)?\s*\)/gi, (_, km) => fmtKm(+km));
+    return s.replace(/([\d.]+)\s*(km|miles|mi)\b/gi, (_, n, u) => fmtKm(/km/i.test(u) ? +n : n * 1.609344));
+  }
   let firstPick = true;
 
   // Interchange data for the carriage-style strip map: which tube lines meet at each stop.
@@ -571,16 +602,8 @@
     toSel.innerHTML = pts.map((p, i) => `<option value="${i}">${escapeHtml(p[0])}</option>`).join("");
     fromSel.value = 0;
     toSel.value = pts.length - 1;
-    // Remember the runner's preferred units across visits.
-    try {
-      const saved = localStorage.getItem("tuberun_units");
-      if (saved && unitsSel) unitsSel.value = saved;
-    } catch (_) { /* ignore */ }
-    if (unitsSel) unitsSel.addEventListener("change", () => {
-      try { localStorage.setItem("tuberun_units", unitsSel.value); } catch (_) { /* ignore */ }
-    });
     if (startSel && !startSel.value) startSel.value = MEET_TIME;
-    [fromSel, toSel, paceSel, unitsSel, startSel].filter(Boolean).forEach((s) => s.addEventListener("input", update));
+    [fromSel, toSel, paceSel, startSel].filter(Boolean).forEach((s) => s.addEventListener("input", update));
     renderDiagram();
     update();
     // Enrich the strip with interchange tags once the network data loads.
@@ -592,7 +615,13 @@
       // panel the user already opened (the rebuild recreates them hidden).
       const open = [...document.querySelectorAll(".run-details-wrap:not([hidden])")].map((d) => d.id);
       renderList();
-      open.forEach((id) => { const d = document.getElementById(id); if (d) d.hidden = false; });
+      open.forEach((id) => {
+        const d = document.getElementById(id);
+        if (!d) return;
+        d.hidden = false;
+        const btn = document.querySelector(`.r-toggle[data-i="${id.replace("det-", "")}"]`);
+        if (btn) { btn.setAttribute("aria-expanded", "true"); btn.textContent = "Hide"; }
+      });
     }).catch(() => {});
   }
 
@@ -606,8 +635,7 @@
     const from = iact ? opts.from : 0, to = iact ? opts.to : wp.length - 1;
     const tag = tappable ? "button" : "span";
     const label = escapeHtml(opts.bannerLabel || `${lineName} line`);
-    const hint = opts.tap ? " · tap a stop to zoom the map" : "";
-    const banner = `<div class="strip-line" style="background:${colour};color:${contrastText(colour)}">${label}${hint}</div>`;
+    const banner = `<div class="strip-line" style="background:${colour};color:${contrastText(colour)}">${label}</div>`;
     const track = wp.map((p, i) => {
       const active = i >= a && i <= b;
       const endpoint = i === from || i === to;
@@ -679,11 +707,8 @@
     const etaFrom = clockAdd(startClock, legDistanceKm(pts, 0, a) * paceKm);
     const etaTo = clockAdd(startClock, legDistanceKm(pts, 0, b) * paceKm);
 
-    const unit = unitsSel ? unitsSel.value : "km";
-    const dist = unit === "mi"
-      ? `${(km * MI_PER_KM).toFixed(1)} mi`
-      : `${km.toFixed(1)} km`;
-    const paceStr = unit === "mi"
+    const dist = fmtKm(km, 1);
+    const paceStr = distUnit === "mi"
       ? `${fmtPace(paceKm / MI_PER_KM)} /mi`
       : `${fmtPace(paceKm)} /km`;
 
@@ -998,7 +1023,7 @@
   function routeCardHtml(r, i) {
     const c = ROUTE_COLOURS[r.type] || "#0019A8";
     return `<div class="route-card" data-i="${i}" role="button" tabindex="0" aria-pressed="false" style="border-top-color:${c}">
-        <div class="rc-top"><span class="rc-type" style="background:${c}">${escapeHtml(r.type)}</span><span class="rc-dist">${escapeHtml(r.distance)}</span></div>
+        <div class="rc-top"><span class="rc-type" style="background:${c}">${escapeHtml(r.type)}</span><span class="rc-dist">${escapeHtml(distText(r.distance))}</span></div>
         <h3>${escapeHtml(r.name)}</h3>
         <p class="rc-leg">${escapeHtml(r.leg)}</p>
         <p class="rc-meta"><strong>Start</strong> ${escapeHtml(r.start)}</p>
@@ -1236,7 +1261,7 @@
       drawBus(seq, wp);
       result.innerHTML = `
         <div class="bus-summary">
-          <div class="cr-main"><span class="cr-km">${km.toFixed(1)} km</span> <span class="bus-mi">${(km * MI_PER_KM).toFixed(1)} mi</span></div>
+          <div class="cr-main"><span class="cr-km">${fmtKm(km, 1)}</span></div>
           <div class="cr-times"><span class="cr-run">🏃 run ~${fmtTime(km * paceKm)}</span> <span class="cr-cycle">🚴 cycle ~${fmtTime(km * CYCLE_MIN_PER_KM)}</span> <span class="cr-walk">🚶 walk ~${fmtTime(km * WALK_MIN_PER_KM)}</span></div>
           <div class="cr-detail">${escapeHtml(from)} → ${escapeHtml(to)} · ${wp.length} stops</div>
           <button type="button" id="busMark" class="bus-mark" data-id="${escapeHtml(id)}">＋ Mark as run</button>
@@ -1281,7 +1306,7 @@
   const LINE_STATS = [
     ["Bakerloo", 23.2, 25], ["Central", 74, 49], ["Circle", 27, 36], ["District", 64, 60],
     ["Hammersmith & City", 25.5, 29], ["Jubilee", 36.2, 27], ["Metropolitan", 66.7, 34],
-    ["Northern", 58, 50], ["Piccadilly", 71, 53], ["Victoria", 21, 16], ["Waterloo & City", 2.5, 2],
+    ["Northern", 58, 52], ["Piccadilly", 71, 53], ["Victoria", 21, 16], ["Waterloo & City", 2.5, 2],
   ];
 
   function renderLineStats() {
@@ -1302,7 +1327,7 @@
       const badgeHtml = badges.map(([t, cls]) => `<span class="ls-badge ${cls}">${t}</span>`).join("");
       return `<tr class="${name === active ? "ls-active" : ""}">
         <td class="ls-name"><span class="ls-name-in"><span class="ls-dot" style="background:${c}"></span>${escapeHtml(name)}${name === active ? ' <span class="ls-next">next run</span>' : ""}${badgeHtml}</span></td>
-        <td>${(km * MI_PER_KM).toFixed(1)} mi<small>${km} km</small></td>
+        <td>${fmtKm(km, 1)}</td>
         <td>${stations}</td>
         <td>${fmtTime(km * 6.5)}</td>
         <td>${fmtTime(km * CYCLE_MIN_PER_KM)}</td>
@@ -1375,7 +1400,7 @@
       if (doneHere >= 1) linesAny++;
       if (doneHere >= 2) linesBoth++;
       return `<div class="lc-row">
-        <span class="lc-name" style="border-color:${c}"><i style="background:${c}"></i>${escapeHtml(name)}<span class="lc-km">${lineKm} km each way</span></span>
+        <span class="lc-name" style="border-color:${c}"><i style="background:${c}"></i>${escapeHtml(name)}<span class="lc-km">${fmtKm(lineKm, 1)} each way</span></span>
         <span class="lc-dirs">${chips}</span>
       </div>`;
     }).join("");
@@ -1396,7 +1421,6 @@
 
     const pct = Math.round((n / total) * 100);
     const done = n === total;
-    const miles = (collectedKm * MI_PER_KM).toFixed(1);
     el.innerHTML = `
       <div class="lc-head">
         <span class="lc-count">${n} / ${total} directions run${done ? " · the whole network! 🎉" : ""}</span>
@@ -1404,7 +1428,7 @@
         ${n ? `<button type="button" class="lc-reset" id="lcReset">Reset</button>` : ""}
       </div>
       <p class="lc-hint"><strong>Tap a direction to tick off a line you've run</strong> — each counts twice, one each way. Your tally is saved in this browser. ${TUBE_LINES.length} lines, ${total} runs to collect them all.</p>
-      <div class="lc-dist"><span class="lc-dist-big">${miles} mi</span> collected so far <small>${collectedKm.toFixed(1)} km across ${n} direction${n === 1 ? "" : "s"}</small></div>
+      <div class="lc-dist"><span class="lc-dist-big">${fmtKm(collectedKm, 1)}</span> collected so far <small>across ${n} direction${n === 1 ? "" : "s"}</small></div>
       <div class="lc-rows">${rows}</div>
       <div class="lc-badges-head"><h3>Badges</h3><span class="lc-badges-count">${gotBadges} / ${BADGES.length} earned</span></div>
       <p class="lc-hint">Collect lines to unlock badges — from your first direction to the whole network, both ways.</p>
@@ -1487,8 +1511,7 @@
   let toiletSet = null;       // Set of station ids with confirmed toilets
   let geoTimeMode = "run";    // run | walk | off — badge mode on the highlighted line
   let geoShowToilets = true;  // toilet pins on the geographic map
-  let geoDistUnit = "km";     // km | mi — distance unit shown alongside times
-  function geoDistStr(km) { return geoDistUnit === "mi" ? `${(km * MI_PER_KM).toFixed(1)} mi` : `${km.toFixed(1)} km`; }
+  function geoDistStr(km) { return fmtKm(km, 1); } // follows the site-wide unit toggle
   // Compass bearing (deg, 0 = north) from waypoint a to b — for direction arrows.
   function bearingDeg(a, b) {
     const lat1 = a[1] * Math.PI / 180, lat2 = b[1] * Math.PI / 180, dLon = (b[2] - a[2]) * Math.PI / 180;
@@ -1692,6 +1715,7 @@
     return linesGeo;
   }
   const tmMap = { map: null };
+  let geoRefresh = null; // set by renderGeoMap; re-draws station labels (e.g. after a unit switch)
 
   // Shared openly-licensed basemap (CARTO Voyager, no key) for our Leaflet maps.
   function cartoBasemap() {
@@ -1800,21 +1824,14 @@
     if (!cap) return;
     const modes = hi ? `<span class="geo-modes">Times: ${["run", "walk", "off"].map((m) =>
       `<button type="button" class="geo-mode" data-mode="${m}"${geoTimeMode === m ? ' data-on="1"' : ""}>${m === "off" ? "Off" : m[0].toUpperCase() + m.slice(1)}</button>`).join("")}</span>` : "";
-    const units = hi ? `<span class="geo-modes">Dist: ${["km", "mi"].map((u) =>
-      `<button type="button" class="geo-mode geo-unit" data-unit="${u}"${geoDistUnit === u ? ' data-on="1"' : ""}>${u}</button>`).join("")}</span>` : "";
     const wcBtn = `<button type="button" class="geo-mode geo-wc-btn" data-wc="1"${geoShowToilets ? ' data-on="1"' : ""}>🚻 Toilets</button>`;
     cap.innerHTML = (hi
       ? `<strong style="color:${net[hi].colour}">${escapeHtml(net[hi].name)} line</strong> lit up for the next run — arrows show the direction of travel, with running time, distance and the group's expected arrival window (from a ${MEET_TIME} start) at each stop. `
-      : `Our own live map — real streets, parks and the Thames, with every tube line on top. `) + modes + " " + units + " " + wcBtn;
+      : `Our own live map — real streets, parks and the Thames, with every tube line on top. `) + modes + " " + wcBtn;
     cap.querySelectorAll(".geo-mode[data-on]").forEach((b) => b.classList.add("on"));
     cap.querySelectorAll(".geo-mode[data-mode]").forEach((b) => b.addEventListener("click", () => {
       geoTimeMode = b.dataset.mode;
       cap.querySelectorAll(".geo-mode[data-mode]").forEach((x) => x.classList.toggle("on", x === b));
-      redraw();
-    }));
-    cap.querySelectorAll(".geo-unit[data-unit]").forEach((b) => b.addEventListener("click", () => {
-      geoDistUnit = b.dataset.unit;
-      cap.querySelectorAll(".geo-unit[data-unit]").forEach((x) => x.classList.toggle("on", x === b));
       redraw();
     }));
     const wb = cap.querySelector(".geo-wc-btn");
@@ -1914,6 +1931,7 @@
     }
     draw();
     geoCaption(cap, net, hi, draw);
+    geoRefresh = () => { if (tmMap.map === map) draw(); };
     let wasDense = map.getZoom() < 12;
     map.on("zoomend", () => { const d = map.getZoom() < 12; if (d !== wasDense) { wasDense = d; draw(); } });
 
@@ -1923,39 +1941,76 @@
       else map.fitBounds(lineLayer.getBounds(), { padding: [16, 16] }); });
   }
 
-  // Per-station running times for the next run's line (uses its WAYPOINTS).
-  function renderRunningTimes(holder) {
-    const line = nextRun && WAYPOINTS[nextRun.key] ? nextRun.key : null;
-    if (!line) {
-      holder.innerHTML = `<p class="diagram-empty">Per-station running times appear here once the next run's line has mapped stations (add them to <code>WAYPOINTS</code>).</p>`;
-      return;
+  // Per-station running times — any line, at an adjustable pace.
+  let rtLine = null; // selected line for the running-times view (defaults to the next run's)
+  let rtPace = (() => { try { const v = parseFloat(localStorage.getItem("tuberun_rtpace")); return v >= 4 && v <= 9 ? v : 6.5; } catch (_) { return 6.5; } })();
+
+  // Ordered [name, lat, lon] stops for a line: the real run route when we have
+  // one, otherwise the line's longest branch from the open TfL network data.
+  function rtStations(net, name) {
+    if (WAYPOINTS[name]) return WAYPOINTS[name];
+    for (const id in net) {
+      if (net[id].name !== name) continue;
+      const br = net[id].branches.reduce((a, b) => (b.length > a.length ? b : a), net[id].branches[0] || []);
+      return br.map((sid) => { const s = net[id].stations[sid]; return [s.n, s.lat, s.lon]; });
     }
-    const stns = WAYPOINTS[line];
-    const c = LINE_COLOURS[line] || "#0019A8";
-    const paceKm = parseFloat(paceSel && paceSel.value) || 6.5;
-    const unit = unitsSel && unitsSel.value === "mi" ? "mi" : "km";
-    let cumKm = 0, cumMin = 0;
+    return null;
+  }
+
+  function rtPaceLabel() { return `${fmtPace(rtPace)} /km · ${fmtPace(rtPace / MI_PER_KM)} /mi`; }
+
+  async function renderRunningTimes(holder) {
+    let net = null;
+    try { net = await loadNetwork(); } catch (_) { /* WAYPOINTS-only fallback below */ }
+    if (curMap !== "running") return; // user switched tabs while the data loaded
+    const lines = net ? Object.values(net).map((l) => l.name).sort() : Object.keys(WAYPOINTS).filter((k) => LINE_COLOURS[k]);
+    if (!rtLine || !lines.includes(rtLine)) rtLine = nextRun && lines.includes(nextRun.key) ? nextRun.key : lines[0];
+    const stns = net ? rtStations(net, rtLine) : WAYPOINTS[rtLine];
+    if (!stns || stns.length < 2) { holder.innerHTML = `<p class="diagram-empty">No station data for this line yet.</p>`; return; }
+    const c = LINE_COLOURS[rtLine] || "#0019A8";
+    let cumKm = 0;
     const rows = stns.map((s, i) => {
-      let legMin = 0;
-      if (i > 0) { const legKm = haversineKm(stns[i - 1], stns[i]) * ROAD_FACTOR; cumKm += legKm; legMin = legKm * paceKm; cumMin += legMin; }
-      const dist = unit === "mi" ? `${(cumKm * MI_PER_KM).toFixed(1)} mi` : `${cumKm.toFixed(1)} km`;
-      return `<tr>
+      const legKm = i === 0 ? 0 : haversineKm(stns[i - 1], stns[i]) * ROAD_FACTOR;
+      cumKm += legKm;
+      return `<tr data-leg="${legKm.toFixed(4)}" data-cum="${cumKm.toFixed(4)}">
         <td class="rt-stn"><span class="rt-dot" style="background:${c}"></span>${escapeHtml(s[0])}</td>
-        <td>${i === 0 ? "—" : "+" + fmtTime(legMin)}</td>
-        <td class="rt-cum">${i === 0 ? "start" : fmtTime(cumMin)}</td>
-        <td>${dist}</td>
+        <td class="rt-leg">${i === 0 ? "—" : "+" + fmtTime(legKm * rtPace)}</td>
+        <td class="rt-cum">${i === 0 ? "start" : fmtTime(cumKm * rtPace)}</td>
+        <td>${fmtKm(cumKm, 1)}</td>
       </tr>`;
     }).join("");
     holder.innerHTML = `
+      <div class="rt-controls">
+        <label class="rt-line-pick">Line
+          <select id="rtLinePick">${lines.map((n) => `<option value="${escapeHtml(n)}"${n === rtLine ? " selected" : ""}>${escapeHtml(n)}</option>`).join("")}</select>
+        </label>
+        <label class="rt-pace-pick">Pace
+          <input type="range" id="rtPaceSlider" min="4" max="9" step="0.25" value="${rtPace}" aria-label="Running pace, minutes per kilometre" />
+          <span class="rt-pace-lbl" id="rtPaceLbl">${rtPaceLabel()}</span>
+        </label>
+      </div>
       <div class="rt-head" style="border-color:${c}">
-        <strong style="color:${c}">${escapeHtml(line)} line</strong>
-        <span>${escapeHtml(stns[0][0])} → ${escapeHtml(stns[stns.length - 1][0])} · at ${fmtPace(paceKm)}/km</span>
+        <strong style="color:${c}">${escapeHtml(rtLine)} line</strong>
+        <span>${escapeHtml(stns[0][0])} → ${escapeHtml(stns[stns.length - 1][0])}${WAYPOINTS[rtLine] ? "" : " · longest branch"}</span>
       </div>
       <table class="rt-table">
         <thead><tr><th>Station</th><th>Leg</th><th>Elapsed</th><th>From start</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
-      <p class="rt-foot">Cumulative running time from the start at your chosen pace (change it in <a href="#plan">Plan</a>). Add time for regroups, photos and breaks.</p>`;
+      <p class="rt-foot">Cumulative running time from the start at the pace above. Add time for regroups, photos and breaks.</p>`;
+    holder.querySelector("#rtLinePick").addEventListener("input", (e) => { rtLine = e.target.value; renderRunningTimes(holder); });
+    const slider = holder.querySelector("#rtPaceSlider");
+    slider.addEventListener("input", () => {
+      rtPace = parseFloat(slider.value) || 6.5;
+      try { localStorage.setItem("tuberun_rtpace", String(rtPace)); } catch (_) { /* private mode */ }
+      holder.querySelector("#rtPaceLbl").textContent = rtPaceLabel();
+      // Update times in place so the drag isn't interrupted by a re-render.
+      holder.querySelectorAll("tbody tr").forEach((tr, i) => {
+        if (i === 0) return;
+        tr.querySelector(".rt-leg").textContent = "+" + fmtTime(parseFloat(tr.dataset.leg) * rtPace);
+        tr.querySelector(".rt-cum").textContent = fmtTime(parseFloat(tr.dataset.cum) * rtPace);
+      });
+    });
   }
 
   // Dim every filled path except those matching the highlighted line's colour.
@@ -2012,6 +2067,30 @@
   wireSocials();
   loadWeather();
   setupScrollSpy();
+  setupUnitToggle();
+
+  // Site-wide km/mi toggle in the header — re-renders everything showing a distance.
+  function setupUnitToggle() {
+    const btns = [...document.querySelectorAll(".unit-toggle button[data-u]")];
+    if (!btns.length) return;
+    const sync = () => btns.forEach((b) => b.classList.toggle("on", b.dataset.u === distUnit));
+    sync();
+    btns.forEach((b) => b.addEventListener("click", () => {
+      if (b.dataset.u === distUnit) return;
+      distUnit = b.dataset.u;
+      try { localStorage.setItem("tuberun_units", distUnit); } catch (_) { /* private mode */ }
+      sync();
+      renderNext();
+      renderJourneyBoard();
+      renderList();
+      renderRouteCards(); // cards only — renderRoutes() would re-init its Leaflet map
+      renderLineStats();
+      renderLineCollector();
+      update();
+      if (typeof geoRefresh === "function") geoRefresh(); // live network-map labels
+      if (curMap === "running") loadMap();                // running-times table
+    }));
+  }
 
   // Highlight the nav link for whichever section is currently in view.
   function setupScrollSpy() {
