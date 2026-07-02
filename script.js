@@ -212,6 +212,7 @@
   }
   function countdownText(date) {
     const d = daysUntil(date);
+    if (d < 0) return "On now!"; // multi-day event already under way
     if (d === 0) return "Today — let's run!";
     if (d === 1) return "Tomorrow";
     if (d < 7) return `In ${d} days`;
@@ -270,7 +271,10 @@
   const runs = RUN_PLAN
     .map((r) => ({ ...normalise(r), date: r.date ? parseISO(r.date) : sundays[si++] }))
     .sort((a, b) => a.date - b.date);
-  const nextRun = runs[0];
+  // "Next" = first run whose final day hasn't passed (a pinned date can be in the past).
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const runEnd = (r) => new Date(r.date.getTime() + ((r.days ? r.days.length : 1) - 1) * 86400000);
+  const nextRun = runs.find((r) => runEnd(r) >= today) || runs[runs.length - 1];
 
   // --- Distance maths ----------------------------------------------------
   function haversineKm(a, b) {
@@ -286,7 +290,7 @@
     return km * ROAD_FACTOR;
   }
   function fmtTime(mins) {
-    const h = Math.floor(mins / 60), m = Math.round(mins % 60);
+    const total = Math.round(mins), h = Math.floor(total / 60), m = total % 60;
     return h ? `${h}h ${m}m` : `${m} min`;
   }
 
@@ -311,12 +315,13 @@
     const md = nextRun.days && nextRun.days.length > 1 ? nextRun.days : null;
     const bound = nextRun.bound || compassBound(WAYPOINTS[nextRun.key]);
     const endDate = md ? new Date(nextRun.date.getTime() + (md.length - 1) * 86400000) : null;
-    el.classList.toggle("is-multiday", !!md);
     el.innerHTML = `
       <div class="date-badge">
         <div class="dow">${md ? DOW[nextRun.date.getDay()] + "–" + DOW[endDate.getDay()] : DOW[nextRun.date.getDay()]}</div>
         <div class="day">${md ? nextRun.date.getDate() + "–" + endDate.getDate() : nextRun.date.getDate()}</div>
-        <div class="mon">${MON[nextRun.date.getMonth()]} ${nextRun.date.getFullYear()}</div>
+        <div class="mon">${md && endDate.getMonth() !== nextRun.date.getMonth()
+          ? `${MON[nextRun.date.getMonth()]}–${MON[endDate.getMonth()]} ${endDate.getFullYear()}`
+          : `${MON[nextRun.date.getMonth()]} ${nextRun.date.getFullYear()}`}</div>
         <div class="cd">${countdownText(nextRun.date)}</div>
       </div>
       <div class="next-body">
@@ -342,17 +347,25 @@
   function journeySegments(wp) {
     const last = wp.length - 1;
     const norm = (s) => (s || "").toLowerCase().replace(/underground station|station/g, "").replace(/\(.*?\)/g, "").replace(/[^a-z0-9]/g, "");
-    const findIdx = (name) => wp.findIndex((p) => norm(p[0]) === norm(name));
+    // Exact name match first; fall back to suffix/prefix so a title like
+    // "Day 1 · Sat 4 July - Chesham" (no em-dash) still resolves its station.
+    const findIdx = (name, tail) => {
+      const n = norm(name);
+      if (!n) return -1;
+      let i = wp.findIndex((p) => norm(p[0]) === n);
+      if (i < 0) i = wp.findIndex((p) => (tail ? n.endsWith(norm(p[0])) : n.startsWith(norm(p[0]))));
+      return i;
+    };
     const days = nextRun.days;
     if (Array.isArray(days) && days.length > 1) {
       const segs = [];
       for (const d of days) {
-        const leg = (d.title || "").split("—").pop();
-        const parts = leg.split("→");
+        const parts = (d.title || "").split("→");
         if (parts.length < 2) return null;
-        const from = findIdx(parts[0]), to = findIdx(parts[1]);
+        const fromName = parts[0].split(/[—–]/).pop();
+        const from = findIdx(fromName, true), to = findIdx(parts[1], false);
         if (from < 0 || to < 0 || to <= from) return null;
-        segs.push({ label: (d.title || "").split("—")[0].trim(), leg: `${parts[0].trim()} → ${parts[1].trim()}`, from, to, start: parseClock(d.start) });
+        segs.push({ label: (d.title || "").split(/[—–]/)[0].trim(), leg: `${wp[from][0]} → ${wp[to][0]}`, from, to, start: parseClock(d.start) });
       }
       return segs;
     }
@@ -452,13 +465,6 @@
   const unitsSel = document.getElementById("units");
   const startSel = document.getElementById("startTime");
   const MI_PER_KM = 0.621371;
-  // Add minutes to a "HH:MM" clock time, returning "HH:MM" (wraps past midnight).
-  function addClock(hhmm, mins) {
-    const [h, m] = (hhmm || MEET_TIME).split(":").map(Number);
-    let t = (h * 60 + m + Math.round(mins)) % 1440;
-    if (t < 0) t += 1440;
-    return `${String(Math.floor(t / 60)).padStart(2, "0")}:${String(t % 60).padStart(2, "0")}`;
-  }
   let firstPick = true;
 
   // Interchange data for the carriage-style strip map: which tube lines meet at each stop.
@@ -535,9 +541,8 @@
   }
 
   function fmtPace(minPerUnit) {
-    const mm = Math.floor(minPerUnit);
-    const ss = Math.round((minPerUnit - mm) * 60);
-    return `${mm}:${String(ss).padStart(2, "0")}`;
+    const totalSec = Math.round(minPerUnit * 60);
+    return `${Math.floor(totalSec / 60)}:${String(totalSec % 60).padStart(2, "0")}`;
   }
 
   function setupPlanner() {
@@ -579,7 +584,16 @@
     renderDiagram();
     update();
     // Enrich the strip with interchange tags once the network data loads.
-    loadNetwork().then((net) => { interchangeMap = buildInterchangeMap(net); renderDiagram(); renderList(); renderJourneyBoard(); }).catch(() => {});
+    loadNetwork().then((net) => {
+      interchangeMap = buildInterchangeMap(net);
+      renderDiagram();
+      renderJourneyBoard();
+      // Re-render the schedule for interchange tags, restoring any details
+      // panel the user already opened (the rebuild recreates them hidden).
+      const open = [...document.querySelectorAll(".run-details-wrap:not([hidden])")].map((d) => d.id);
+      renderList();
+      open.forEach((id) => { const d = document.getElementById(id); if (d) d.hidden = false; });
+    }).catch(() => {});
   }
 
   // Carriage-style strip map for a WAYPOINTS line. Interactive (planner) or read-only (schedule).
@@ -651,7 +665,7 @@
   function update() {
     if (!pts) return;
     let a = +fromSel.value, b = +toSel.value;
-    if (a === b) { b = Math.min(a + 1, pts.length - 1); }
+    if (a === b) { if (b < pts.length - 1) b += 1; else a -= 1; } // force a real one-leg selection even at the last stop
     if (a > b) [a, b] = [b, a];
     const km = legDistanceKm(pts, a, b);
     const paceKm = parseFloat(paceSel.value);
@@ -662,8 +676,8 @@
     // Expected arrival clock time: running time from the route's actual start
     // (index 0) to each picked station, added to the run's start time.
     const startClock = (startSel && startSel.value) || MEET_TIME;
-    const etaFrom = addClock(startClock, legDistanceKm(pts, 0, a) * paceKm);
-    const etaTo = addClock(startClock, legDistanceKm(pts, 0, b) * paceKm);
+    const etaFrom = clockAdd(startClock, legDistanceKm(pts, 0, a) * paceKm);
+    const etaTo = clockAdd(startClock, legDistanceKm(pts, 0, b) * paceKm);
 
     const unit = unitsSel ? unitsSel.value : "km";
     const dist = unit === "mi"
@@ -840,7 +854,7 @@
   }
 
   // --- Route ideas library (adapted from a runners' guide to London) -----
-  const ROUTE_COLOURS = { river: "#0E7C90", canal: "#237A49", park: "#2C7D45", landmark: "#9B0056", trail: "#4E6E22", loop: "#8F5104", tube: "#0072A6" };
+  const ROUTE_COLOURS = { river: "#0E7C90", canal: "#237A49", park: "#2C7D45", landmark: "#9B0056", trail: "#4E6E22" };
   // Each route carries an indicative `path` of [lat,lon] waypoints tracing the described
   // course (an overview line, not a turn-by-turn GPX); `loop` closes the trace visually.
   const ROUTES = [
@@ -876,13 +890,17 @@
 
   const routeMap = { map: null, layer: null, current: -1, reversed: false };
 
-  // Route ideas you've run — kept per-visitor (localStorage), keyed by route name.
-  const ROUTE_KEY = "tuberun_routes";
-  function loadRoutesRun() {
-    try { const s = JSON.parse(localStorage.getItem(ROUTE_KEY)); return new Set(Array.isArray(s) ? s : []); }
+  // Per-visitor progress Sets in localStorage (collector, buses, route ideas).
+  function loadSet(key) {
+    try { const s = JSON.parse(localStorage.getItem(key)); return new Set(Array.isArray(s) ? s : []); }
     catch (_) { return new Set(); }
   }
-  function saveRoutesRun(set) { try { localStorage.setItem(ROUTE_KEY, JSON.stringify([...set])); } catch (_) { /* private mode */ } }
+  function saveSet(key, set) { try { localStorage.setItem(key, JSON.stringify([...set])); } catch (_) { /* private mode etc. */ } }
+
+  // Route ideas you've run — kept per-visitor (localStorage), keyed by route name.
+  const ROUTE_KEY = "tuberun_routes";
+  function loadRoutesRun() { return loadSet(ROUTE_KEY); }
+  function saveRoutesRun(set) { saveSet(ROUTE_KEY, set); }
   let routeRun = loadRoutesRun();
   const LANDMARK_TOTAL = ROUTES.filter((r) => r.type === "landmark").length;
   const ROUTE_BADGES = [
@@ -916,15 +934,21 @@
   // Real OSM route geometry (data/routes.geojson), keyed by slug in ROUTES order.
   const ROUTE_IDS = ["regents-canal", "hyde-kensington", "grand-tour", "regents-park", "diana-memorial", "victoria-park", "battersea-park", "greenwich-park", "hampstead-heath", "stjames-green", "southwark-docks", "wormwood-scrubs",
     "richmond-park", "bushy-park", "wimbledon-common", "clapham-common", "wandsworth-common", "brockwell-park", "dulwich-park", "crystal-palace-park", "alexandra-park", "finsbury-park", "parkland-walk", "grand-union-paddington", "lea-navigation", "olympic-park", "thames-putney-richmond", "thames-barrier"];
+  // Geometry is matched to ROUTES purely by position — fail loudly if the lists drift.
+  if (ROUTE_IDS.length !== ROUTES.length) console.error(`ROUTE_IDS (${ROUTE_IDS.length}) out of sync with ROUTES (${ROUTES.length}) — geometry will attach to the wrong routes.`);
   let routesGeo = null;
   async function loadRoutes() {
     if (routesGeo) return routesGeo;
-    routesGeo = {};
+    const loaded = {};
     try {
       const res = await fetch("data/routes.geojson");
-      if (res.ok) { const gj = await res.json(); for (const f of gj.features) routesGeo[f.properties.id] = f.geometry; }
+      if (res.ok) {
+        const gj = await res.json();
+        for (const f of gj.features) loaded[f.properties.id] = f.geometry;
+        routesGeo = loaded; // only cache success — a transient failure can retry next call
+      }
     } catch (_) { /* fall back to the sketched paths */ }
-    return routesGeo;
+    return routesGeo || loaded;
   }
 
   function drawRoute(i) {
@@ -965,7 +989,7 @@
     { key: "medium", label: "Medium · 5–10k", test: (k) => k >= 5 && k <= 10 },
     { key: "long", label: "Long · 10k+", test: (k) => k > 10 },
   ];
-  const TYPE_LABELS = { all: "All", park: "Parks", trail: "Trails", canal: "Canals", river: "Rivers", landmark: "Landmarks", loop: "Loops", tube: "Tube" };
+  const TYPE_LABELS = { all: "All", park: "Parks", trail: "Trails", canal: "Canals", river: "Rivers", landmark: "Landmarks" };
   const routeFilter = { type: "all", dist: "all" };
   const distBucket = (k) => { const b = DIST_BUCKETS.find((x) => x.test(k)); return b ? b.key : ""; };
   const routeMatches = (r) => (routeFilter.type === "all" || r.type === routeFilter.type)
@@ -1083,17 +1107,11 @@
   // --- Run a bus route (live from the TfL API) --------------------------
   const BUS_COL = "#DC241F"; // London bus red
   const busMapObj = { map: null, layer: null, currentId: null };
-  let busIds = null;
 
   // Bus routes you've run — kept per-visitor in the browser, like the line collector.
   const BUS_KEY = "tuberun_buses";
-  function loadBuses() {
-    try { const s = JSON.parse(localStorage.getItem(BUS_KEY)); return new Set(Array.isArray(s) ? s : []); }
-    catch (_) { return new Set(); }
-  }
-  function saveBuses(set) {
-    try { localStorage.setItem(BUS_KEY, JSON.stringify([...set])); } catch (_) { /* private mode etc. */ }
-  }
+  function loadBuses() { return loadSet(BUS_KEY); }
+  function saveBuses(set) { saveSet(BUS_KEY, set); }
   let busRun = loadBuses();
   const BUS_FAVE_IDS = ["24", "11", "15", "9", "159", "88"];
   const BUS_BADGES = [
@@ -1122,7 +1140,7 @@
     const got = BUS_BADGES.filter((b) => b.test(ctx)).length;
     const sorted = ids.slice().sort((a, b) => (parseInt(a, 10) || 0) - (parseInt(b, 10) || 0) || a.localeCompare(b));
     const chips = sorted.length
-      ? sorted.map((id) => `<button type="button" class="bus-chip" title="Tap to remove">${escapeHtml(id)} ✕</button>`).join("")
+      ? sorted.map((id) => `<button type="button" class="bus-chip" data-id="${escapeHtml(id)}" title="Tap to remove">${escapeHtml(id)} ✕</button>`).join("")
       : `<span class="bus-none">None yet — trace a route above and tap “Mark as run”.</span>`;
     const badges = BUS_BADGES.map((b) => {
       const g = b.test(ctx);
@@ -1133,7 +1151,7 @@
       <div class="bus-chips">${chips}</div>
       <div class="lc-badges">${badges}</div>`;
     el.querySelectorAll(".bus-chip").forEach((ch) => ch.addEventListener("click", () => {
-      busRun.delete(ch.textContent.replace(/\s*✕\s*$/, ""));
+      busRun.delete(ch.dataset.id);
       saveBuses(busRun); renderBusProgress(); syncBusMark();
     }));
   }
@@ -1174,10 +1192,10 @@
     if (!pick || !go || !mapEl || typeof L === "undefined") return;
 
     fetch("data/bus-routes.json").then((r) => r.ok ? r.json() : []).then((ids) => {
-      busIds = ids;
+
       const dl = document.getElementById("busList");
       if (dl) dl.innerHTML = ids.map((id) => `<option value="${escapeHtml(id)}"></option>`).join("");
-    }).catch(() => { busIds = []; });
+    }).catch(() => {});
 
     busMapObj.map = L.map(mapEl, { center: [51.509, -0.115], zoom: 11, preferCanvas: true, zoomSnap: 0 });
     cartoBasemap().addTo(busMapObj.map);
@@ -1186,9 +1204,11 @@
     addFullscreenControl(busMapObj.map);
     requestAnimationFrame(() => busMapObj.map.invalidateSize(false));
 
+    let traceSeq = 0; // two rapid picks can resolve out of order — only the latest may render
     async function trace() {
       const id = (pick.value || "").trim();
       if (!id) return;
+      const mySeq = ++traceSeq;
       result.innerHTML = `<p class="bus-loading">Loading route ${escapeHtml(id)}…</p>`;
       let seq;
       try {
@@ -1196,9 +1216,11 @@
         if (!res.ok) throw new Error("http " + res.status);
         seq = await res.json();
       } catch (_) {
+        if (mySeq !== traceSeq) return;
         result.innerHTML = `<p class="bus-error">Couldn't load route <strong>${escapeHtml(id)}</strong> (${escapeHtml(dir.value)}). Check the number, or try the other direction.</p>`;
         return;
       }
+      if (mySeq !== traceSeq) return;
       const sps = seq.stopPointSequences || [];
       const stops = sps.length ? sps[0].stopPoint : [];
       if (!stops || stops.length < 2) {
@@ -1297,13 +1319,8 @@
 
   // --- Render: Line collector (two directions per line, saved per-visitor) --
   const LC_KEY = "tuberun_collector";
-  function loadCollector() {
-    try { const s = JSON.parse(localStorage.getItem(LC_KEY)); return new Set(Array.isArray(s) ? s : []); }
-    catch (_) { return new Set(); }
-  }
-  function saveCollector(set) {
-    try { localStorage.setItem(LC_KEY, JSON.stringify([...set])); } catch (_) { /* private mode etc. */ }
-  }
+  function loadCollector() { return loadSet(LC_KEY); }
+  function saveCollector(set) { saveSet(LC_KEY, set); }
   let collectorDone = loadCollector();
   // Line length (km) for collector distance totals.
   const LINE_KM = {};
@@ -1420,7 +1437,8 @@
       const res = await fetch("data/gallery.json", { cache: "no-cache" });
       if (res.ok) { const j = await res.json(); if (Array.isArray(j)) items = j; }
     } catch (_) { /* fall back to placeholder below */ }
-    items = (items || []).filter((g) => g && g.src);
+    // Only same-site relative image paths — gallery.json shouldn't be able to point elsewhere.
+    items = (items || []).filter((g) => g && typeof g.src === "string" && /^img\//.test(g.src));
     if (!items.length) { galleryPlaceholder(el); return; }
     el.innerHTML = items.map((g) => `<figure class="gal-item">
         <img src="${attrVal(g.src)}" alt="${escapeHtml(g.caption || "")}" loading="lazy" />
@@ -1493,30 +1511,22 @@
     if (ap === "pm" && h < 12) h += 12; if (ap === "am" && h === 12) h = 0;
     return `${String(h).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
   }
-  function defaultZoom(kind) { return kind === "geo" ? 1.4 : kind === "schematic" ? 1.3 : kind === "data" ? 1 : 1.6; }
-  async function loadNetwork() {
-    if (netData) return netData;
-    const [nRes, tRes] = await Promise.all([fetch("data/tube-network.json"), fetch("data/station-toilets.json")]);
-    if (!nRes.ok) throw new Error("network data");
-    netData = await nRes.json();
-    toiletSet = new Set(tRes.ok ? await tRes.json() : []);
-    return netData;
-  }
-  let schemData = null;       // data/schematic.json — Beck-style schematic coords (d3-tube-map, MIT)
-  async function loadSchematic() {
-    if (schemData) return schemData;
-    const res = await fetch("data/schematic.json");
-    if (!res.ok) throw new Error("schematic data");
-    schemData = await res.json();
-    return schemData;
+  function defaultZoom(kind) { return kind === "geo" ? 1.4 : kind === "data" ? 1 : 1.6; }
+  let netPromise = null; // memoise the in-flight fetch so parallel callers share one request
+  function loadNetwork() {
+    if (!netPromise) {
+      netPromise = (async () => {
+        const [nRes, tRes] = await Promise.all([fetch("data/tube-network.json"), fetch("data/station-toilets.json")]);
+        if (!nRes.ok) throw new Error("network data");
+        netData = await nRes.json();
+        toiletSet = new Set(tRes.ok ? await tRes.json() : []);
+        return netData;
+      })();
+      netPromise.catch(() => { netPromise = null; }); // allow a retry after a transient failure
+    }
+    return netPromise;
   }
   const norm = (s) => (s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
-  const LABEL_POS = {
-    N: { dx: 0, dy: -1, anchor: "middle" }, S: { dx: 0, dy: 1, anchor: "middle" },
-    E: { dx: 1, dy: 0, anchor: "start" }, W: { dx: -1, dy: 0, anchor: "end" },
-    NE: { dx: 1, dy: -1, anchor: "start" }, NW: { dx: -1, dy: -1, anchor: "end" },
-    SE: { dx: 1, dy: 1, anchor: "start" }, SW: { dx: -1, dy: 1, anchor: "end" },
-  };
 
   function renderTubeMap() {
     const root = document.getElementById("tubeMap");
@@ -1581,7 +1591,10 @@
     loadMap();
   }
 
+  let mapSeq = 0; // invalidates in-flight async renders when the user switches tabs mid-load
   async function loadMap() {
+    const seq = ++mapSeq;
+    const stale = () => seq !== mapSeq;
     const holder = document.getElementById("tmHolder");
     const cap = document.getElementById("tmCaption");
     const zoom = document.querySelector(".tm-zoom");
@@ -1590,7 +1603,6 @@
     const active = cfg.highlight && nextRun && LINE_FILL[nextRun.key] ? nextRun.key : null;
     const CAPTIONS = {
       geo: `Our own live map, built from open TfL data — zoom, drag and tap a station.`,
-      schematic: `Our own semantic Beck-style schematic (beta).`,
       standard: active ? `<strong style="color:${LINE_COLOURS[active]}">${escapeHtml(active)} line</strong> highlighted for the next run — zoom in to trace it.` : `The official London Underground map.`,
       running: `Estimated running time to each stop on the next run's line.`,
       walking: `Walking minutes between stations — handy for short hops.`,
@@ -1603,11 +1615,8 @@
     holder.style.cursor = cfg.kind === "data" ? "auto" : "grab";
     holder.innerHTML = `<p class="tm-loading">Loading…</p>`;
 
-    // Our own semantic schematic (Beck-style).
-    if (cfg.kind === "schematic") { renderSchematic(holder, cap).catch(() => { holder.innerHTML = `<p class="diagram-empty">Couldn't build the schematic right now.</p>`; }); return; }
-
     // Our own data-driven geographic map.
-    if (cfg.kind === "geo") { renderGeoMap(holder, cap).catch(() => { holder.innerHTML = `<p class="diagram-empty">Couldn't build the map right now.</p>`; }); return; }
+    if (cfg.kind === "geo") { renderGeoMap(holder, cap, stale).catch(() => { if (!stale()) holder.innerHTML = `<p class="diagram-empty">Couldn't build the map right now.</p>`; }); return; }
 
     // Data view: a computed per-station running-time table (no image).
     if (cfg.kind === "data") { renderRunningTimes(holder); return; }
@@ -1620,8 +1629,8 @@
       img.className = "tm-svg";
       img.draggable = false;
       img.alt = cfg.label + " map";
-      img.addEventListener("load", () => { applyZoom(); requestAnimationFrame(() => centreContent(holder)); });
-      img.addEventListener("error", () => { holder.innerHTML = `<p class="diagram-empty">Couldn't load the map right now.</p>`; });
+      img.addEventListener("load", () => { if (stale()) return; applyZoom(); requestAnimationFrame(() => centreContent(holder)); });
+      img.addEventListener("error", () => { if (!stale()) holder.innerHTML = `<p class="diagram-empty">Couldn't load the map right now.</p>`; });
       holder.innerHTML = "";
       holder.appendChild(img);
       img.src = cfg.file;
@@ -1631,6 +1640,7 @@
     try {
       let txt = svgCache[cfg.key];
       if (!txt) { const res = await fetch(cfg.file); if (!res.ok) throw new Error("fetch"); txt = await res.text(); svgCache[cfg.key] = txt; }
+      if (stale()) return;
       // Parse as SVG (not innerHTML) so xlink:href references resolve & render.
       const svg = new DOMParser().parseFromString(txt, "image/svg+xml").documentElement;
       if (svg.nodeName.toLowerCase() !== "svg") throw new Error("no svg");
@@ -1645,7 +1655,7 @@
         else centreContent(holder);
       });
     } catch (e) {
-      holder.innerHTML = `<p class="diagram-empty">Couldn't load the map right now.</p>`;
+      if (!stale()) holder.innerHTML = `<p class="diagram-empty">Couldn't load the map right now.</p>`;
     }
   }
 
@@ -1733,6 +1743,13 @@
     };
     ctl.addTo(map);
     const onChange = () => {
+      // The geo map is destroyed and rebuilt on tab switches — drop this
+      // listener once its container leaves the DOM instead of leaking one per rebuild.
+      if (!document.body.contains(container)) {
+        document.removeEventListener("fullscreenchange", onChange);
+        document.removeEventListener("webkitfullscreenchange", onChange);
+        return;
+      }
       const fs = isFs();
       if (map._fsBtn) {
         map._fsBtn.innerHTML = fs ? "✕" : "⤢";
@@ -1805,9 +1822,10 @@
   }
 
   // Real geographic map: Leaflet + CARTO Voyager basemap + our tube overlays.
-  async function renderGeoMap(holder, cap) {
+  async function renderGeoMap(holder, cap, stale) {
     if (typeof L === "undefined") { holder.innerHTML = `<p class="diagram-empty">The map library couldn't load — check your connection.</p>`; return; }
     const [net, geo] = await Promise.all([loadNetwork(), loadLines()]);
+    if (stale && stale()) return; // user switched tabs while the data was in flight
     const hi = geoHighlightId(net);
     document.body.classList.add("tm-map-active");
     holder.innerHTML = `<div id="tmMap"></div>`;
@@ -1851,6 +1869,17 @@
     for (const id in net) { const st = net[id].stations; for (const sid in st) { count[sid] = (count[sid] || 0) + 1;
       if (!coordById[sid]) { coordById[sid] = st[sid]; colourById[sid] = net[id].colour; } } }
     const km = tmComputeKm(net, hi);
+    // Per-day ETA table so multi-day runs count each day's windows from that day's
+    // own start clock (matching the journey board) instead of one 09:00 origin.
+    const etaWp = hi && nextRun ? WAYPOINTS[nextRun.key] : null;
+    const etaSegs = etaWp ? (journeySegments(etaWp) || []).map((s) => ({
+      fromKm: legDistanceKm(etaWp, 0, s.from), toKm: legDistanceKm(etaWp, 0, s.to), start: s.start,
+    })) : [];
+    function etaWindow(kmCum, perKm) {
+      const seg = etaSegs.find((s) => kmCum <= s.toKm + 0.01) || etaSegs[etaSegs.length - 1];
+      if (!seg) return arrivalWindow(kmCum * perKm);
+      return arrivalWindow(Math.max(0, kmCum - seg.fromKm) * perKm, seg.start);
+    }
 
     let stationGrp = null, toiletGrp = null;
     function draw() {
@@ -1868,10 +1897,10 @@
         });
         const mins = km[sid] * perKm;
         if (onHi && (!dense || inter)) {
-          const time = geoTimeMode !== "off" ? `<span>${fmtTime(mins)} · ${geoDistStr(km[sid])}<br><b class="tm-eta">🕒 ${arrivalWindow(mins)}</b></span>` : "";
+          const time = geoTimeMode !== "off" ? `<span>${fmtTime(mins)} · ${geoDistStr(km[sid])}<br><b class="tm-eta">🕒 ${etaWindow(km[sid], perKm)}</b></span>` : "";
           m.bindTooltip(`<b>${escapeHtml(s.n)}</b>${time}`, { permanent: true, direction: "right", className: "tm-run-label", offset: [7, 0] });
         } else {
-          const t = onHi && geoTimeMode !== "off" ? `${escapeHtml(s.n)} · ${fmtTime(mins)} · ${geoDistStr(km[sid])} · group here ~${arrivalWindow(mins)}` : escapeHtml(s.n);
+          const t = onHi && geoTimeMode !== "off" ? `${escapeHtml(s.n)} · ${fmtTime(mins)} · ${geoDistStr(km[sid])} · group here ~${etaWindow(km[sid], perKm)}` : escapeHtml(s.n);
           m.bindTooltip(t, { direction: "top", className: "tm-hover-label" });
         }
         stationGrp.addLayer(m);
@@ -1892,102 +1921,6 @@
       if (hi) { const b = L.latLngBounds([]); lineLayer.eachLayer((l) => { if (l.feature.properties.line === hi) b.extend(l.getBounds()); });
         if (b.isValid()) map.fitBounds(b, { padding: [28, 28] }); }
       else map.fitBounds(lineLayer.getBounds(), { padding: [16, 16] }); });
-  }
-
-  // --- Our own SEMANTIC Beck-style schematic (data/schematic.json) --------
-  function schemLineForNext(schem) {
-    if (!nextRun) return null;
-    const k = (nextRun.key || "").toLowerCase();
-    const l = schem.lines.find((L) => L.name.toLowerCase() === k || (L.label || "").toLowerCase() === k);
-    return l ? l.name : null;
-  }
-
-  function schemLabelText(schem, name) { return (schem.stations[name] && schem.stations[name].label || name).replace(/\n/g, " "); }
-
-  function schemLabel(schem, nd, x, y, timeInfo) {
-    const lp = LABEL_POS[nd.labelPos || "E"], off = 6, lh = 6.4;
-    const raw = (schem.stations[nd.name] && schem.stations[nd.name].label) || nd.name;
-    const rows = raw.split("\n");
-    const ax = x + lp.dx * off;
-    let baseline, y0;
-    if (lp.dy < 0) { baseline = "auto"; y0 = y + lp.dy * off - (rows.length - 1) * lh; }
-    else if (lp.dy > 0) { baseline = "hanging"; y0 = y + lp.dy * off; }
-    else { baseline = "middle"; y0 = y - (rows.length - 1) * lh / 2; }
-    let t = `<text class="sch-lbl" text-anchor="${lp.anchor}" dominant-baseline="${baseline}">`;
-    rows.forEach((ln, i) => { t += `<tspan x="${ax.toFixed(1)}" y="${(y0 + i * lh).toFixed(1)}">${escapeHtml(ln)}</tspan>`; });
-    t += `</text>`;
-    if (timeInfo && timeInfo.show) {
-      const ty = (lp.dy < 0 ? y - off + 1 : y0 + rows.length * lh);
-      t += `<text class="sch-time" x="${ax.toFixed(1)}" y="${ty.toFixed(1)}" text-anchor="${lp.anchor}" dominant-baseline="hanging" fill="${timeInfo.color}">${fmtTime(timeInfo.mins)}</text>`;
-    }
-    return t;
-  }
-
-  function buildSchematicSvg(schem, net, hi) {
-    const S = 15, pad = 60;
-    let minX = 1e9, maxX = -1e9, minY = 1e9, maxY = -1e9;
-    schem.lines.forEach((L) => L.nodes.forEach((nd) => { const [x, y] = nd.coords;
-      if (x < minX) minX = x; if (x > maxX) maxX = x; if (y < minY) minY = y; if (y > maxY) maxY = y; }));
-    const W = Math.round((maxX - minX) * S + 2 * pad), H = Math.round((maxY - minY) * S + 2 * pad);
-    const X = (x) => pad + (x - minX) * S, Y = (y) => pad + (maxY - y) * S; // flip Y (north up)
-
-    // cumulative km along the highlighted line, using real geographic coords by name
-    const coordByName = {};
-    for (const id in net) { const st = net[id].stations; for (const sid in st) { const s = st[sid]; const k = norm(s.n); if (!coordByName[k]) coordByName[k] = s; } }
-    const tmap = {}; let hiColor = "#0019A8";
-    if (hi) {
-      const L = schem.lines.find((l) => l.name === hi); hiColor = L.color;
-      let cum = 0, prev = null;
-      L.nodes.filter((n) => n.name).forEach((n) => { const c = coordByName[norm(n.name)];
-        if (c && prev) cum += haversineKm([0, prev.lat, prev.lon], [0, c.lat, c.lon]) * ROAD_FACTOR;
-        if (c) prev = c; tmap[n.name] = cum; });
-    }
-    const perKm = geoTimeMode === "walk" ? WALK_MIN_PER_KM : (parseFloat(paceSel && paceSel.value) || 6.5);
-
-    const order = schem.lines.slice().sort((a, b) => ((a.name === hi) ? 1 : 0) - ((b.name === hi) ? 1 : 0));
-    let paths = "";
-    order.forEach((L) => { const dim = hi && L.name !== hi, w = L.name === hi ? 6 : 3.4, op = dim ? 0.25 : 1;
-      const pts = L.nodes.map((nd) => `${X(nd.coords[0]).toFixed(1)},${Y(nd.coords[1]).toFixed(1)}`).join(" ");
-      paths += `<polyline points="${pts}" fill="none" stroke="${L.color}" stroke-width="${w}" stroke-linejoin="round" stroke-linecap="round" opacity="${op}"/>`;
-    });
-
-    let dots = "", labels = ""; const drawn = new Set();
-    order.forEach((L) => { L.nodes.forEach((nd) => { if (!nd.name || drawn.has(nd.name)) return; drawn.add(nd.name);
-      const x = X(nd.coords[0]), y = Y(nd.coords[1]);
-      const onHi = tmap[nd.name] !== undefined, op = hi && !onHi ? 0.3 : 1, inter = nd.marker === "interchange";
-      dots += inter
-        ? `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="4.4" fill="#fff" stroke="#111" stroke-width="1.6" opacity="${op}"><title>${escapeHtml(schemLabelText(schem, nd.name))}</title></circle>`
-        : `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="2.6" fill="${L.color}" opacity="${op}"><title>${escapeHtml(schemLabelText(schem, nd.name))}</title></circle>`;
-      if (!hi || onHi) labels += schemLabel(schem, nd, x, y, onHi ? { mins: tmap[nd.name] * perKm, show: geoTimeMode !== "off", color: hiColor } : null);
-    }); });
-
-    return `<svg class="tm-svg sch-svg" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" style="width:${curZoom * 100}%">`
-      + `<rect width="${W}" height="${H}" fill="#fff"/>${paths}${dots}${labels}</svg>`;
-  }
-
-  function schematicCaption(cap, schem, net, hi, holder) {
-    if (!cap) return;
-    const col = hi ? schem.lines.find((l) => l.name === hi).color : "#0019A8";
-    const modes = hi ? `<span class="geo-modes">Times: ${["run", "walk", "off"].map((m) =>
-      `<button type="button" class="geo-mode" data-mode="${m}"${geoTimeMode === m ? ' data-on="1"' : ""}>${m === "off" ? "Off" : m[0].toUpperCase() + m.slice(1)}</button>`).join("")}</span>` : "";
-    cap.innerHTML = (hi
-      ? `<strong style="color:${col}">${escapeHtml(hi)} line</strong> on our own semantic schematic <em>(beta — central zone, expanding)</em>. `
-      : `Our own semantic Beck-style schematic <em>(beta — central zone, expanding)</em>. `) + modes;
-    cap.querySelectorAll(".geo-mode[data-on]").forEach((b) => b.classList.add("on"));
-    cap.querySelectorAll(".geo-mode[data-mode]").forEach((b) => b.addEventListener("click", () => {
-      geoTimeMode = b.dataset.mode;
-      cap.querySelectorAll(".geo-mode[data-mode]").forEach((x) => x.classList.toggle("on", x === b));
-      holder.innerHTML = buildSchematicSvg(schem, net, hi); applyZoom();
-    }));
-  }
-
-  async function renderSchematic(holder, cap) {
-    const [schem] = await Promise.all([loadSchematic(), loadNetwork()]);
-    const hi = schemLineForNext(schem);
-    schematicCaption(cap, schem, netData, hi, holder);
-    holder.innerHTML = buildSchematicSvg(schem, netData, hi);
-    applyZoom();
-    requestAnimationFrame(() => centreContent(holder));
   }
 
   // Per-station running times for the next run's line (uses its WAYPOINTS).
