@@ -270,29 +270,48 @@
   // A pure function of the current time — recomputed on every tick. Returns a
   // compact `short` (for the hero corner chip) and a fuller `label`.
   function runPhase(run) {
-    if (!run) return { short: "", label: "", live: false };
+    if (!run) return { short: "", label: "", live: false, day: 0 };
     const now = Date.now();
     const tl = runTimeline(run);
     const multi = tl.length > 1;
-    if (now >= tl[tl.length - 1].end) return { short: "Done", label: "That's a wrap — see you next time", live: false };
+    // The day the runner should care about now: the first not-yet-finished day,
+    // or the last once the whole event is over.
+    let day = tl.findIndex((w) => now < w.end);
+    if (day === -1) day = tl.length - 1;
+    if (now >= tl[tl.length - 1].end) return { short: "Done", label: "That's a wrap — see you next time", live: false, day };
     for (let i = 0; i < tl.length; i++) {
       const w = tl[i];
       if (now < w.start) {
         if (i > 0) {
           const rel = relDay(now, w.start);
-          return { short: rel === "tomorrow" ? "Tomorrow" : "Today", label: `Day ${i} done · Day ${i + 1} ${rel} ${londonHM(w.start)}`, live: false };
+          return { short: rel === "tomorrow" ? "Tomorrow" : "Today", label: `Day ${i} done · Day ${i + 1} ${rel} ${londonHM(w.start)}`, live: false, day };
         }
         if (londonDayNo(now) === londonDayNo(w.start)) {
           const mins = Math.round((w.start - now) / 60000);
           const inTxt = mins >= 60 ? `in ${Math.round(mins / 60)}h` : `in ${mins} min`;
-          return { short: "Today", label: `Today · meet ${londonHM(w.start)} (${inTxt})`, live: false };
+          return { short: "Today", label: `Today · meet ${londonHM(w.start)} (${inTxt})`, live: false, day };
         }
         const c = countdownText(run.date);
-        return { short: c, label: c, live: false };
+        return { short: c, label: c, live: false, day };
       }
-      if (now < w.end) return { short: "On now", label: multi ? `On now · Day ${i + 1}` : "On now", live: true };
+      if (now < w.end) return { short: "On now", label: multi ? `On now · Day ${i + 1}` : "On now", live: true, day };
     }
-    return { short: "On now", label: "On now", live: true };
+    return { short: "On now", label: "On now", live: true, day };
+  }
+  // The meeting point / meet time / leg the card should show *right now*. For a
+  // multi-day run this follows the active day once day 1 is done, so the card
+  // stops advertising a leg the group has already run.
+  function stripTime(s) { return (s || "").replace(/,\s*\d{1,2}(:\d{2})?\s*[ap]m.*$/i, "").trim(); }
+  function dayLeg(d) {
+    if (d.title && /[—–]/.test(d.title)) return d.title.split(/[—–]/).slice(1).join("–").trim();
+    const from = stripTime(d.start);
+    return d.finish ? `${from} → ${d.finish}` : from;
+  }
+  function runMeet(run, ph) {
+    const days = run.days && run.days.length > 1 ? run.days : null;
+    if (!days) return { place: run.start, clock: MEET_TIME, leg: run.leg };
+    const d = days[ph.day] || days[0];
+    return { place: stripTime(d.start) || run.start, clock: parseClock(d.start), leg: ph.day > 0 ? dayLeg(d) : run.leg };
   }
 
   // --- Route normalisation ----------------------------------------------
@@ -343,10 +362,10 @@
   }
   // Google Maps link for a run's meeting point — explicit `map` URL if given,
   // otherwise a search built from the start point + its location.
-  function meetMapUrl(r) {
+  function meetMapUrl(r, place) {
     if (r.map && /^https?:\/\//i.test(r.map)) return r.map;
     const where = r.location && r.location !== "London" ? r.location : "London";
-    const q = `${r.start}, ${where}`;
+    const q = `${place || r.start}, ${where}`;
     return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`;
   }
 
@@ -408,6 +427,7 @@
     if (!el || !nextRun) return;
     const c = nextRun.colour, tc = contrastText(c);
     const ph = runPhase(nextRun);
+    const meet = runMeet(nextRun, ph);
     el.style.borderLeftColor = c;
     el.style.setProperty("--run-col", c);
     const md = nextRun.days && nextRun.days.length > 1 ? nextRun.days : null;
@@ -428,9 +448,9 @@
         <span class="line-tag" style="background:${c};color:${tc}">${escapeHtml(nextRun.badge)}</span>
         ${md ? `<span class="multiday-badge">${md.length}-day run</span>` : ""}
         ${bound ? `<span class="run-dir">🧭 ${bound}</span>` : ""}
-        <h3>${escapeHtml(nextRun.leg)}</h3>
+        <h3>${escapeHtml(meet.leg)}</h3>
         <div class="next-meta">
-          <div><strong>Meet</strong> ${MEET_TIME} · <a class="meet-link" href="${escapeAttr(meetMapUrl(nextRun))}" target="_blank" rel="noopener">${escapeHtml(nextRun.start)} ↗</a></div>
+          <div><strong>Meet</strong> ${escapeHtml(meet.clock)} · <a class="meet-link" href="${escapeAttr(meetMapUrl(nextRun, meet.place))}" target="_blank" rel="noopener">${escapeHtml(meet.place)} ↗</a></div>
           <div><strong>Distance</strong> ${escapeHtml(distText(nextRun.distance))}</div>
           ${nextRun.location !== "London" ? `<div><strong>Where</strong> ${escapeHtml(nextRun.location)}</div>` : ""}
         </div>
@@ -448,6 +468,7 @@
     if (!el || !nextRun) return;
     const c = nextRun.colour, tc = contrastText(c);
     const ph = runPhase(nextRun);
+    const meet = runMeet(nextRun, ph);
     const md = nextRun.days && nextRun.days.length > 1 ? nextRun.days : null;
     const endDate = md ? new Date(nextRun.date.getTime() + (md.length - 1) * 86400000) : null;
     const when = md && endDate.getMonth() !== nextRun.date.getMonth()
@@ -466,11 +487,11 @@
         <span class="line-tag" style="background:${c};color:${tc}">${escapeHtml(nextRun.badge)}</span>
         <span class="hc-cd${ph.live ? " is-live" : ""}">${escapeHtml(ph.short)}</span>
       </div>
-      <div class="hc-when">${when} · meet ${MEET_TIME}</div>
+      <div class="hc-when">${when} · meet ${escapeHtml(meet.clock)}</div>
       ${ph.label && ph.label !== ph.short ? `<div class="hc-status${ph.live ? " is-live" : ""}">${escapeHtml(ph.label)}</div>` : ""}
-      <div class="hc-leg">${escapeHtml(nextRun.leg)}</div>
+      <div class="hc-leg">${escapeHtml(meet.leg)}</div>
       <div class="hc-meta">
-        <span>📍 <a href="${escapeAttr(meetMapUrl(nextRun))}" target="_blank" rel="noopener">${escapeHtml(nextRun.start)}</a></span>
+        <span>📍 <a href="${escapeAttr(meetMapUrl(nextRun, meet.place))}" target="_blank" rel="noopener">${escapeHtml(meet.place)}</a></span>
         <span>📏 ${escapeHtml(distText(nextRun.distance))}</span>
       </div>
       <p class="hc-bail">${bail}</p>
