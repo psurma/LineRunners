@@ -223,6 +223,78 @@
     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
   }
 
+  // --- Live run phase (timezone-correct) ---------------------------------
+  // Runs happen on UK time, but a viewer can be in any timezone — so anything
+  // hour-aware must reason in Europe/London, never the viewer's local clock.
+  const LON_DTF = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Europe/London", year: "numeric", month: "2-digit",
+    day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false,
+  });
+  function londonParts(ms) {
+    const p = LON_DTF.formatToParts(new Date(ms));
+    const g = (t) => +p.find((x) => x.type === t).value;
+    return { y: g("year"), mo: g("month"), d: g("day"), h: g("hour") % 24, mi: g("minute") };
+  }
+  // Absolute epoch-ms for a wall-clock time in London (handles BST/GMT itself).
+  function londonInstant(y, m0, d, h, mi) {
+    const guess = Date.UTC(y, m0, d, h, mi);
+    const p = londonParts(guess);
+    return guess - (Date.UTC(p.y, p.mo - 1, p.d, p.h, p.mi) - guess);
+  }
+  function londonHM(ms) {
+    const p = londonParts(ms);
+    return `${String(p.h).padStart(2, "0")}:${String(p.mi).padStart(2, "0")}`;
+  }
+  function londonDayNo(ms) {
+    const p = londonParts(ms);
+    return Math.floor(Date.UTC(p.y, p.mo - 1, p.d) / 86400000);
+  }
+  function relDay(nowMs, ms) {
+    const diff = londonDayNo(ms) - londonDayNo(nowMs);
+    if (diff <= 0) return "today";
+    if (diff === 1) return "tomorrow";
+    return DOW[new Date(londonDayNo(ms) * 86400000).getUTCDay()];
+  }
+  const RUN_WINDOW_MS = 6 * 3600 * 1000; // assumed time on the move per day
+  // Per-day { start, end } windows for a run, as absolute instants.
+  function runTimeline(run) {
+    const days = run.days && run.days.length > 1 ? run.days : [null];
+    return days.map((d, i) => {
+      const base = new Date(run.date.getFullYear(), run.date.getMonth(), run.date.getDate() + i);
+      const [H, M] = (d ? parseClock(d.start) : MEET_TIME).split(":").map(Number);
+      const start = londonInstant(base.getFullYear(), base.getMonth(), base.getDate(), H, M);
+      return { start, end: start + RUN_WINDOW_MS };
+    });
+  }
+  // Live status of a run: upcoming / today / on-now / between days / finished.
+  // A pure function of the current time — recomputed on every tick. Returns a
+  // compact `short` (for the hero corner chip) and a fuller `label`.
+  function runPhase(run) {
+    if (!run) return { short: "", label: "", live: false };
+    const now = Date.now();
+    const tl = runTimeline(run);
+    const multi = tl.length > 1;
+    if (now >= tl[tl.length - 1].end) return { short: "Done", label: "That's a wrap — see you next time", live: false };
+    for (let i = 0; i < tl.length; i++) {
+      const w = tl[i];
+      if (now < w.start) {
+        if (i > 0) {
+          const rel = relDay(now, w.start);
+          return { short: rel === "tomorrow" ? "Tomorrow" : "Today", label: `Day ${i} done · Day ${i + 1} ${rel} ${londonHM(w.start)}`, live: false };
+        }
+        if (londonDayNo(now) === londonDayNo(w.start)) {
+          const mins = Math.round((w.start - now) / 60000);
+          const inTxt = mins >= 60 ? `in ${Math.round(mins / 60)}h` : `in ${mins} min`;
+          return { short: "Today", label: `Today · meet ${londonHM(w.start)} (${inTxt})`, live: false };
+        }
+        const c = countdownText(run.date);
+        return { short: c, label: c, live: false };
+      }
+      if (now < w.end) return { short: "On now", label: multi ? `On now · Day ${i + 1}` : "On now", live: true };
+    }
+    return { short: "On now", label: "On now", live: true };
+  }
+
   // --- Route normalisation ----------------------------------------------
   // Turn a RUN_PLAN entry into a uniform shape the UI can render.
   function normalise(entry) {
@@ -291,10 +363,15 @@
   const runs = RUN_PLAN
     .map((r) => ({ ...normalise(r), date: r.date ? parseISO(r.date) : sundays[si++] }))
     .sort((a, b) => a.date - b.date);
-  // "Next" = first run whose final day hasn't passed (a pinned date can be in the past).
-  const today = new Date(); today.setHours(0, 0, 0, 0);
   const runEnd = (r) => new Date(r.date.getTime() + ((r.days ? r.days.length : 1) - 1) * 86400000);
-  const nextRun = runs.find((r) => runEnd(r) >= today) || runs[runs.length - 1];
+  // "Next" = first run whose final day hasn't passed (a pinned date can be in
+  // the past). Recomputed live rather than frozen at page-load, so a tab left
+  // open — or restored from bfcache — rolls over on its own.
+  function pickNextRun() {
+    const t = new Date(); t.setHours(0, 0, 0, 0);
+    return runs.find((r) => runEnd(r) >= t) || runs[runs.length - 1];
+  }
+  let nextRun = pickNextRun();
 
   // --- Distance maths ----------------------------------------------------
   function haversineKm(a, b) {
@@ -330,6 +407,7 @@
     const el = document.getElementById("nextCard");
     if (!el || !nextRun) return;
     const c = nextRun.colour, tc = contrastText(c);
+    const ph = runPhase(nextRun);
     el.style.borderLeftColor = c;
     el.style.setProperty("--run-col", c);
     const md = nextRun.days && nextRun.days.length > 1 ? nextRun.days : null;
@@ -344,7 +422,7 @@
             ? `${MON[nextRun.date.getMonth()]} ${nextRun.date.getFullYear()}–${MON[endDate.getMonth()]} ${endDate.getFullYear()}`
             : `${MON[nextRun.date.getMonth()]}–${MON[endDate.getMonth()]} ${endDate.getFullYear()}`)
           : `${MON[nextRun.date.getMonth()]} ${nextRun.date.getFullYear()}`}</div>
-        <div class="cd">${countdownText(nextRun.date)}</div>
+        <div class="cd${ph.live ? " is-live" : ""}">${escapeHtml(ph.label)}</div>
       </div>
       <div class="next-body">
         <span class="line-tag" style="background:${c};color:${tc}">${escapeHtml(nextRun.badge)}</span>
@@ -369,6 +447,7 @@
     const el = document.getElementById("heroCard");
     if (!el || !nextRun) return;
     const c = nextRun.colour, tc = contrastText(c);
+    const ph = runPhase(nextRun);
     const md = nextRun.days && nextRun.days.length > 1 ? nextRun.days : null;
     const endDate = md ? new Date(nextRun.date.getTime() + (md.length - 1) * 86400000) : null;
     const when = md && endDate.getMonth() !== nextRun.date.getMonth()
@@ -385,9 +464,10 @@
     el.innerHTML = `
       <div class="hc-top">
         <span class="line-tag" style="background:${c};color:${tc}">${escapeHtml(nextRun.badge)}</span>
-        <span class="hc-cd">${countdownText(nextRun.date)}</span>
+        <span class="hc-cd${ph.live ? " is-live" : ""}">${escapeHtml(ph.short)}</span>
       </div>
       <div class="hc-when">${when} · meet ${MEET_TIME}</div>
+      ${ph.label && ph.label !== ph.short ? `<div class="hc-status${ph.live ? " is-live" : ""}">${escapeHtml(ph.label)}</div>` : ""}
       <div class="hc-leg">${escapeHtml(nextRun.leg)}</div>
       <div class="hc-meta">
         <span>📍 <a href="${escapeAttr(meetMapUrl(nextRun))}" target="_blank" rel="noopener">${escapeHtml(nextRun.start)}</a></span>
@@ -528,7 +608,8 @@
   }
 
   // --- Distance planner + line/route diagram -----------------------------
-  const pts = WAYPOINTS[nextRun ? nextRun.key : ""];
+  // `let`, not `const`: the live clock repoints it when the run rolls over.
+  let pts = WAYPOINTS[nextRun ? nextRun.key : ""];
   const fromSel = document.getElementById("fromStn");
   const toSel = document.getElementById("toStn");
   const paceSel = document.getElementById("pace");
@@ -2360,6 +2441,38 @@
   loadWeather();
   setupScrollSpy();
   setupUnitToggle();
+  setupLiveClock();
+
+  // Keep the time-sensitive views live. The "next run" and its phase are
+  // otherwise a snapshot frozen when the page's JS first ran, so a left-open
+  // tab never advances its countdown or rolls over to the following run.
+  // Recompute on a one-minute timer and whenever the tab wakes (visibility
+  // change covers tab focus; pageshow covers bfcache back/forward restores).
+  function setupLiveClock() {
+    let timeSig = "";
+    function refreshTime() {
+      const prevKey = nextRun ? nextRun.key : null;
+      nextRun = pickNextRun();
+      pts = WAYPOINTS[nextRun ? nextRun.key : ""];
+      const ph = runPhase(nextRun);
+      const sig = (nextRun ? nextRun.key : "") + "|" + ph.short + "|" + ph.label + "|" + ph.live;
+      if (sig === timeSig) return; // nothing visible changed — skip the re-render
+      timeSig = sig;
+      renderNext();
+      renderHeroCard();
+      if (nextRun && nextRun.key !== prevKey) {
+        // Run rolled over to a different entry (rare, ~monthly): refresh the
+        // views that key off it. renderRoutes/Leaflet are untouched.
+        renderJourneyBoard();
+        renderTubeMap();
+        setupPlanner();
+      }
+    }
+    refreshTime(); // seed timeSig so the first timer tick is a genuine no-op
+    setInterval(refreshTime, 60000);
+    document.addEventListener("visibilitychange", () => { if (!document.hidden) refreshTime(); });
+    window.addEventListener("pageshow", refreshTime);
+  }
 
   // Site-wide km/mi toggle in the header — re-renders everything showing a distance.
   function setupUnitToggle() {

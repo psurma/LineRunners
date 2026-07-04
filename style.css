@@ -122,6 +122,23 @@ a { color: inherit; text-decoration: none; }
 .hc-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
 .hc-cd { font-size: 13px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; color: #ffd34e; white-space: nowrap; }
 .hc-when { font-size: 14px; font-weight: 700; color: #a9b6ff; margin-bottom: 4px; }
+.hc-status { font-size: 13.5px; font-weight: 700; color: #cdd6ff; margin-bottom: 10px; }
+.hc-status.is-live { color: #4fe08a; }
+/* Live "on now" accent: bright green on the dark hero, dark green on the light
+   next-run card — both clear WCAG AA on their own backgrounds. */
+.hc-cd.is-live { color: #4fe08a; }
+.date-badge .cd.is-live { color: #147a3b; font-weight: 800; }
+.hc-status.is-live::before, .hc-cd.is-live::before, .date-badge .cd.is-live::before {
+  content: ""; display: inline-block; width: 8px; height: 8px; margin-right: 6px;
+  border-radius: 50%; background: currentColor; box-shadow: 0 0 8px 1px currentColor;
+  vertical-align: middle;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .hc-status.is-live::before, .hc-cd.is-live::before, .date-badge .cd.is-live::before {
+    animation: live-pulse 1.4s ease-in-out infinite;
+  }
+  @keyframes live-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+}
 .hc-leg { font-size: clamp(19px, 2.4vw, 23px); font-weight: 800; letter-spacing: -0.3px; margin-bottom: 10px; }
 .hc-meta { display: flex; flex-direction: column; gap: 4px; font-size: 14px; color: #dfe4ff; margin-bottom: 10px; }
 .hc-meta a { color: #fff; text-decoration: underline; text-decoration-color: rgba(255, 255, 255, 0.45); text-underline-offset: 3px; }
