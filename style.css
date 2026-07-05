@@ -1368,6 +1368,28 @@ body {
   .jb-leg, .jb-elapsed, .jb-dist, .jb-cols span:nth-child(3), .jb-cols span:nth-child(4), .jb-cols span:nth-child(5) { display: none; }
 }
 
+/* Journey board: a finished day collapses to an expandable summary */
+.jb-done > .jb-summary { cursor: pointer; display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; padding: 4px 0; list-style: none; }
+.jb-done > .jb-summary::-webkit-details-marker { display: none; }
+.jb-done > .jb-summary::before { content: "▸"; align-self: center; color: var(--muted); font-size: 12px; transition: transform 0.15s; }
+.jb-done[open] > .jb-summary::before { transform: rotate(90deg); }
+.jb-summary .jb-day, .jb-summary .jb-sub { margin-bottom: 0; }
+.jb-done-tag { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; color: #147a3b; }
+.jb-done[open] .jb-cols { margin-top: 8px; }
+
+/* Journey board: live "the group is roughly here now" marker on the active day */
+.jb-now { background: color-mix(in srgb, var(--jb-col) 9%, transparent); }
+.jb-now .jb-dot { background: var(--jb-col); }
+.jb-now .jb-name::after { content: "group ~here now"; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; color: var(--jb-text); }
+@media (prefers-reduced-motion: no-preference) {
+  .jb-now .jb-dot { animation: jb-now-pulse 1.6s ease-in-out infinite; }
+}
+@keyframes jb-now-pulse {
+  0% { box-shadow: 0 0 0 2px color-mix(in srgb, var(--jb-col) 45%, transparent); }
+  70% { box-shadow: 0 0 0 9px color-mix(in srgb, var(--jb-col) 0%, transparent); }
+  100% { box-shadow: 0 0 0 2px color-mix(in srgb, var(--jb-col) 0%, transparent); }
+}
+
 /* Header km/mi toggle */
 .unit-toggle { display: inline-flex; border: 1.5px solid var(--tfl-blue); border-radius: 20px; overflow: hidden; flex: none; }
 .unit-toggle button { appearance: none; border: none; background: none; font: inherit; font-size: 13px; font-weight: 700; color: var(--tfl-blue); padding: 4px 12px; cursor: pointer; }

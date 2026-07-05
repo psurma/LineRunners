@@ -536,7 +536,7 @@
     return [{ label: null, leg: run.leg, from: 0, to: last, start: MEET_TIME }];
   }
 
-  function journeyBoardSection(run, wp, seg, c, paceKm) {
+  function journeyBoardSection(run, wp, seg, c, paceKm, opts = {}) {
     const rows = [];
     for (let j = seg.from; j <= seg.to; j++) {
       const kmFromStart = legDistanceKm(wp, seg.from, j);
@@ -544,7 +544,8 @@
       const mins = kmFromStart * paceKm;
       const isStart = j === seg.from, isEnd = j === seg.to, end = isStart || isEnd;
       const time = isStart ? `depart ${seg.start}` : (isEnd ? `arrive ~${arrivalWindow(mins, seg.start)}` : `~${arrivalWindow(mins, seg.start)}`);
-      rows.push(`<li class="jb-stop${end ? " jb-end" : ""}">
+      const now = opts.liveIdx === j;
+      rows.push(`<li class="jb-stop${end ? " jb-end" : ""}${now ? " jb-now" : ""}" data-i="${j}">
         <span class="jb-dot" style="border-color:${c}${end ? `;background:${c}` : ""}"></span>
         <span class="jb-name">${escapeHtml(wp[j][0])}${interchangeTags(wp[j][0], run.key)}</span>
         <span class="jb-leg">${isStart ? "—" : "+" + fmtTime(legKm * paceKm)}</span>
@@ -553,26 +554,81 @@
         <span class="jb-time">${time}</span>
       </li>`);
     }
+    const cols = `<div class="jb-cols" aria-hidden="true"><span></span><span>Station</span><span>Leg</span><span>Elapsed</span><span>From start</span><span>Group arrives</span></div>`;
+    const list = `<ol class="jb-list${opts.current ? " jb-current" : ""}" style="--jb-col:${c};--jb-text:${lineTextColour(c)}">${rows.join("")}</ol>`;
+    const sub = (t) => `<p class="jb-sub" style="color:${lineTextColour(c)}">${t}</p>`;
+    if (opts.done) {
+      // Finished day: collapse into an expandable summary; the stops stay one click away.
+      return `<details class="jb-section jb-done">
+        <summary class="jb-summary"><span class="jb-day">${escapeHtml(seg.label)}</span>${sub(escapeHtml(seg.leg))}<span class="jb-done-tag">done ✓</span></summary>
+        ${cols}${list}</details>`;
+    }
     const head = seg.label
-      ? `<p class="jb-day">${escapeHtml(seg.label)}</p><p class="jb-sub" style="color:${lineTextColour(c)}">${escapeHtml(seg.leg)}</p>`
-      : `<p class="jb-sub" style="color:${lineTextColour(c)}">${escapeHtml(run.badge)} · ${escapeHtml(seg.leg)}</p>`;
-    return `<div class="jb-section">${head}
-      <div class="jb-cols" aria-hidden="true"><span></span><span>Station</span><span>Leg</span><span>Elapsed</span><span>From start</span><span>Group arrives</span></div>
-      <ol class="jb-list" style="--jb-col:${c}">${rows.join("")}</ol></div>`;
+      ? `<p class="jb-day">${escapeHtml(seg.label)}</p>${sub(escapeHtml(seg.leg))}`
+      : sub(`${escapeHtml(run.badge)} · ${escapeHtml(seg.leg)}`);
+    return `<div class="jb-section">${head}${cols}${list}</div>`;
   }
 
+  // Where the group most likely is right now on the active day: the stop whose
+  // expected arrival time is closest to now (London time). absIdx is null before
+  // the day starts or once they've arrived. Drives the pulsing "you are here" dot.
+  function journeyLivePos(run) {
+    const wp = WAYPOINTS[run.key];
+    if (!wp || wp.length < 2) return null;
+    const segs = journeySegments(run, wp);
+    if (!segs) return null;
+    const tl = runTimeline(run);
+    const di = Math.min(runPhase(run).day, segs.length - 1);
+    const seg = segs[di];
+    const startMs = tl[Math.min(di, tl.length - 1)].start;
+    const elapsed = (Date.now() - startMs) / 60000;
+    const paceKm = 6.5;
+    const endMin = legDistanceKm(wp, seg.from, seg.to) * paceKm;
+    if (elapsed < 0 || elapsed > endMin + 10) return { dayIdx: di, absIdx: null };
+    let best = seg.from, bestD = Infinity;
+    for (let j = seg.from; j <= seg.to; j++) {
+      const d = Math.abs(legDistanceKm(wp, seg.from, j) * paceKm - elapsed);
+      if (d < bestD) { bestD = d; best = j; }
+    }
+    return { dayIdx: di, absIdx: best };
+  }
+
+  let jbRenderedKey = null, jbRenderedDay = -1;
   function renderJourneyBoard() {
     const el = document.getElementById("journeyBoard");
     if (!el || !nextRun) return;
     const wp = WAYPOINTS[nextRun.key];
-    if (!wp || wp.length < 2) { el.innerHTML = ""; return; }
+    if (!wp || wp.length < 2) { el.innerHTML = ""; jbRenderedKey = null; return; }
     const c = nextRun.colour, paceKm = 6.5;
     const segs = journeySegments(nextRun, wp) || [{ label: null, leg: nextRun.leg, from: 0, to: wp.length - 1, start: MEET_TIME }];
-    const sections = segs.map((s) => journeyBoardSection(nextRun, wp, s, c, paceKm)).join("");
+    const multi = segs.length > 1;
+    const curDay = Math.min(runPhase(nextRun).day, segs.length - 1);
+    const live = journeyLivePos(nextRun);
+    const sections = segs.map((s, di) => journeyBoardSection(nextRun, wp, s, c, paceKm, {
+      done: multi && di < curDay,
+      current: di === curDay,
+      liveIdx: live && live.dayIdx === di ? live.absIdx : null,
+    })).join("");
     el.innerHTML = `
       <h3 class="jb-title">Journey board</h3>
       ${sections}
       <p class="jb-foot">Expected arrival windows at a steady 6:30/km from each day's start — add time for regroups and photos.</p>`;
+    jbRenderedKey = nextRun.key; jbRenderedDay = curDay;
+  }
+
+  // Move the live "group ~here now" dot each minute without re-rendering the whole
+  // board (so an expanded finished day stays open). Full re-render only when the
+  // run or the active day changes.
+  function tickJourneyNow() {
+    const el = document.getElementById("journeyBoard");
+    if (!el || !nextRun || jbRenderedKey !== nextRun.key) return;
+    const live = journeyLivePos(nextRun);
+    if (live && live.dayIdx !== jbRenderedDay) { renderJourneyBoard(); return; }
+    const prev = el.querySelector(".jb-stop.jb-now");
+    const target = live && live.absIdx != null
+      ? el.querySelector(`.jb-current .jb-stop[data-i="${live.absIdx}"]`) : null;
+    if (prev && prev !== target) prev.classList.remove("jb-now");
+    if (target) target.classList.add("jb-now");
   }
 
   // --- Render: Schedule --------------------------------------------------
@@ -2499,6 +2555,7 @@
       nextRun = pickNextRun();
       pts = WAYPOINTS[nextRun ? nextRun.key : ""];
       const ph = runPhase(nextRun);
+      tickJourneyNow(); // slide the live "group ~here now" dot even when the headline is unchanged
       const sig = (nextRun ? nextRun.key : "") + "|" + ph.short + "|" + ph.label + "|" + ph.live;
       if (sig === timeSig) return; // nothing visible changed — skip the re-render
       timeSig = sig;
