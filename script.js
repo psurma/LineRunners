@@ -1717,6 +1717,24 @@
   // shared station at each join. (Northern branch 1 = via Charing Cross, branch 5
   // = via Bank; District branches all hinge on Earl's Court / Turnham Green.)
   const LINE_VARIANTS = {
+    central: [
+      { segs: [[0, 0], [1, 0], [2, 0], [3, 0]] },              // West Ruislip – Epping
+      { segs: [[6, 0], [1, 0], [2, 0], [3, 0]] },              // Ealing Broadway – Epping
+      { via: "Newbury Park", segs: [[0, 0], [1, 0], [4, 0]] }, // West Ruislip – Hainault
+      { via: "Newbury Park", segs: [[6, 0], [1, 0], [4, 0]] }, // Ealing Broadway – Hainault
+    ],
+    district: [
+      { segs: [[2, 1], [1, 1], [0, 1]] },   // Upminster – Ealing Broadway
+      { segs: [[2, 1], [1, 1], [3, 1]] },   // Upminster – Richmond
+      { segs: [[2, 1], [4, 1]] },           // Upminster – Wimbledon
+      { segs: [[5, 1], [4, 1]] },           // Edgware Road – Wimbledon
+    ],
+    metropolitan: [
+      { segs: [[7, 0], [1, 0], [2, 0], [3, 0], [6, 0], [4, 0]] }, // Chesham – Aldgate
+      { segs: [[0, 0], [1, 0], [2, 0], [3, 0], [6, 0], [4, 0]] }, // Amersham – Aldgate
+      { segs: [[8, 0], [3, 0], [6, 0], [4, 0]] },                 // Uxbridge – Aldgate
+      { segs: [[9, 0], [2, 0], [3, 0], [6, 0], [4, 0]] },         // Watford – Aldgate
+    ],
     northern: [
       { via: "Bank", segs: [[0, 0], [5, 0], [6, 0], [7, 0]] },
       { via: "Charing Cross", segs: [[0, 0], [1, 0], [2, 0], [7, 0]] },
@@ -1724,11 +1742,11 @@
       { via: "Charing Cross", segs: [[0, 0], [1, 0], [2, 0], [3, 0], [4, 0]] },
       { via: "Bank", segs: [[0, 0], [5, 0], [6, 0], [3, 0], [8, 0]] },
     ],
-    district: [
-      { segs: [[2, 1], [1, 1], [0, 1]] },
-      { segs: [[2, 1], [1, 1], [3, 1]] },
-      { segs: [[2, 1], [4, 1]] },
-      { segs: [[5, 1], [4, 1]] },
+    piccadilly: [
+      { segs: [[1, 1], [0, 1]] },             // Cockfosters – Uxbridge
+      { segs: [[1, 1], [3, 1]] },             // Cockfosters – Heathrow T2 & 3
+      { segs: [[1, 1], [3, 1], [2, 1]] },     // Cockfosters – Heathrow T4
+      { segs: [[1, 1], [3, 1], [4, 1]] },     // Cockfosters – Heathrow T5
     ],
   };
   function assembleVariant(net, id, variant) {
@@ -1745,6 +1763,27 @@
       }
     }
     return ids.map((sid) => { const s = ln.stations[sid]; return s ? [s.n, s.lat, s.lon] : null; }).filter(Boolean);
+  }
+  // Build the dropdown options for a line with multiple paths: every curated
+  // variant, each in both directions. wp is the station waypoints (drawn as hops
+  // and used for the route's distance/stop figures).
+  function buildVariantOptions(net, id) {
+    const variants = LINE_VARIANTS[id];
+    if (!variants) return null;
+    const options = [];
+    for (const v of variants) {
+      const wp = assembleVariant(net, id, v);
+      if (!wp || wp.length < 2) continue;
+      const a = wp[0][0], b = wp[wp.length - 1][0], via = v.via ? " · via " + v.via : "";
+      options.push({ label: `${a} → ${b}${via}`, wp });
+      options.push({ label: `${b} → ${a}${via}`, wp: [...wp].reverse() });
+    }
+    return options.length ? options : null;
+  }
+  function waypointsKm(wp) {
+    let km = 0;
+    for (let i = 1; i < wp.length; i++) km += haversineKm(wp[i - 1], wp[i]);
+    return km;
   }
 
   // "Line by line" row expansion: show a selected line's run route on a mini-map.
@@ -1796,19 +1835,10 @@
     const id = Object.keys(net).find((k) => net[k].name === name);
     if (!id) { mapDiv.innerHTML = '<p class="diagram-empty">No route mapped for this line yet.</p>'; return; }
     if (!mapDiv.isConnected) return; // collapsed again before the network finished loading
-    // Lines with multiple paths get a dropdown of curated route variants, each in
-    // both directions; picking one redraws the map and updates the row's figures.
-    const variants = LINE_VARIANTS[id] || null;
-    let options = null;
-    if (variants) {
-      options = [];
-      for (const v of variants) {
-        const wp = assembleVariant(net, id, v);
-        if (!wp || wp.length < 2) continue;
-        const a = wp[0][0], b = wp[wp.length - 1][0], via = v.via ? " · via " + v.via : "";
-        options.push({ label: `${a} → ${b}${via}`, wp });
-        options.push({ label: `${b} → ${a}${via}`, wp: [...wp].reverse() });
-      }
+    // Lines with multiple paths get a dropdown — the default route plus every
+    // variant both ways; picking one redraws the map and updates the row's figures.
+    const options = buildVariantOptions(net, id);
+    if (options) {
       const sel = document.createElement("select");
       sel.className = "ls-variant";
       sel.setAttribute("aria-label", "Choose a route and direction for the " + name + " line");
@@ -1821,15 +1851,11 @@
     let routeGrp = null;
     async function drawVariant(idx) {
       if (routeGrp) { routeGrp.remove(); routeGrp = null; }
-      const wp = options ? options[idx].wp : null;
-      const r = await drawRunRoute(map, net, id, wp ? { waypoints: wp } : {});
+      const opt = options ? options[idx] : null;
+      const r = await drawRunRoute(map, net, id, opt && !opt.gpx ? { waypoints: opt.wp } : {});
       routeGrp = r && r.group;
       if (r && r.latlngs.length) map.fitBounds(L.latLngBounds(r.latlngs), { padding: [18, 18] });
-      if (options && wp) { // reflect the selected route's distance and stop count in the row
-        let km = 0;
-        for (let i = 1; i < wp.length; i++) km += haversineKm(wp[i - 1], wp[i]);
-        setRowStats(tr, km * ROAD_FACTOR, wp.length);
-      }
+      if (opt && opt.wp) setRowStats(tr, waypointsKm(opt.wp) * ROAD_FACTOR, opt.wp.length); // reflect the route in the row
     }
     await drawVariant(0);
     setTimeout(() => { if (lsMap === map) map.invalidateSize(); }, 60);
@@ -2462,6 +2488,23 @@
     return map;
   }
 
+  // A dropdown control (top-left) to choose which route of the highlighted line is
+  // shown on the geographic map. Options come from buildVariantOptions().
+  function addMapVariantControl(map, options, onChange) {
+    const ctl = L.control({ position: "topleft" });
+    ctl.onAdd = () => {
+      const div = L.DomUtil.create("div", "leaflet-bar geo-variant");
+      const sel = L.DomUtil.create("select", "", div);
+      sel.setAttribute("aria-label", "Choose which route to show on the map");
+      sel.innerHTML = options.map((o, i) => `<option value="${i}">${escapeHtml(o.label)}</option>`).join("");
+      L.DomEvent.disableClickPropagation(div);
+      L.DomEvent.disableScrollPropagation(div);
+      L.DomEvent.on(sel, "change", () => onChange(+sel.value));
+      return div;
+    };
+    ctl.addTo(map);
+  }
+
   // Friendly message in a map container when Leaflet itself failed to load.
   function mapUnavailable(el) {
     el.innerHTML = `<p class="diagram-empty">The map library couldn't load — check your connection.</p>`;
@@ -2536,8 +2579,27 @@
 
     // Run route for the highlighted line — the real pavement route drawn as a
     // soft base + animated flow line, with start/finish markers and arrows.
-    if (hi) await drawRunRoute(map, net, hi, { stale });
+    // Multi-path lines get a dropdown (top-left) to switch which route is shown.
+    let hiRouteGrp = null;
+    async function drawHiRoute(opt) {
+      if (hiRouteGrp) { hiRouteGrp.remove(); hiRouteGrp = null; }
+      const r = await drawRunRoute(map, net, hi, opt && !opt.gpx ? { waypoints: opt.wp, stale } : { stale });
+      hiRouteGrp = r && r.group;
+    }
+    let vopts = null;
+    if (hi) {
+      const variants = buildVariantOptions(net, hi);
+      if (variants) {
+        // Keep this month's actual run (pavement GPX) as the default; the dropdown
+        // adds every route variant of the highlighted line.
+        const base = rtStations(net, net[hi].name);
+        const ends = base && base.length > 1 ? ` · ${base[0][0]} → ${base[base.length - 1][0]}` : "";
+        vopts = [{ label: "This month's run" + ends, gpx: true }, ...variants];
+      }
+      await drawHiRoute(vopts ? vopts[0] : null);
+    }
     if (stale && stale()) return;
+    if (hi && vopts) addMapVariantControl(map, vopts, (i) => drawHiRoute(vopts[i]));
 
     // Station lookup: dedup by id, count lines per station (interchange), colour.
     const count = {}, coordById = {}, colourById = {};

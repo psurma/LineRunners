@@ -863,6 +863,9 @@ tr.ls-open .ls-caret { transform: rotate(90deg); }
   font: inherit; font-weight: 600; color: #10131c; background: #fff;
   border: 1.5px solid var(--line); border-radius: 10px; cursor: pointer; }
 .ls-variant:focus-visible { outline: none; border-color: #0019a8; box-shadow: 0 0 0 3px rgba(0, 25, 168, 0.14); }
+.geo-variant { background: #fff; padding: 2px; }
+.geo-variant select { font: inherit; font-size: 12px; font-weight: 600; color: #10131c; background: #fff; border: 0; max-width: 46vw; padding: 3px 4px; cursor: pointer; }
+@media (min-width: 560px) { .geo-variant select { max-width: 240px; } }
 .ls-map { height: 320px; border-radius: 12px; overflow: hidden; border: 1px solid var(--line); }
 @media (max-width: 560px) { .ls-map { height: 240px; } }
 .ls-foot { margin-top: 14px; color: var(--muted); font-size: 13px; }
