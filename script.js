@@ -255,15 +255,22 @@
     if (diff === 1) return "tomorrow";
     return DOW[new Date(londonDayNo(ms) * 86400000).getUTCDay()];
   }
-  const RUN_WINDOW_MS = 6 * 3600 * 1000; // assumed time on the move per day
-  // Per-day { start, end } windows for a run, as absolute instants.
+  const RUN_WINDOW_MS = 6 * 3600 * 1000; // fallback time on the move when a finish can't be estimated
+  // Per-day { start, end } windows for a run, as absolute instants. `end` is the
+  // estimated finish — the day's routed distance at ~6:30/km plus 30 min slack —
+  // so "on now" (and the live button) stop once the group is realistically done
+  // rather than after a flat 6 hours. Falls back to RUN_WINDOW_MS with no route.
   function runTimeline(run) {
     const days = run.days && run.days.length > 1 ? run.days : [null];
+    const wp = WAYPOINTS[run.key];
+    const segs = wp ? journeySegments(run, wp) : null;
     return days.map((d, i) => {
       const base = new Date(run.date.getFullYear(), run.date.getMonth(), run.date.getDate() + i);
       const [H, M] = (d ? parseClock(d.start) : MEET_TIME).split(":").map(Number);
       const start = londonInstant(base.getFullYear(), base.getMonth(), base.getDate(), H, M);
-      return { start, end: start + RUN_WINDOW_MS };
+      const seg = segs && segs[i];
+      const dur = seg ? legDistanceKm(wp, seg.from, seg.to) * 6.5 * 60000 + 30 * 60000 : RUN_WINDOW_MS;
+      return { start, end: start + dur };
     });
   }
   // Live status of a run: upcoming / today / on-now / between days / finished.
@@ -482,27 +489,11 @@
     const p = londonParts(Date.now());
     return `${p.y}-${String(p.mo).padStart(2, "0")}-${String(p.d).padStart(2, "0")}`;
   }
-  // True only while a run is genuinely out on the road: from the active day's
-  // start until its estimated finish (+30 min slack), London time. Uses the
-  // route/pace estimate when available, else the coarse run window.
-  function runUnderway(run) {
-    if (!run) return false;
-    const tl = runTimeline(run);
-    const di = Math.min(runPhase(run).day, tl.length - 1);
-    const w = tl[di];
-    if (Date.now() < w.start) return false;
-    const wp = WAYPOINTS[run.key];
-    const segs = wp ? journeySegments(run, wp) : null;
-    if (segs) {
-      const seg = segs[Math.min(di, segs.length - 1)];
-      const finish = w.start + (legDistanceKm(wp, seg.from, seg.to) * 6.5 + 30) * 60000;
-      return Date.now() <= finish;
-    }
-    return Date.now() < w.end;
-  }
   function liveTrackBtn(run) {
+    // runPhase().live now means "genuinely out on the road" (the run window ends
+    // at the estimated finish), so it doubles as the button's underway gate.
     const lt = liveNow;
-    if (!lt || !lt.url || lt.date !== todayLondonISO() || !runUnderway(run)) return "";
+    if (!lt || !lt.url || lt.date !== todayLondonISO() || !runPhase(run).live) return "";
     const who = lt.name ? `${escapeHtml(lt.name)} live` : "live";
     return `<a class="live-follow" href="${escapeAttr(lt.url)}" target="_blank" rel="noopener">` +
       `<span class="live-follow-dot" aria-hidden="true"></span>Follow ${who} on Garmin ↗</a>`;
