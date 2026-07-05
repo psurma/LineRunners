@@ -2054,6 +2054,22 @@
     linesGeo = await res.json();
     return linesGeo;
   }
+  // Real pavement run route for a line, from the generated routes/<slug>.gpx
+  // (built offline by tools/generate-routes.mjs — foot-routed on OpenStreetMap).
+  // Same-origin fetch, cached per slug; returns [[lat, lon], …] or null.
+  const routeGpxCache = {};
+  async function loadRouteGpx(slug) {
+    if (!slug) return null;
+    if (routeGpxCache[slug] !== undefined) return routeGpxCache[slug];
+    try {
+      const res = await fetch(`routes/${slug}.gpx`);
+      if (!res.ok) throw new Error("gpx " + res.status);
+      const doc = new DOMParser().parseFromString(await res.text(), "application/xml");
+      const pts = [...doc.getElementsByTagName("trkpt")].map((t) => [+t.getAttribute("lat"), +t.getAttribute("lon")]);
+      routeGpxCache[slug] = pts.length > 1 ? pts : null;
+    } catch (_) { routeGpxCache[slug] = null; }
+    return routeGpxCache[slug];
+  }
   const tmMap = { map: null };
   let geoRefresh = null; // set by renderGeoMap; re-draws station labels (e.g. after a unit switch)
 
@@ -2218,11 +2234,18 @@
       return { color: f.properties.colour, weight: on ? 5 : 3, opacity: on ? 1 : (hi ? 0.3 : 0.9), lineJoin: "round", lineCap: "round" }; } }).addTo(map);
     lineLayer.eachLayer((l) => { if (hi && l.feature.properties.line === hi) l.bringToFront(); });
 
-    // Animated run route from the next run's waypoints (start → finish) to show direction.
-    const wp = hi && nextRun ? WAYPOINTS[nextRun.key] : null;
+    // Run route for the highlighted line: the real pavement route from the
+    // generated GPX (routes/<slug>.gpx), drawn as a soft base + animated flow
+    // line. Station waypoints (from any line) drive the start/finish markers and
+    // direction arrows. Falls back to straight station hops if the GPX is missing.
+    const wp = hi ? rtStations(net, net[hi].name) : null;
     if (wp && wp.length > 1) {
       const wl = wp.map((s) => [s[1], s[2]]);
-      L.polyline(wl, flowLineOptions(net[hi].colour, { weight: 4, dashArray: "2 12" })).addTo(map);
+      const gpxLine = await loadRouteGpx(hi);
+      if (stale && stale()) return;
+      const routeLine = gpxLine && gpxLine.length > 1 ? gpxLine : wl;
+      L.polyline(routeLine, { color: net[hi].colour, weight: 6, opacity: 0.3, lineJoin: "round", lineCap: "round" }).addTo(map);
+      L.polyline(routeLine, flowLineOptions(net[hi].colour, { weight: 4 })).addTo(map);
       L.circleMarker(wl[0], { radius: 6, color: "#fff", weight: 2, fillColor: net[hi].colour, fillOpacity: 1 })
         .bindTooltip("Start · " + escapeHtml(wp[0][0]), { direction: "top" }).addTo(map);
       L.marker(wl[wl.length - 1], { icon: L.divIcon({ className: "route-finish", html: "◉", iconSize: [15, 15], iconAnchor: [7, 7] }) })
