@@ -1390,6 +1390,19 @@ body {
   100% { box-shadow: 0 0 0 2px color-mix(in srgb, var(--jb-col) 0%, transparent); }
 }
 
+/* "Follow live" button — links to a runner's Garmin LiveTrack during a run */
+.live-follow { display: inline-flex; align-items: center; gap: 8px; margin: 12px 0 2px; padding: 9px 15px; border-radius: 999px; background: #c1121f; color: #fff; font-weight: 800; font-size: 14px; text-decoration: none; box-shadow: 0 2px 10px rgba(193, 18, 31, 0.35); }
+.live-follow:hover { background: #a10f1a; }
+.live-follow-dot { width: 9px; height: 9px; border-radius: 50%; background: #fff; flex: none; }
+@media (prefers-reduced-motion: no-preference) {
+  .live-follow-dot { animation: live-follow-pulse 1.3s ease-in-out infinite; }
+}
+@keyframes live-follow-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.75); }
+  70% { box-shadow: 0 0 0 7px rgba(255, 255, 255, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(255, 255, 255, 0); }
+}
+
 /* Header km/mi toggle */
 .unit-toggle { display: inline-flex; border: 1.5px solid var(--tfl-blue); border-radius: 20px; overflow: hidden; flex: none; }
 .unit-toggle button { appearance: none; border: none; background: none; font: inherit; font-size: 13px; font-weight: 700; color: var(--tfl-blue); padding: 4px 12px; cursor: pointer; }

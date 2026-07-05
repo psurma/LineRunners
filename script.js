@@ -106,6 +106,7 @@
       distance: "2 days · ~59 km",
       routeLink: "https://www.strava.com/clubs/311876/group_events/3499820905351240354",
       notes: "Our big one — the whole Metropolitan line over a weekend, from Chesham out in the Chilterns all the way to Aldgate, split overnight at Wembley Park. All paces: run as much or as little of each day as you like.",
+      liveTrack: { name: "Phil", url: "https://livetrack.garmin.com/session/0651acc3-f654-8bff-99ec-57a60584d800/token/3B49ED5650E1EE1BA7FA19991FE27457" },
       days: [
         { title: "Day 1 · Sat 4 July — Chesham → Wembley Park", start: "Chesham Underground Station, 9:18am", distance: "~6:00/km, 2 pitstops", finish: "Wembley Park Underground Station" },
         { title: "Day 2 · Sun 5 July — Wembley Park → Aldgate", start: "Wembley Park Underground Station, 9:35am", finish: "Aldgate" },
@@ -328,6 +329,7 @@
       notes: entry.notes || null,
       leg: entry.leg, start: entry.start, distance: entry.distance,
       bound: entry.bound || null,        // explicit line direction (e.g. TfL "Southbound"); overrides the computed compass
+      liveTrack: entry.liveTrack || null, // optional per-run Garmin LiveTrack { name, url }, set by hand on the day
     };
     if (entry.type === "tube") {
       return { ...rich, key: entry.line, badge: `${entry.line} line`, colour: LINE_COLOURS[entry.line] || "#0019A8" };
@@ -463,6 +465,20 @@
   }
 
   // --- Render: Next-run card in the hero (compact, above the fold) -------
+  // "Follow live" link to a runner's Garmin LiveTrack — shown only while the run
+  // is actually happening (live, or same-day before the off). The session URL and
+  // runner name are set by hand on the run in RUN_PLAN; LiveTrack sessions are
+  // per-activity and expire, so this is populated on the day and cleared after.
+  function liveTrackBtn(run, ph) {
+    const lt = run && run.liveTrack;
+    if (!lt || !lt.url) return "";
+    const p = ph || runPhase(run);
+    if (!p.live && p.short !== "Today") return "";
+    const who = lt.name ? `${escapeHtml(lt.name)} live` : "live";
+    return `<a class="live-follow" href="${escapeAttr(lt.url)}" target="_blank" rel="noopener">` +
+      `<span class="live-follow-dot" aria-hidden="true"></span>Follow ${who} on Garmin ↗</a>`;
+  }
+
   function renderHeroCard() {
     const el = document.getElementById("heroCard");
     if (!el || !nextRun) return;
@@ -490,6 +506,7 @@
       <div class="hc-when">${when} · meet ${escapeHtml(meet.clock)}</div>
       ${ph.label && ph.label !== ph.short ? `<div class="hc-status${ph.live ? " is-live" : ""}">${escapeHtml(ph.label)}</div>` : ""}
       <div class="hc-leg">${escapeHtml(meet.leg)}</div>
+      ${liveTrackBtn(nextRun, ph)}
       <div class="hc-meta">
         <span>📍 <a href="${escapeAttr(meetMapUrl(nextRun, meet.place))}" target="_blank" rel="noopener">${escapeHtml(meet.place)}</a></span>
         <span>📏 ${escapeHtml(distText(nextRun.distance))}</span>
