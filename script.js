@@ -1718,17 +1718,17 @@
   // = via Bank; District branches all hinge on Earl's Court / Turnham Green.)
   const LINE_VARIANTS = {
     northern: [
-      { name: "Edgware ↔ Morden · via Bank", segs: [[0, 0], [5, 0], [6, 0], [7, 0]] },
-      { name: "Edgware ↔ Morden · via Charing Cross", segs: [[0, 0], [1, 0], [2, 0], [7, 0]] },
-      { name: "High Barnet ↔ Morden · via Bank", segs: [[0, 0], [5, 0], [6, 0], [3, 0], [4, 0]] },
-      { name: "High Barnet ↔ Morden · via Charing Cross", segs: [[0, 0], [1, 0], [2, 0], [3, 0], [4, 0]] },
-      { name: "Mill Hill East ↔ Morden · via Bank", segs: [[0, 0], [5, 0], [6, 0], [3, 0], [8, 0]] },
+      { via: "Bank", segs: [[0, 0], [5, 0], [6, 0], [7, 0]] },
+      { via: "Charing Cross", segs: [[0, 0], [1, 0], [2, 0], [7, 0]] },
+      { via: "Bank", segs: [[0, 0], [5, 0], [6, 0], [3, 0], [4, 0]] },
+      { via: "Charing Cross", segs: [[0, 0], [1, 0], [2, 0], [3, 0], [4, 0]] },
+      { via: "Bank", segs: [[0, 0], [5, 0], [6, 0], [3, 0], [8, 0]] },
     ],
     district: [
-      { name: "Upminster ↔ Ealing Broadway", segs: [[2, 1], [1, 1], [0, 1]] },
-      { name: "Upminster ↔ Richmond", segs: [[2, 1], [1, 1], [3, 1]] },
-      { name: "Upminster ↔ Wimbledon", segs: [[2, 1], [4, 1]] },
-      { name: "Edgware Road ↔ Wimbledon", segs: [[5, 1], [4, 1]] },
+      { segs: [[2, 1], [1, 1], [0, 1]] },
+      { segs: [[2, 1], [1, 1], [3, 1]] },
+      { segs: [[2, 1], [4, 1]] },
+      { segs: [[5, 1], [4, 1]] },
     ],
   };
   function assembleVariant(net, id, variant) {
@@ -1758,6 +1758,7 @@
     tbody.querySelectorAll(".ls-open").forEach((r) => {
       r.classList.remove("ls-open");
       const b = r.querySelector(".ls-row-btn"); if (b) b.setAttribute("aria-expanded", "false");
+      restoreRowStats(r); // put the line's overall figures back when it collapses
     });
     if (wasOpen) return; // a second click on the open row just closes it
     tr.classList.add("ls-open");
@@ -1766,34 +1767,69 @@
     detail.className = "ls-detail-row";
     detail.innerHTML = `<td colspan="6"><div class="ls-detail-inner"><div class="ls-map"></div></div></td>`;
     tr.after(detail);
-    lineRouteMap(detail.querySelector(".ls-map"), tr.dataset.line);
+    lineRouteMap(detail.querySelector(".ls-map"), tr.dataset.line, tr);
   }
-  async function lineRouteMap(mapDiv, name) {
+  // Update / restore a line row's Length·Stops·Run·Cycle·Walk cells so they reflect
+  // the route variant currently shown on its mini-map (stashing the line's overall
+  // figures the first time, to put back when it collapses).
+  function setRowStats(tr, km, stops) {
+    if (!tr) return;
+    const cells = tr.querySelectorAll("td");
+    if (cells.length < 6) return;
+    if (!tr._origStats) tr._origStats = [1, 2, 3, 4, 5].map((i) => cells[i].textContent);
+    cells[1].textContent = fmtKm(km, 1);
+    cells[2].textContent = stops;
+    cells[3].textContent = fmtTime(km * 6.5);
+    cells[4].textContent = fmtTime(km * CYCLE_MIN_PER_KM);
+    cells[5].textContent = fmtTime(km * WALK_MIN_PER_KM);
+  }
+  function restoreRowStats(tr) {
+    if (!tr || !tr._origStats) return;
+    const cells = tr.querySelectorAll("td");
+    [1, 2, 3, 4, 5].forEach((i, k) => { if (cells[i]) cells[i].textContent = tr._origStats[k]; });
+    tr._origStats = null;
+  }
+  async function lineRouteMap(mapDiv, name, tr) {
     if (!mapDiv) return;
     if (typeof L === "undefined") { mapDiv.innerHTML = '<p class="diagram-empty">The map couldn\'t load.</p>'; return; }
     const net = await loadNetwork();
     const id = Object.keys(net).find((k) => net[k].name === name);
     if (!id) { mapDiv.innerHTML = '<p class="diagram-empty">No route mapped for this line yet.</p>'; return; }
     if (!mapDiv.isConnected) return; // collapsed again before the network finished loading
-    // Lines with multiple paths get a dropdown of curated route variants above the map.
+    // Lines with multiple paths get a dropdown of curated route variants, each in
+    // both directions; picking one redraws the map and updates the row's figures.
     const variants = LINE_VARIANTS[id] || null;
+    let options = null;
     if (variants) {
+      options = [];
+      for (const v of variants) {
+        const wp = assembleVariant(net, id, v);
+        if (!wp || wp.length < 2) continue;
+        const a = wp[0][0], b = wp[wp.length - 1][0], via = v.via ? " · via " + v.via : "";
+        options.push({ label: `${a} → ${b}${via}`, wp });
+        options.push({ label: `${b} → ${a}${via}`, wp: [...wp].reverse() });
+      }
       const sel = document.createElement("select");
       sel.className = "ls-variant";
-      sel.setAttribute("aria-label", "Choose a route for the " + name + " line");
-      sel.innerHTML = variants.map((v, i) => `<option value="${i}">${escapeHtml(v.name)}</option>`).join("");
+      sel.setAttribute("aria-label", "Choose a route and direction for the " + name + " line");
+      sel.innerHTML = options.map((o, i) => `<option value="${i}">${escapeHtml(o.label)}</option>`).join("");
       sel.addEventListener("change", () => drawVariant(+sel.value));
       mapDiv.parentNode.insertBefore(sel, mapDiv);
     }
     const map = createSiteMap(mapDiv);
     lsMap = map;
     let routeGrp = null;
-    async function drawVariant(vIdx) {
+    async function drawVariant(idx) {
       if (routeGrp) { routeGrp.remove(); routeGrp = null; }
-      const wp = variants ? assembleVariant(net, id, variants[vIdx]) : null;
+      const wp = options ? options[idx].wp : null;
       const r = await drawRunRoute(map, net, id, wp ? { waypoints: wp } : {});
       routeGrp = r && r.group;
       if (r && r.latlngs.length) map.fitBounds(L.latLngBounds(r.latlngs), { padding: [18, 18] });
+      if (options && wp) { // reflect the selected route's distance and stop count in the row
+        let km = 0;
+        for (let i = 1; i < wp.length; i++) km += haversineKm(wp[i - 1], wp[i]);
+        setRowStats(tr, km * ROAD_FACTOR, wp.length);
+      }
     }
     await drawVariant(0);
     setTimeout(() => { if (lsMap === map) map.invalidateSize(); }, 60);
