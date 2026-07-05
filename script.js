@@ -106,7 +106,6 @@
       distance: "2 days · ~59 km",
       routeLink: "https://www.strava.com/clubs/311876/group_events/3499820905351240354",
       notes: "Our big one — the whole Metropolitan line over a weekend, from Chesham out in the Chilterns all the way to Aldgate, split overnight at Wembley Park. All paces: run as much or as little of each day as you like.",
-      liveTrack: { name: "Phil", url: "https://livetrack.garmin.com/session/0651acc3-f654-8bff-99ec-57a60584d800/token/3B49ED5650E1EE1BA7FA19991FE27457" },
       days: [
         { title: "Day 1 · Sat 4 July — Chesham → Wembley Park", start: "Chesham Underground Station, 9:18am", distance: "~6:00/km, 2 pitstops", finish: "Wembley Park Underground Station" },
         { title: "Day 2 · Sun 5 July — Wembley Park → Aldgate", start: "Wembley Park Underground Station, 9:35am", finish: "Aldgate" },
@@ -329,7 +328,6 @@
       notes: entry.notes || null,
       leg: entry.leg, start: entry.start, distance: entry.distance,
       bound: entry.bound || null,        // explicit line direction (e.g. TfL "Southbound"); overrides the computed compass
-      liveTrack: entry.liveTrack || null, // optional per-run Garmin LiveTrack { name, url }, set by hand on the day
     };
     if (entry.type === "tube") {
       return { ...rich, key: entry.line, badge: `${entry.line} line`, colour: LINE_COLOURS[entry.line] || "#0019A8" };
@@ -465,15 +463,46 @@
   }
 
   // --- Render: Next-run card in the hero (compact, above the fold) -------
-  // "Follow live" link to a runner's Garmin LiveTrack — shown only while the run
-  // is actually happening (live, or same-day before the off). The session URL and
-  // runner name are set by hand on the run in RUN_PLAN; LiveTrack sessions are
-  // per-activity and expire, so this is populated on the day and cleared after.
-  function liveTrackBtn(run, ph) {
-    const lt = run && run.liveTrack;
-    if (!lt || !lt.url) return "";
-    const p = ph || runPhase(run);
-    if (!p.live && p.short !== "Today") return "";
+  // --- Live "Follow along" link ------------------------------------------
+  // Editable at data/live.json (no code deploy needed — change it from the
+  // GitHub app on run morning). Shape:
+  //   { "date": "YYYY-MM-DD", "name": "Sam", "url": "https://livetrack.garmin.com/..." }
+  // A "Follow <name> live" button then shows on that date, but only while the
+  // group is actually out (until the estimated finish). Blank the fields to
+  // remove it. LiveTrack links are per-activity and expire, hence the hand edit.
+  let liveNow = null;
+  async function loadLiveNow() {
+    try {
+      const res = await fetch("data/live.json?t=" + Math.floor(Date.now() / 60000));
+      liveNow = res.ok ? await res.json() : null;
+    } catch (_) { liveNow = null; }
+    renderHeroCard();
+  }
+  function todayLondonISO() {
+    const p = londonParts(Date.now());
+    return `${p.y}-${String(p.mo).padStart(2, "0")}-${String(p.d).padStart(2, "0")}`;
+  }
+  // True only while a run is genuinely out on the road: from the active day's
+  // start until its estimated finish (+30 min slack), London time. Uses the
+  // route/pace estimate when available, else the coarse run window.
+  function runUnderway(run) {
+    if (!run) return false;
+    const tl = runTimeline(run);
+    const di = Math.min(runPhase(run).day, tl.length - 1);
+    const w = tl[di];
+    if (Date.now() < w.start) return false;
+    const wp = WAYPOINTS[run.key];
+    const segs = wp ? journeySegments(run, wp) : null;
+    if (segs) {
+      const seg = segs[Math.min(di, segs.length - 1)];
+      const finish = w.start + (legDistanceKm(wp, seg.from, seg.to) * 6.5 + 30) * 60000;
+      return Date.now() <= finish;
+    }
+    return Date.now() < w.end;
+  }
+  function liveTrackBtn(run) {
+    const lt = liveNow;
+    if (!lt || !lt.url || lt.date !== todayLondonISO() || !runUnderway(run)) return "";
     const who = lt.name ? `${escapeHtml(lt.name)} live` : "live";
     return `<a class="live-follow" href="${escapeAttr(lt.url)}" target="_blank" rel="noopener">` +
       `<span class="live-follow-dot" aria-hidden="true"></span>Follow ${who} on Garmin ↗</a>`;
@@ -506,7 +535,7 @@
       <div class="hc-when">${when} · meet ${escapeHtml(meet.clock)}</div>
       ${ph.label && ph.label !== ph.short ? `<div class="hc-status${ph.live ? " is-live" : ""}">${escapeHtml(ph.label)}</div>` : ""}
       <div class="hc-leg">${escapeHtml(meet.leg)}</div>
-      ${liveTrackBtn(nextRun, ph)}
+      ${liveTrackBtn(nextRun)}
       <div class="hc-meta">
         <span>📍 <a href="${escapeAttr(meetMapUrl(nextRun, meet.place))}" target="_blank" rel="noopener">${escapeHtml(meet.place)}</a></span>
         <span>📏 ${escapeHtml(distText(nextRun.distance))}</span>
@@ -2559,6 +2588,7 @@
   setupScrollSpy();
   setupUnitToggle();
   setupLiveClock();
+  loadLiveNow();
 
   // Keep the time-sensitive views live. The "next run" and its phase are
   // otherwise a snapshot frozen when the page's JS first ran, so a left-open
@@ -2588,8 +2618,8 @@
     }
     refreshTime(); // seed timeSig so the first timer tick is a genuine no-op
     setInterval(refreshTime, 60000);
-    document.addEventListener("visibilitychange", () => { if (!document.hidden) refreshTime(); });
-    window.addEventListener("pageshow", refreshTime);
+    document.addEventListener("visibilitychange", () => { if (!document.hidden) { refreshTime(); loadLiveNow(); } });
+    window.addEventListener("pageshow", () => { refreshTime(); loadLiveNow(); });
   }
 
   // Site-wide km/mi toggle in the header — re-renders everything showing a distance.
