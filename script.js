@@ -2174,6 +2174,18 @@
     });
   }
 
+  // Ordnance Survey "Road" raster tiles — an A-Z-style British street atlas.
+  // Free on the OS OpenData plan to zoom 16 (upscaled beyond via maxNativeZoom).
+  // The key rides in the tile URL (unavoidable for a static site); it's the free
+  // OpenData plan so it can't incur cost, and it's restricted to our domain at OS.
+  const OS_KEY = "okbMrQnWH0qLZbLKEw29GCtB6ulDR9Tt";
+  function osRoadBasemap() {
+    return L.tileLayer("https://api.os.uk/maps/raster/v1/zxy/Road_3857/{z}/{x}/{y}.png?key=" + OS_KEY, {
+      attribution: 'Contains OS data &copy; Crown copyright and database right 2026',
+      maxZoom: 20, maxNativeZoom: 16,
+    });
+  }
+
   // Zoom to the cursor only while ⌘/Ctrl is held, so plain scroll still moves the page.
   function modifierWheelZoom(map) {
     map.scrollWheelZoom.disable();
@@ -2247,7 +2259,9 @@
   // control (plus an optional zoom hint for the geo map).
   function createSiteMap(el, opts = {}) {
     const map = L.map(el, { center: [51.509, -0.115], zoom: 11, preferCanvas: true, zoomSnap: 0 });
-    cartoBasemap().addTo(map);
+    const bases = { "Voyager": cartoBasemap(), "Street atlas": osRoadBasemap() };
+    bases["Street atlas"].addTo(map); // OS A-Z-style street atlas is the default; toggle to Voyager for the soft view
+    L.control.layers(bases, null, { collapsed: true }).addTo(map);
     modifierWheelZoom(map);
     observeMapSize(map);
     if (opts.zoomHint) addZoomHint(map);
