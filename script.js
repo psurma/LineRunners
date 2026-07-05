@@ -1649,6 +1649,12 @@
     ["Northern", 58, 52], ["Piccadilly", 71, 53], ["Victoria", 21, 16], ["Waterloo & City", 2.5, 2],
   ];
 
+  // Sortable "Line by line" columns. Run/Cycle/Walk are all distance × a constant,
+  // so they sort in the same order as Length — kept sortable for consistency.
+  const LS_COLS = ["Line", "Length", "Stops", "Run", "Cycle", "Walk"];
+  const lsSortVal = [(s) => s[0].toLowerCase(), (s) => s[1], (s) => s[2], (s) => s[1], (s) => s[1], (s) => s[1]];
+  let lsSortCol = 1, lsSortDir = -1; // default: longest first
+
   function renderLineStats() {
     const el = document.getElementById("lineStats");
     if (!el) return;
@@ -1657,7 +1663,11 @@
     const maxKm = Math.max(...kms), minKm = Math.min(...kms);
     const maxSt = Math.max(...stns), minSt = Math.min(...stns);
     const active = nextRun ? nextRun.key : null;
-    const rows = [...LINE_STATS].sort((a, b) => b[1] - a[1]).map(([name, km, stations]) => {
+    const sortVal = lsSortVal[lsSortCol];
+    const rows = [...LINE_STATS].sort((a, b) => {
+      const va = sortVal(a), vb = sortVal(b);
+      return va < vb ? -lsSortDir : va > vb ? lsSortDir : 0;
+    }).map(([name, km, stations]) => {
       const c = LINE_COLOURS[name] || "#0019A8";
       const badges = [];
       if (km === maxKm) badges.push(["Longest", "tough"]);
@@ -1675,17 +1685,66 @@
       </tr>`;
     }).join("");
     if (lsMap) { lsMap.remove(); lsMap = null; } // drop any open mini-map before re-render
+    const heads = LS_COLS.map((h, i) => {
+      const on = i === lsSortCol;
+      return `<th aria-sort="${on ? (lsSortDir === 1 ? "ascending" : "descending") : "none"}"><button type="button" class="ls-sort${on ? " on" : ""}" data-col="${i}">${escapeHtml(h)}<span class="ls-arrow" aria-hidden="true">${on ? (lsSortDir === 1 ? "▲" : "▼") : ""}</span></button></th>`;
+    }).join("");
     el.innerHTML = `
       <table class="ls-table">
-        <thead><tr><th>Line</th><th>Length</th><th>Stops</th><th>Run</th><th>Cycle</th><th>Walk</th></tr></thead>
+        <thead><tr>${heads}</tr></thead>
         <tbody>${rows}</tbody>
       </table>
-      <p class="ls-foot">Tap a line to see its run route on a map. Run at a steady 6:30/km, cycle at ~15 km/h, walk at ~5 km/h, end to end. Longest = toughest tick; little Waterloo &amp; City is the gentlest.</p>`;
+      <p class="ls-foot">Tap a column to sort, or a line to see its run route on a map. Run at a steady 6:30/km, cycle at ~15 km/h, walk at ~5 km/h, end to end.</p>`;
     const tbody = el.querySelector("tbody");
     if (tbody) tbody.addEventListener("click", (e) => {
       const btn = e.target.closest(".ls-row-btn");
       if (btn) toggleLineDetail(btn);
     });
+    const thead = el.querySelector("thead");
+    if (thead) thead.addEventListener("click", (e) => {
+      const btn = e.target.closest(".ls-sort");
+      if (!btn) return;
+      const col = +btn.dataset.col;
+      if (col === lsSortCol) lsSortDir = -lsSortDir;
+      else { lsSortCol = col; lsSortDir = col === 0 ? 1 : -1; }
+      renderLineStats();
+    });
+  }
+
+  // Curated end-to-end route variants for lines with multiple paths. Each variant
+  // references the network's branch segments as [branchIndex, reversed] so the
+  // station lists stay exact — assembleVariant() stitches them, dropping the
+  // shared station at each join. (Northern branch 1 = via Charing Cross, branch 5
+  // = via Bank; District branches all hinge on Earl's Court / Turnham Green.)
+  const LINE_VARIANTS = {
+    northern: [
+      { name: "Edgware ↔ Morden · via Bank", segs: [[0, 0], [5, 0], [6, 0], [7, 0]] },
+      { name: "Edgware ↔ Morden · via Charing Cross", segs: [[0, 0], [1, 0], [2, 0], [7, 0]] },
+      { name: "High Barnet ↔ Morden · via Bank", segs: [[0, 0], [5, 0], [6, 0], [3, 0], [4, 0]] },
+      { name: "High Barnet ↔ Morden · via Charing Cross", segs: [[0, 0], [1, 0], [2, 0], [3, 0], [4, 0]] },
+      { name: "Mill Hill East ↔ Morden · via Bank", segs: [[0, 0], [5, 0], [6, 0], [3, 0], [8, 0]] },
+    ],
+    district: [
+      { name: "Upminster ↔ Ealing Broadway", segs: [[2, 1], [1, 1], [0, 1]] },
+      { name: "Upminster ↔ Richmond", segs: [[2, 1], [1, 1], [3, 1]] },
+      { name: "Upminster ↔ Wimbledon", segs: [[2, 1], [4, 1]] },
+      { name: "Edgware Road ↔ Wimbledon", segs: [[5, 1], [4, 1]] },
+    ],
+  };
+  function assembleVariant(net, id, variant) {
+    const ln = net[id];
+    if (!ln || !ln.branches) return null;
+    const ids = [];
+    for (const [bi, rev] of variant.segs) {
+      const branch = ln.branches[bi];
+      if (!branch) continue;
+      const seg = rev ? [...branch].reverse() : branch;
+      for (const sid of seg) {
+        if (ids.length && ids[ids.length - 1] === sid) continue; // drop the shared join station
+        ids.push(sid);
+      }
+    }
+    return ids.map((sid) => { const s = ln.stations[sid]; return s ? [s.n, s.lat, s.lon] : null; }).filter(Boolean);
   }
 
   // "Line by line" row expansion: show a selected line's run route on a mini-map.
@@ -1716,10 +1775,27 @@
     const id = Object.keys(net).find((k) => net[k].name === name);
     if (!id) { mapDiv.innerHTML = '<p class="diagram-empty">No route mapped for this line yet.</p>'; return; }
     if (!mapDiv.isConnected) return; // collapsed again before the network finished loading
+    // Lines with multiple paths get a dropdown of curated route variants above the map.
+    const variants = LINE_VARIANTS[id] || null;
+    if (variants) {
+      const sel = document.createElement("select");
+      sel.className = "ls-variant";
+      sel.setAttribute("aria-label", "Choose a route for the " + name + " line");
+      sel.innerHTML = variants.map((v, i) => `<option value="${i}">${escapeHtml(v.name)}</option>`).join("");
+      sel.addEventListener("change", () => drawVariant(+sel.value));
+      mapDiv.parentNode.insertBefore(sel, mapDiv);
+    }
     const map = createSiteMap(mapDiv);
     lsMap = map;
-    const route = await drawRunRoute(map, net, id, {});
-    if (route && route.length) map.fitBounds(L.latLngBounds(route), { padding: [18, 18] });
+    let routeGrp = null;
+    async function drawVariant(vIdx) {
+      if (routeGrp) { routeGrp.remove(); routeGrp = null; }
+      const wp = variants ? assembleVariant(net, id, variants[vIdx]) : null;
+      const r = await drawRunRoute(map, net, id, wp ? { waypoints: wp } : {});
+      routeGrp = r && r.group;
+      if (r && r.latlngs.length) map.fitBounds(L.latLngBounds(r.latlngs), { padding: [18, 18] });
+    }
+    await drawVariant(0);
     setTimeout(() => { if (lsMap === map) map.invalidateSize(); }, 60);
   }
 
@@ -2217,18 +2293,21 @@
   async function drawRunRoute(map, net, id, opts = {}) {
     const line = net[id];
     if (!line) return null;
-    const wp = rtStations(net, line.name);
+    const wp = opts.waypoints || rtStations(net, line.name);
     if (!wp || wp.length < 2) return null;
     const wl = wp.map((s) => [s[1], s[2]]);
-    const gpxLine = await loadRouteGpx(id);
+    // Explicit variant waypoints draw as station-to-station hops; the default
+    // whole-line route prefers the real pavement GPX when one exists.
+    const gpxLine = opts.waypoints ? null : await loadRouteGpx(id);
     if (opts.stale && opts.stale()) return null;
     const routeLine = gpxLine && gpxLine.length > 1 ? gpxLine : wl;
-    L.polyline(routeLine, { color: line.colour, weight: 6, opacity: 0.3, lineJoin: "round", lineCap: "round" }).addTo(map);
-    L.polyline(routeLine, flowLineOptions(line.colour, { weight: 4 })).addTo(map);
+    const grp = L.layerGroup().addTo(map);
+    L.polyline(routeLine, { color: line.colour, weight: 6, opacity: 0.3, lineJoin: "round", lineCap: "round" }).addTo(grp);
+    L.polyline(routeLine, flowLineOptions(line.colour, { weight: 4 })).addTo(grp);
     L.circleMarker(wl[0], { radius: 6, color: "#fff", weight: 2, fillColor: line.colour, fillOpacity: 1 })
-      .bindTooltip("Start · " + escapeHtml(wp[0][0]), { direction: "top" }).addTo(map);
+      .bindTooltip("Start · " + escapeHtml(wp[0][0]), { direction: "top" }).addTo(grp);
     L.marker(wl[wl.length - 1], { icon: L.divIcon({ className: "route-finish", html: "◉", iconSize: [15, 15], iconAnchor: [7, 7] }) })
-      .bindTooltip("Finish · " + escapeHtml(wp[wp.length - 1][0]), { direction: "top" }).addTo(map);
+      .bindTooltip("Finish · " + escapeHtml(wp[wp.length - 1][0]), { direction: "top" }).addTo(grp);
     // Direction-of-travel arrows spaced along the route (point start → finish).
     const step = Math.max(1, Math.floor(wp.length / 9));
     for (let i = step; i < wp.length - 1; i += step) {
@@ -2237,9 +2316,9 @@
         className: "route-arrow",
         html: `<span style="transform:rotate(${Math.round(deg - 90)}deg);color:${line.colour}">➤</span>`,
         iconSize: [22, 22], iconAnchor: [11, 11],
-      }) }).addTo(map);
+      }) }).addTo(grp);
     }
-    return routeLine;
+    return { group: grp, latlngs: routeLine };
   }
   const tmMap = { map: null };
   let geoRefresh = null; // set by renderGeoMap; re-draws station labels (e.g. after a unit switch)

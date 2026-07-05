@@ -844,6 +844,12 @@ body.tm-map-active .tm-zoom, body.tm-map-active .tm-scrollhint { display: none; 
 .ls-badge.tough { background: #fde7e7; color: #b3261e; }
 .ls-badge.easy { background: #e6f5ec; color: #1e7a44; }
 .ls-table td.ls-name { padding: 0; }
+.ls-table th { padding: 0; }
+.ls-sort { display: inline-flex; align-items: center; gap: 4px; width: 100%; padding: 12px 14px; margin: 0;
+  background: none; border: 0; font: inherit; font-size: 12px; text-transform: uppercase; letter-spacing: 1px;
+  color: var(--muted); cursor: pointer; text-align: left; white-space: nowrap; }
+.ls-sort:hover, .ls-sort.on { color: var(--ink); }
+.ls-arrow { font-size: 9px; line-height: 1; }
 .ls-row-btn { display: flex; align-items: center; gap: 8px; width: 100%; padding: 12px 14px; margin: 0;
   background: none; border: 0; font: inherit; font-weight: 600; color: inherit; text-align: left; cursor: pointer; }
 .ls-row-btn:hover { background: rgba(0, 25, 168, 0.06); }
@@ -853,6 +859,10 @@ tr.ls-open { background: rgba(0, 25, 168, 0.05); }
 tr.ls-open .ls-caret { transform: rotate(90deg); }
 .ls-detail-row td { padding: 0; }
 .ls-detail-inner { padding: 4px 14px 16px; }
+.ls-variant { display: block; width: 100%; max-width: 360px; margin: 0 0 10px; padding: 8px 12px;
+  font: inherit; font-weight: 600; color: #10131c; background: #fff;
+  border: 1.5px solid var(--line); border-radius: 10px; cursor: pointer; }
+.ls-variant:focus-visible { outline: none; border-color: #0019a8; box-shadow: 0 0 0 3px rgba(0, 25, 168, 0.14); }
 .ls-map { height: 320px; border-radius: 12px; overflow: hidden; border: 1px solid var(--line); }
 @media (max-width: 560px) { .ls-map { height: 240px; } }
 .ls-foot { margin-top: 14px; color: var(--muted); font-size: 13px; }
