@@ -843,6 +843,18 @@ body.tm-map-active .tm-zoom, body.tm-map-active .tm-scrollhint { display: none; 
 .ls-badge { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 20px; background: #eef0f4; color: #2b3140; }
 .ls-badge.tough { background: #fde7e7; color: #b3261e; }
 .ls-badge.easy { background: #e6f5ec; color: #1e7a44; }
+.ls-table td.ls-name { padding: 0; }
+.ls-row-btn { display: flex; align-items: center; gap: 8px; width: 100%; padding: 12px 14px; margin: 0;
+  background: none; border: 0; font: inherit; font-weight: 600; color: inherit; text-align: left; cursor: pointer; }
+.ls-row-btn:hover { background: rgba(0, 25, 168, 0.06); }
+.ls-row-btn:focus-visible { outline: 2px solid #0019a8; outline-offset: -2px; }
+.ls-caret { flex: 0 0 auto; color: var(--muted); font-size: 12px; transition: transform 0.15s ease; }
+tr.ls-open { background: rgba(0, 25, 168, 0.05); }
+tr.ls-open .ls-caret { transform: rotate(90deg); }
+.ls-detail-row td { padding: 0; }
+.ls-detail-inner { padding: 4px 14px 16px; }
+.ls-map { height: 320px; border-radius: 12px; overflow: hidden; border: 1px solid var(--line); }
+@media (max-width: 560px) { .ls-map { height: 240px; } }
 .ls-foot { margin-top: 14px; color: var(--muted); font-size: 13px; }
 
 /* ---------- Gallery ---------- */

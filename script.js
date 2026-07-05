@@ -639,10 +639,15 @@
     const c = nextRun.colour, paceKm = 6.5;
     const segs = journeySegments(nextRun, wp) || [{ label: null, leg: nextRun.leg, from: 0, to: wp.length - 1, start: MEET_TIME }];
     const multi = segs.length > 1;
-    const curDay = Math.min(runPhase(nextRun).day, segs.length - 1);
+    const tl = runTimeline(nextRun);
+    const now = Date.now();
+    // A day collapses to "done" once its own window has ended; the current day is
+    // the first not-yet-finished one (none once the whole run is over, so both days
+    // collapse into their summaries).
+    const curDay = tl.findIndex((w) => now < w.end);
     const live = journeyLivePos(nextRun);
     const sections = segs.map((s, di) => journeyBoardSection(nextRun, wp, s, c, paceKm, {
-      done: multi && di < curDay,
+      done: multi && tl[di] && now >= tl[di].end,
       current: di === curDay,
       liveIdx: live && live.dayIdx === di ? live.absIdx : null,
     })).join("");
@@ -1660,8 +1665,8 @@
       if (stations === maxSt) badges.push(["Most stops", ""]);
       if (stations === minSt) badges.push(["Fewest stops", ""]);
       const badgeHtml = badges.map(([t, cls]) => `<span class="ls-badge ${cls}">${t}</span>`).join("");
-      return `<tr class="${name === active ? "ls-active" : ""}">
-        <td class="ls-name"><span class="ls-name-in"><span class="ls-dot" style="background:${c}"></span>${escapeHtml(name)}${name === active ? ' <span class="ls-next">next run</span>' : ""}${badgeHtml}</span></td>
+      return `<tr class="${name === active ? "ls-active" : ""}" data-line="${escapeHtml(name)}">
+        <td class="ls-name"><button type="button" class="ls-row-btn" aria-expanded="false"><span class="ls-caret" aria-hidden="true">▸</span><span class="ls-name-in"><span class="ls-dot" style="background:${c}"></span>${escapeHtml(name)}${name === active ? ' <span class="ls-next">next run</span>' : ""}${badgeHtml}</span></button></td>
         <td>${fmtKm(km, 1)}</td>
         <td>${stations}</td>
         <td>${fmtTime(km * 6.5)}</td>
@@ -1669,12 +1674,53 @@
         <td>${fmtTime(km * WALK_MIN_PER_KM)}</td>
       </tr>`;
     }).join("");
+    if (lsMap) { lsMap.remove(); lsMap = null; } // drop any open mini-map before re-render
     el.innerHTML = `
       <table class="ls-table">
         <thead><tr><th>Line</th><th>Length</th><th>Stops</th><th>Run</th><th>Cycle</th><th>Walk</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
-      <p class="ls-foot">Run at a steady 6:30/km, cycle at ~15 km/h, walk at ~5 km/h, end to end. Longest = toughest tick; little Waterloo &amp; City is the gentlest.</p>`;
+      <p class="ls-foot">Tap a line to see its run route on a map. Run at a steady 6:30/km, cycle at ~15 km/h, walk at ~5 km/h, end to end. Longest = toughest tick; little Waterloo &amp; City is the gentlest.</p>`;
+    const tbody = el.querySelector("tbody");
+    if (tbody) tbody.addEventListener("click", (e) => {
+      const btn = e.target.closest(".ls-row-btn");
+      if (btn) toggleLineDetail(btn);
+    });
+  }
+
+  // "Line by line" row expansion: show a selected line's run route on a mini-map.
+  let lsMap = null; // the single open mini-map (accordion — one line at a time)
+  function toggleLineDetail(btn) {
+    const tr = btn.closest("tr");
+    const tbody = tr.parentNode;
+    const wasOpen = tr.classList.contains("ls-open");
+    if (lsMap) { lsMap.remove(); lsMap = null; }
+    tbody.querySelectorAll(".ls-detail-row").forEach((r) => r.remove());
+    tbody.querySelectorAll(".ls-open").forEach((r) => {
+      r.classList.remove("ls-open");
+      const b = r.querySelector(".ls-row-btn"); if (b) b.setAttribute("aria-expanded", "false");
+    });
+    if (wasOpen) return; // a second click on the open row just closes it
+    tr.classList.add("ls-open");
+    btn.setAttribute("aria-expanded", "true");
+    const detail = document.createElement("tr");
+    detail.className = "ls-detail-row";
+    detail.innerHTML = `<td colspan="6"><div class="ls-detail-inner"><div class="ls-map"></div></div></td>`;
+    tr.after(detail);
+    lineRouteMap(detail.querySelector(".ls-map"), tr.dataset.line);
+  }
+  async function lineRouteMap(mapDiv, name) {
+    if (!mapDiv) return;
+    if (typeof L === "undefined") { mapDiv.innerHTML = '<p class="diagram-empty">The map couldn\'t load.</p>'; return; }
+    const net = await loadNetwork();
+    const id = Object.keys(net).find((k) => net[k].name === name);
+    if (!id) { mapDiv.innerHTML = '<p class="diagram-empty">No route mapped for this line yet.</p>'; return; }
+    if (!mapDiv.isConnected) return; // collapsed again before the network finished loading
+    const map = createSiteMap(mapDiv);
+    lsMap = map;
+    const route = await drawRunRoute(map, net, id, {});
+    if (route && route.length) map.fitBounds(L.latLngBounds(route), { padding: [18, 18] });
+    setTimeout(() => { if (lsMap === map) map.invalidateSize(); }, 60);
   }
 
   // --- Render: Line collector (two directions per line, saved per-visitor) --
@@ -2163,6 +2209,38 @@
     } catch (_) { routeGpxCache[slug] = null; }
     return routeGpxCache[slug];
   }
+
+  // Draw a line's run route onto a Leaflet map: a soft base + animated flow line,
+  // start/finish markers and direction-of-travel arrows. Prefers the real pavement
+  // route (routes/<id>.gpx), falling back to straight station hops. Returns the
+  // drawn latlngs (for fitBounds), or null if the line has no usable route.
+  async function drawRunRoute(map, net, id, opts = {}) {
+    const line = net[id];
+    if (!line) return null;
+    const wp = rtStations(net, line.name);
+    if (!wp || wp.length < 2) return null;
+    const wl = wp.map((s) => [s[1], s[2]]);
+    const gpxLine = await loadRouteGpx(id);
+    if (opts.stale && opts.stale()) return null;
+    const routeLine = gpxLine && gpxLine.length > 1 ? gpxLine : wl;
+    L.polyline(routeLine, { color: line.colour, weight: 6, opacity: 0.3, lineJoin: "round", lineCap: "round" }).addTo(map);
+    L.polyline(routeLine, flowLineOptions(line.colour, { weight: 4 })).addTo(map);
+    L.circleMarker(wl[0], { radius: 6, color: "#fff", weight: 2, fillColor: line.colour, fillOpacity: 1 })
+      .bindTooltip("Start · " + escapeHtml(wp[0][0]), { direction: "top" }).addTo(map);
+    L.marker(wl[wl.length - 1], { icon: L.divIcon({ className: "route-finish", html: "◉", iconSize: [15, 15], iconAnchor: [7, 7] }) })
+      .bindTooltip("Finish · " + escapeHtml(wp[wp.length - 1][0]), { direction: "top" }).addTo(map);
+    // Direction-of-travel arrows spaced along the route (point start → finish).
+    const step = Math.max(1, Math.floor(wp.length / 9));
+    for (let i = step; i < wp.length - 1; i += step) {
+      const deg = bearingDeg(wp[i], wp[i + 1]);
+      L.marker(wl[i], { interactive: false, keyboard: false, icon: L.divIcon({
+        className: "route-arrow",
+        html: `<span style="transform:rotate(${Math.round(deg - 90)}deg);color:${line.colour}">➤</span>`,
+        iconSize: [22, 22], iconAnchor: [11, 11],
+      }) }).addTo(map);
+    }
+    return routeLine;
+  }
   const tmMap = { map: null };
   let geoRefresh = null; // set by renderGeoMap; re-draws station labels (e.g. after a unit switch)
 
@@ -2341,33 +2419,10 @@
       return { color: f.properties.colour, weight: on ? 5 : 3, opacity: on ? 1 : (hi ? 0.3 : 0.9), lineJoin: "round", lineCap: "round" }; } }).addTo(map);
     lineLayer.eachLayer((l) => { if (hi && l.feature.properties.line === hi) l.bringToFront(); });
 
-    // Run route for the highlighted line: the real pavement route from the
-    // generated GPX (routes/<slug>.gpx), drawn as a soft base + animated flow
-    // line. Station waypoints (from any line) drive the start/finish markers and
-    // direction arrows. Falls back to straight station hops if the GPX is missing.
-    const wp = hi ? rtStations(net, net[hi].name) : null;
-    if (wp && wp.length > 1) {
-      const wl = wp.map((s) => [s[1], s[2]]);
-      const gpxLine = await loadRouteGpx(hi);
-      if (stale && stale()) return;
-      const routeLine = gpxLine && gpxLine.length > 1 ? gpxLine : wl;
-      L.polyline(routeLine, { color: net[hi].colour, weight: 6, opacity: 0.3, lineJoin: "round", lineCap: "round" }).addTo(map);
-      L.polyline(routeLine, flowLineOptions(net[hi].colour, { weight: 4 })).addTo(map);
-      L.circleMarker(wl[0], { radius: 6, color: "#fff", weight: 2, fillColor: net[hi].colour, fillOpacity: 1 })
-        .bindTooltip("Start · " + escapeHtml(wp[0][0]), { direction: "top" }).addTo(map);
-      L.marker(wl[wl.length - 1], { icon: L.divIcon({ className: "route-finish", html: "◉", iconSize: [15, 15], iconAnchor: [7, 7] }) })
-        .bindTooltip("Finish · " + escapeHtml(wp[wp.length - 1][0]), { direction: "top" }).addTo(map);
-      // Direction-of-travel arrows spaced along the route (point start → finish).
-      const step = Math.max(1, Math.floor(wp.length / 9));
-      for (let i = step; i < wp.length - 1; i += step) {
-        const deg = bearingDeg(wp[i], wp[i + 1]);
-        L.marker(wl[i], { interactive: false, keyboard: false, icon: L.divIcon({
-          className: "route-arrow",
-          html: `<span style="transform:rotate(${Math.round(deg - 90)}deg);color:${net[hi].colour}">➤</span>`,
-          iconSize: [22, 22], iconAnchor: [11, 11],
-        }) }).addTo(map);
-      }
-    }
+    // Run route for the highlighted line — the real pavement route drawn as a
+    // soft base + animated flow line, with start/finish markers and arrows.
+    if (hi) await drawRunRoute(map, net, hi, { stale });
+    if (stale && stale()) return;
 
     // Station lookup: dedup by id, count lines per station (interchange), colour.
     const count = {}, coordById = {}, colourById = {};
