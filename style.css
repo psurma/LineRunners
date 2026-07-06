@@ -870,7 +870,10 @@ tr.ls-open .ls-caret { transform: rotate(90deg); }
 /* Download-GPX links (line-by-line, planner, journey board, network map) */
 .gpx-dl { display: inline-block; font-size: 12px; font-weight: 700; color: #0019a8; background: #eef1ff; border: 1px solid #cdd6ff; border-radius: 999px; padding: 2px 10px; text-decoration: none; white-space: nowrap; cursor: pointer; }
 .gpx-dl:hover { background: #dfe5ff; }
-.ls-gpx-row { margin: 0 0 10px; }
+.ls-gpx-row { margin: 0 0 10px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.ls-reverse { font: 700 12px Inter, sans-serif; color: #0019a8; background: #fff; border: 1px solid #cdd6ff; border-radius: 999px; padding: 3px 12px; cursor: pointer; white-space: nowrap; transition: background 0.12s, border-color 0.12s; }
+.ls-reverse:hover { background: #eef1ff; border-color: #9fb0ff; }
+.ls-reverse.on { background: #0019a8; border-color: #0019a8; color: #fff; }
 .jb-gpx { vertical-align: middle; margin-left: 8px; font-size: 11px; padding: 1px 9px; }
 .plan-gpx-row { margin: 14px 0 0; color: var(--muted); font-size: 14px; }
 .geo-gpx { flex: none; }

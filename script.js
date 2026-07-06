@@ -1160,6 +1160,15 @@
     const label = lineName || slug;
     return `<a class="gpx-dl${extraClass ? " " + extraClass : ""}" href="routes/${slug}.gpx" download="TubeRun-${slug}.gpx" title="Download the ${escapeHtml(label)} line's pavement route as a GPX file for your watch">↓ GPX</a>`;
   }
+  // Flip a GPX file's direction: reverse each track segment's trackpoint order
+  // (so a watch follows it the other way). Waypoint POIs are order-independent,
+  // so they're left as-is; every trkpt attribute (incl. elevation) is preserved.
+  function reverseGpxText(text) {
+    return text.replace(/<trkseg>[\s\S]*?<\/trkseg>/g, (seg) => {
+      const pts = seg.match(/<trkpt\b(?:[^>]*\/>|[^>]*>[\s\S]*?<\/trkpt>)/g) || [];
+      return "<trkseg>\n" + pts.reverse().map((p) => "      " + p).join("\n") + "\n    </trkseg>";
+    });
+  }
 
   // --- Render: Live now banner ------------------------------------------
   function renderLive() {
@@ -1762,13 +1771,17 @@
       { segs: [[0, 0], [1, 0], [2, 0], [3, 0]] },              // West Ruislip – Epping
       { segs: [[6, 0], [1, 0], [2, 0], [3, 0]] },              // Ealing Broadway – Epping
       { via: "Newbury Park", segs: [[0, 0], [1, 0], [4, 0]] }, // West Ruislip – Hainault
+      { via: "Woodford", segs: [[0, 0], [1, 0], [2, 0], [5, 0]] }, // West Ruislip – Hainault (loop)
       { via: "Newbury Park", segs: [[6, 0], [1, 0], [4, 0]] }, // Ealing Broadway – Hainault
+      { via: "Woodford", segs: [[6, 0], [1, 0], [2, 0], [5, 0]] }, // Ealing Broadway – Hainault (loop)
     ],
     district: [
       { segs: [[2, 1], [1, 1], [0, 1]] },   // Upminster – Ealing Broadway
       { segs: [[2, 1], [1, 1], [3, 1]] },   // Upminster – Richmond
       { segs: [[2, 1], [4, 1]] },           // Upminster – Wimbledon
       { segs: [[5, 1], [4, 1]] },           // Edgware Road – Wimbledon
+      { segs: [[5, 1], [1, 1], [0, 1]] },   // Edgware Road – Ealing Broadway
+      { segs: [[5, 1], [1, 1], [3, 1]] },   // Edgware Road – Richmond
     ],
     metropolitan: [
       { segs: [[7, 0], [1, 0], [2, 0], [3, 0], [6, 0], [4, 0]] }, // Chesham – Aldgate
@@ -1777,17 +1790,36 @@
       { segs: [[9, 0], [2, 0], [3, 0], [6, 0], [4, 0]] },         // Watford – Aldgate
     ],
     northern: [
-      { via: "Bank", segs: [[0, 0], [5, 0], [6, 0], [7, 0]] },
-      { via: "Charing Cross", segs: [[0, 0], [1, 0], [2, 0], [7, 0]] },
-      { via: "Bank", segs: [[0, 0], [5, 0], [6, 0], [3, 0], [4, 0]] },
-      { via: "Charing Cross", segs: [[0, 0], [1, 0], [2, 0], [3, 0], [4, 0]] },
-      { via: "Bank", segs: [[0, 0], [5, 0], [6, 0], [3, 0], [8, 0]] },
+      { via: "Bank", segs: [[0, 0], [5, 0], [6, 0], [7, 0]] },          // Morden – Edgware
+      { via: "Charing Cross", segs: [[0, 0], [1, 0], [2, 0], [7, 0]] }, // Morden – Edgware
+      { via: "Bank", segs: [[0, 0], [5, 0], [6, 0], [3, 0], [4, 0]] },  // Morden – High Barnet
+      { via: "Charing Cross", segs: [[0, 0], [1, 0], [2, 0], [3, 0], [4, 0]] }, // Morden – High Barnet
+      { via: "Bank", segs: [[0, 0], [5, 0], [6, 0], [3, 0], [8, 0]] },  // Morden – Mill Hill East
+      { via: "Charing Cross", segs: [[0, 0], [1, 0], [2, 0], [3, 0], [8, 0]] }, // Morden – Mill Hill East
+      { via: "Charing Cross", segs: [[9, 0], [1, 0], [2, 0], [7, 0]] }, // Battersea Power – Edgware
+      { via: "Charing Cross", segs: [[9, 0], [1, 0], [2, 0], [3, 0], [4, 0]] }, // Battersea Power – High Barnet
+      { via: "Charing Cross", segs: [[9, 0], [1, 0], [2, 0], [3, 0], [8, 0]] }, // Battersea Power – Mill Hill East
     ],
     piccadilly: [
       { segs: [[1, 1], [0, 1]] },             // Cockfosters – Uxbridge
       { segs: [[1, 1], [3, 1]] },             // Cockfosters – Heathrow T2 & 3
       { segs: [[1, 1], [3, 1], [2, 1]] },     // Cockfosters – Heathrow T4
       { segs: [[1, 1], [3, 1], [4, 1]] },     // Cockfosters – Heathrow T5
+    ],
+    mildmay: [
+      { segs: [[0, 0], [1, 0]] },   // Stratford – Richmond
+      { segs: [[0, 0], [2, 0]] },   // Stratford – Clapham Junction
+    ],
+    windrush: [
+      { segs: [[0, 0], [1, 0], [2, 0]] },   // Highbury & Islington – West Croydon
+      { segs: [[0, 0], [1, 0], [4, 0]] },   // Highbury & Islington – Crystal Palace
+      { segs: [[0, 0], [3, 0]] },           // Highbury & Islington – Clapham Junction
+      { segs: [[0, 0], [5, 0]] },           // Highbury & Islington – New Cross
+    ],
+    weaver: [
+      { segs: [[0, 0], [5, 0]] },                   // Liverpool Street – Chingford
+      { segs: [[0, 0], [1, 0], [2, 0], [3, 0]] },   // Liverpool Street – Cheshunt
+      { segs: [[0, 0], [1, 0], [2, 0], [4, 0]] },   // Liverpool Street – Enfield Town
     ],
   };
   function assembleVariant(net, id, variant) {
@@ -1880,7 +1912,8 @@
     const detail = document.createElement("tr");
     detail.className = "ls-detail-row";
     const gpx = gpxDownloadHtml(lineSlug(tr.dataset.line), tr.dataset.line, "ls-gpx");
-    detail.innerHTML = `<td colspan="6"><div class="ls-detail-inner">${gpx ? `<div class="ls-gpx-row">${gpx}</div>` : ""}<div class="ls-map"></div></div></td>`;
+    const reverseBtn = gpx ? `<button type="button" class="ls-reverse" aria-pressed="false" title="Reverse the route direction — and download the GPX the other way round">⇄ Reverse</button>` : "";
+    detail.innerHTML = `<td colspan="6"><div class="ls-detail-inner">${gpx ? `<div class="ls-gpx-row">${gpx}${reverseBtn}</div>` : ""}<div class="ls-map"></div></div></td>`;
     tr.after(detail);
     lineRouteMap(detail.querySelector(".ls-map"), tr.dataset.line, tr);
   }
@@ -1914,25 +1947,55 @@
     // Lines with multiple paths get a dropdown — the default route plus every
     // variant both ways; picking one redraws the map and updates the row's figures.
     const options = buildVariantOptions(net, id);
+    const detailInner = mapDiv.parentNode;
+    const reverseBtn = detailInner.querySelector(".ls-reverse");
+    const gpxLink = detailInner.querySelector(".ls-gpx");
+    let reversed = false, curIdx = 0, gpxText = null, revUrl = null;
     if (options) {
       const sel = document.createElement("select");
       sel.className = "ls-variant";
       sel.setAttribute("aria-label", "Choose a route and direction for the " + name + " line");
       sel.innerHTML = groupedOptionsHtml(options, (o) => o.pair, 0);
-      sel.addEventListener("change", () => drawVariant(+sel.value));
+      sel.addEventListener("change", () => { setReversed(false); drawVariant(+sel.value); syncGpxDir(); });
       mapDiv.parentNode.insertBefore(sel, mapDiv);
     }
     const map = createSiteMap(mapDiv);
     lsMap = map;
     let routeGrp = null;
+    // Keep the GPX download in step with the shown direction: forward is the
+    // static file; reversed is a client-built blob of the same file flipped.
+    async function syncGpxDir() {
+      if (!gpxLink) return;
+      const slug = lineSlug(name);
+      if (!reversed) {
+        if (revUrl) { URL.revokeObjectURL(revUrl); revUrl = null; }
+        gpxLink.href = `routes/${slug}.gpx`;
+        gpxLink.setAttribute("download", `TubeRun-${slug}.gpx`);
+        return;
+      }
+      if (gpxText === null) { try { gpxText = await (await fetch(`routes/${slug}.gpx`)).text(); } catch (_) { gpxText = ""; } }
+      if (!gpxText) return;
+      if (revUrl) URL.revokeObjectURL(revUrl);
+      revUrl = URL.createObjectURL(new Blob([reverseGpxText(gpxText)], { type: "application/gpx+xml" }));
+      gpxLink.href = revUrl;
+      gpxLink.setAttribute("download", `TubeRun-${slug}-reverse.gpx`);
+    }
+    function setReversed(v) {
+      reversed = v;
+      if (reverseBtn) { reverseBtn.setAttribute("aria-pressed", String(reversed)); reverseBtn.classList.toggle("on", reversed); }
+    }
     async function drawVariant(idx) {
+      curIdx = idx;
       if (routeGrp) { routeGrp.remove(); routeGrp = null; }
       const opt = options ? options[idx] : null;
-      const r = await drawRunRoute(map, net, id, opt && !opt.gpx ? { waypoints: opt.wp } : {});
+      const dOpts = opt && !opt.gpx ? { waypoints: opt.wp } : {};
+      if (reversed) dOpts.reverse = true;
+      const r = await drawRunRoute(map, net, id, dOpts);
       routeGrp = r && r.group;
       if (r && r.latlngs.length) map.fitBounds(L.latLngBounds(r.latlngs), { padding: [18, 18] });
       if (opt && opt.wp) setRowStats(tr, waypointsKm(opt.wp) * ROAD_FACTOR, opt.wp.length); // reflect the route in the row
     }
+    if (reverseBtn) reverseBtn.addEventListener("click", () => { setReversed(!reversed); drawVariant(curIdx); syncGpxDir(); });
     await drawVariant(0);
     setTimeout(() => { if (lsMap === map) map.invalidateSize(); }, 60);
   }
@@ -2434,15 +2497,17 @@
   async function drawRunRoute(map, net, id, opts = {}) {
     const line = net[id];
     if (!line) return null;
-    const wp = opts.waypoints || rtStations(net, line.name);
+    let wp = opts.waypoints || rtStations(net, line.name);
     if (!wp || wp.length < 2) return null;
+    if (opts.reverse) wp = [...wp].reverse(); // draw the route the other way (swaps start/finish, flips arrows)
     const wl = wp.map((s) => [s[1], s[2]]);
     // Explicit variant waypoints draw as station-to-station hops; the default
     // whole-line route prefers the real pavement GPX (track 0, the main route).
     const gpxSegs = opts.waypoints ? null : await loadRouteGpx(id);
     if (opts.stale && opts.stale()) return null;
     const gpxLine = gpxSegs && gpxSegs[0];
-    const routeLine = gpxLine && gpxLine.length > 1 ? gpxLine : wl;
+    let routeLine = gpxLine && gpxLine.length > 1 ? gpxLine : wl;
+    if (opts.reverse && routeLine === gpxLine) routeLine = [...gpxLine].reverse();
     const grp = L.layerGroup().addTo(map);
     L.polyline(routeLine, { color: line.colour, weight: 6, opacity: 0.3, lineJoin: "round", lineCap: "round" }).addTo(grp);
     L.polyline(routeLine, flowLineOptions(line.colour, { weight: 4 })).addTo(grp);
