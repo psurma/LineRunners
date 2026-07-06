@@ -1321,8 +1321,10 @@
     // Click any marker to recentre the map on that stop (zooming in if far out)
     // and name it in a popup. `safeName` must already be HTML-escaped.
     const centerOn = (lat, lon, safeName) => {
+      // autoPan off so the popup doesn't fight setView's centring (it would nudge
+      // the stop to the edge instead, especially when zooming in from a wide view).
       map.setView([lat, lon], Math.max(map.getZoom(), 16), { animate: true });
-      L.popup({ offset: [0, -2] }).setLatLng([lat, lon]).setContent(safeName).openOn(map);
+      L.popup({ offset: [0, -2], autoPan: false }).setLatLng([lat, lon]).setContent(safeName).openOn(map);
     };
     // Optional dot at every stop along the route (e.g. each bus stop), tube-map style.
     if (marks.stops) marks.stops.forEach((s) => {
@@ -1623,7 +1625,7 @@
         const s = wp[+btn.dataset.i];
         if (!s || !busMapObj.map) return;
         busMapObj.map.setView([s[1], s[2]], 16, { animate: true });
-        L.popup({ offset: [0, -2] }).setLatLng([s[1], s[2]]).setContent(escapeHtml(s[0])).openOn(busMapObj.map);
+        L.popup({ offset: [0, -2], autoPan: false }).setLatLng([s[1], s[2]]).setContent(escapeHtml(s[0])).openOn(busMapObj.map);
         if (window.matchMedia("(max-width: 860px)").matches)
           document.getElementById("busMap").scrollIntoView({ behavior: "smooth", block: "center" });
       }));
