@@ -73,6 +73,9 @@
     "Hammersmith & City": "#F3A9BB", Jubilee: "#A0A5A9", Metropolitan: "#9B0056",
     Northern: "#000000", Piccadilly: "#003688", Victoria: "#0098D4",
     "Waterloo & City": "#95CDBA", Elizabeth: "#6950A1", Overground: "#EE7C0E", DLR: "#00A4A7",
+    // London Overground's 6 named lines (TfL Colour Standard, Issue 10).
+    Lioness: "#FAA61A", Mildmay: "#0077AD", Windrush: "#ED1B00",
+    Weaver: "#823A62", Suffragette: "#5BBD72", Liberty: "#5D6061",
   };
   // Colours + labels for non-tube run types.
   const TYPE_STYLE = {
@@ -1148,7 +1151,8 @@
 
   // Downloadable pavement GPX per Tube line (generated into routes/<slug>.gpx and
   // also used to draw the maps). Accepts a line slug (network id) or a line name.
-  const GPX_LINES = new Set(["bakerloo", "central", "circle", "district", "hammersmith-city", "jubilee", "metropolitan", "northern", "piccadilly", "victoria", "waterloo-city"]);
+  const GPX_LINES = new Set(["bakerloo", "central", "circle", "district", "hammersmith-city", "jubilee", "metropolitan", "northern", "piccadilly", "victoria", "waterloo-city",
+    "lioness", "mildmay", "windrush", "weaver", "suffragette", "liberty"]);
   function lineSlug(name) { return String(name || "").toLowerCase().replace(/\s*&\s*/g, "-").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""); }
   function gpxDownloadHtml(slugOrName, lineName, extraClass) {
     const slug = GPX_LINES.has(slugOrName) ? slugOrName : lineSlug(slugOrName);
@@ -1681,6 +1685,9 @@
     ["Bakerloo", 23.2, 25], ["Central", 74, 49], ["Circle", 27, 36], ["District", 64, 60],
     ["Hammersmith & City", 25.5, 29], ["Jubilee", 36.2, 27], ["Metropolitan", 66.7, 34],
     ["Northern", 58, 52], ["Piccadilly", 71, 53], ["Victoria", 21, 16], ["Waterloo & City", 2.5, 2],
+    // London Overground — km + stops of each line's main route (branches also shown on the map).
+    ["Lioness", 34.2, 19], ["Mildmay", 24.4, 18], ["Windrush", 11.5, 12],
+    ["Weaver", 14.1, 7], ["Suffragette", 29.5, 13], ["Liberty", 6.6, 3],
   ];
 
   // Sortable "Line by line" columns. Run/Cycle/Walk are all distance × a constant,
