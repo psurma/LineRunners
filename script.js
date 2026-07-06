@@ -2429,8 +2429,9 @@
   // route (routes/<id>.gpx), falling back to straight station hops. Returns the
   // drawn latlngs (for fitBounds), or null if the line has no usable route.
   async function drawRunRoute(map, net, id, opts = {}) {
-    const line = net[id];
-    if (!line) return null;
+    const line = net[id] || null;
+    if (!line && !opts.waypoints) return null;
+    const col = opts.colour || (line && line.colour) || "#0019a8";
     const wp = opts.waypoints || rtStations(net, line.name);
     if (!wp || wp.length < 2) return null;
     const wl = wp.map((s) => [s[1], s[2]]);
@@ -2440,9 +2441,9 @@
     if (opts.stale && opts.stale()) return null;
     const routeLine = gpxLine && gpxLine.length > 1 ? gpxLine : wl;
     const grp = L.layerGroup().addTo(map);
-    L.polyline(routeLine, { color: line.colour, weight: 6, opacity: 0.3, lineJoin: "round", lineCap: "round" }).addTo(grp);
-    L.polyline(routeLine, flowLineOptions(line.colour, { weight: 4 })).addTo(grp);
-    L.circleMarker(wl[0], { radius: 6, color: "#fff", weight: 2, fillColor: line.colour, fillOpacity: 1 })
+    L.polyline(routeLine, { color: col, weight: 6, opacity: 0.3, lineJoin: "round", lineCap: "round" }).addTo(grp);
+    L.polyline(routeLine, flowLineOptions(col, { weight: 4 })).addTo(grp);
+    L.circleMarker(wl[0], { radius: 6, color: "#fff", weight: 2, fillColor: col, fillOpacity: 1 })
       .bindTooltip("Start · " + escapeHtml(wp[0][0]), { direction: "top" }).addTo(grp);
     L.marker(wl[wl.length - 1], { icon: L.divIcon({ className: "route-finish", html: "◉", iconSize: [15, 15], iconAnchor: [7, 7] }) })
       .bindTooltip("Finish · " + escapeHtml(wp[wp.length - 1][0]), { direction: "top" }).addTo(grp);
@@ -2452,7 +2453,7 @@
       const deg = bearingDeg(wp[i], wp[i + 1]);
       L.marker(wl[i], { interactive: false, keyboard: false, icon: L.divIcon({
         className: "route-arrow",
-        html: `<span style="transform:rotate(${Math.round(deg - 90)}deg);color:${line.colour}">➤</span>`,
+        html: `<span style="transform:rotate(${Math.round(deg - 90)}deg);color:${col}">➤</span>`,
         iconSize: [22, 22], iconAnchor: [11, 11],
       }) }).addTo(grp);
     }
@@ -2460,6 +2461,7 @@
   }
   const tmMap = { map: null };
   let geoRefresh = null; // set by renderGeoMap; re-draws station labels (e.g. after a unit switch)
+  let journeyRefresh = null; // set by setupJourneyPlanner; re-renders the A→B result at the new unit
 
   // Shared openly-licensed basemap (CARTO Voyager, no key) for our Leaflet maps.
   function cartoBasemap() {
@@ -2759,6 +2761,145 @@
     return null;
   }
 
+  // --- A→B journey planner: shortest running route between any two stations ---
+  // One undirected graph over the whole network. Nodes are keyed by a normalized
+  // station name, so an interchange shared by several lines — including tube ↔
+  // Overground, which use different ids — collapses to a single node: changing
+  // lines there is free, exactly like a real journey. Edge weight is the
+  // on-street running distance between adjacent stations (crow-flies ×
+  // ROAD_FACTOR), matching every other estimate on the site.
+  function buildStationGraph(net) {
+    const norm = (s) => String(s).toLowerCase().replace(/&/g, "and").replace(/[^a-z0-9]/g, "");
+    const nodes = {}, adj = {};
+    const node = (st) => {
+      const k = norm(st.n);
+      if (!nodes[k]) { nodes[k] = { name: st.n, lat: st.lat, lon: st.lon }; adj[k] = new Map(); }
+      return k;
+    };
+    for (const id in net) {
+      for (const branch of net[id].branches || []) {
+        let prev = null;
+        for (const sid of branch) {
+          const st = net[id].stations[sid];
+          if (!st) { prev = null; continue; }
+          const k = node(st);
+          if (prev && prev.k !== k) {
+            const w = haversineKm([0, prev.lat, prev.lon], [0, st.lat, st.lon]) * ROAD_FACTOR;
+            if (!adj[k].has(prev.k) || adj[k].get(prev.k) > w) { adj[k].set(prev.k, w); adj[prev.k].set(k, w); }
+          }
+          prev = { k, lat: st.lat, lon: st.lon };
+        }
+      }
+    }
+    return { nodes, adj, norm };
+  }
+  // Dijkstra over the station graph (a few hundred nodes — a sorted-array queue
+  // is ample). Returns { path: [nodeKey…], km } or null if either end is unknown
+  // or the two sit on disconnected parts of the network.
+  function shortestPath(graph, fromName, toName) {
+    const { adj, norm } = graph;
+    const start = norm(fromName), end = norm(toName);
+    if (!adj[start] || !adj[end]) return null;
+    if (start === end) return { path: [start], km: 0 };
+    const dist = { [start]: 0 }, prev = {}, done = new Set();
+    const q = [[0, start]];
+    while (q.length) {
+      q.sort((x, y) => x[0] - y[0]);
+      const [d, u] = q.shift();
+      if (done.has(u)) continue;
+      done.add(u);
+      if (u === end) break;
+      for (const [v, w] of adj[u]) {
+        const nd = d + w;
+        if (dist[v] === undefined || nd < dist[v]) { dist[v] = nd; prev[v] = u; q.push([nd, v]); }
+      }
+    }
+    if (dist[end] === undefined) return null;
+    const path = [];
+    for (let cur = end; cur !== undefined; cur = prev[cur]) path.unshift(cur);
+    return { path, km: dist[end] };
+  }
+  // Distance/time summary for an A→B route (respects the km/mi toggle).
+  function journeyResultHtml(wp, km) {
+    const from = wp[0][0], to = wp[wp.length - 1][0], mid = wp.slice(1, -1);
+    const via = mid.slice(0, 3).map((s) => escapeHtml(s[0])).join(" · ");
+    const viaLine = mid.length
+      ? `<p class="jr-via"><span class="jr-via-k">via</span> ${via}${mid.length > 3 ? ` <span class="jr-more">+${mid.length - 3} more</span>` : ""}</p>`
+      : "";
+    return `
+      <div class="jr-head"><strong>${escapeHtml(from)}</strong><span class="jr-arrow">→</span><strong>${escapeHtml(to)}</strong></div>
+      <div class="cr-main"><span class="cr-km">${fmtKm(km, 1)}</span> <span class="jr-stops">${wp.length} stops</span></div>
+      <div class="cr-times">
+        <span class="cr-run">🏃 run ~${fmtTime(km * rtPace)}</span>
+        <span class="cr-cycle">🚴 cycle ~${fmtTime(km * CYCLE_MIN_PER_KM)}</span>
+        <span class="cr-walk">🚶 walk ~${fmtTime(km * WALK_MIN_PER_KM)}</span>
+      </div>
+      ${viaLine}
+      <p class="jr-note">Shortest above-ground route, changing lines where they meet. Distance is on-street (crow-flies &times; 1.3).</p>`;
+  }
+  function setupJourneyPlanner() {
+    const fromEl = document.getElementById("abFrom");
+    const toEl = document.getElementById("abTo");
+    const dl = document.getElementById("abStations");
+    const goBtn = document.getElementById("abGo");
+    const swapBtn = document.getElementById("abSwap");
+    const mapEl = document.getElementById("abMap");
+    const result = document.getElementById("abResult");
+    if (!fromEl || !toEl || !mapEl || !result) return;
+    let graph = null, jMap = null, jLayer = null, last = null;
+
+    loadNetwork().catch(() => null).then((net) => {
+      if (!net) { result.innerHTML = `<p class="journey-hint">Couldn't load the network map — try refreshing.</p>`; return; }
+      graph = buildStationGraph(net);
+      const names = Object.values(graph.nodes).map((n) => n.name).sort((a, b) => a.localeCompare(b));
+      dl.innerHTML = names.map((n) => `<option value="${escapeHtml(n)}"></option>`).join("");
+    });
+
+    function ensureMap() {
+      if (jMap) return jMap;
+      jMap = createSiteMap(mapEl);
+      requestAnimationFrame(() => jMap.invalidateSize(false));
+      return jMap;
+    }
+    function render(res) {
+      last = res;
+      const wp = res.path.map((k) => { const n = graph.nodes[k]; return [n.name, n.lat, n.lon]; });
+      const map = ensureMap();
+      if (jLayer) { map.removeLayer(jLayer); jLayer = null; }
+      drawRunRoute(map, {}, null, { waypoints: wp, colour: "#0019a8" }).then((drawn) => {
+        if (!drawn) return;
+        jLayer = drawn.group;
+        map.fitBounds(L.latLngBounds(drawn.latlngs), { padding: [28, 28] });
+      });
+      result.innerHTML = journeyResultHtml(wp, res.km);
+    }
+    function plan() {
+      if (!graph) return;
+      const a = fromEl.value.trim(), b = toEl.value.trim();
+      if (!a || !b) { result.innerHTML = `<p class="journey-hint">Pick a start and a finish station to trace a route.</p>`; return; }
+      const res = shortestPath(graph, a, b);
+      if (!res || res.path.length < 2) {
+        const unknown = [a, b].filter((n) => !graph.adj[graph.norm(n)]);
+        result.innerHTML = unknown.length
+          ? `<p class="journey-hint">${unknown.map(escapeHtml).join(" and ")} ${unknown.length > 1 ? "aren't stations" : "isn't a station"} on the map — start typing and pick from the list.</p>`
+          : `<p class="journey-hint">Those two aren't connected on the running network. Try another pair.</p>`;
+        if (jLayer && jMap) { jMap.removeLayer(jLayer); jLayer = null; }
+        last = null;
+        return;
+      }
+      render(res);
+    }
+    if (goBtn) goBtn.addEventListener("click", plan);
+    [fromEl, toEl].forEach((el) => el.addEventListener("change", () => { if (fromEl.value.trim() && toEl.value.trim()) plan(); }));
+    if (swapBtn) swapBtn.addEventListener("click", () => {
+      const t = fromEl.value; fromEl.value = toEl.value; toEl.value = t;
+      if (fromEl.value.trim() && toEl.value.trim()) plan();
+    });
+    journeyRefresh = () => { if (last) render(last); };
+    result.innerHTML = `<p class="journey-hint">Pick a start and a finish station &mdash; we&rsquo;ll trace the shortest running route across the network, changing lines where they meet.</p>`;
+    ensureMap(); // show the London basemap straight away, ready to draw on
+  }
+
   function rtPaceLabel() { return `${fmtPace(rtPace)} /km · ${fmtPace(rtPace / MI_PER_KM)} /mi`; }
 
   // rtPace is the single source of truth for pace, shared by the planner
@@ -2897,6 +3038,7 @@
   setupPaceState();
   setupPlanner();
   setupBusRunner();
+  setupJourneyPlanner();
   renderLineCollector();
   renderGallery();
   wireSocials();
@@ -2959,6 +3101,7 @@
       renderLineCollector();
       refreshPlanner(); // tube calc or adventure escape-point distances, at the new unit
       if (typeof geoRefresh === "function") geoRefresh(); // live network-map labels
+      if (typeof journeyRefresh === "function") journeyRefresh(); // A→B planner result
       if (curMap === "running") loadMap();                // running-times table
     }));
   }

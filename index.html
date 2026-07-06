@@ -6,10 +6,10 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: https://*.basemaps.cartocdn.com https://api.os.uk; connect-src 'self' https://api.open-meteo.com https://api.tfl.gov.uk; object-src 'none'; base-uri 'self'" />
   <title>Tube Run &middot; Running London's Underground, above ground</title>
   <meta name="description" content="Tube Run is a London running group that runs above ground, tracing the Underground line by line, on the first Sunday of every month." />
-  <link rel="stylesheet" href="vendor/fonts/fonts.css?v=180" />
+  <link rel="stylesheet" href="vendor/fonts/fonts.css?v=182" />
   <link rel="stylesheet" href="vendor/leaflet/leaflet.css" />
   <script src="vendor/leaflet/leaflet.js" defer></script>
-  <link rel="stylesheet" href="style.css?v=180" />
+  <link rel="stylesheet" href="style.css?v=182" />
 </head>
 <body>
   <header class="site-header">
@@ -21,6 +21,7 @@
       <a href="#next">Next run</a>
       <a href="#plan">Plan</a>
       <a href="#network">Map</a>
+      <a href="#journey">Journey</a>
       <a href="#stats">Lines</a>
       <a href="#newhere">New here?</a>
       <a href="#schedule">Schedule</a>
@@ -149,6 +150,29 @@
       <h2 class="section-title">The whole network</h2>
       <p class="section-sub">A real map of London &mdash; streets, parks and the Thames &mdash; with the next run's line lit up over the top, running times at every stop and toilet stops marked. &#8984;/Ctrl + scroll to zoom, drag to pan, tap or hover a station. Plus walking-time, official-map and rail reference views.</p>
       <div id="tubeMap" class="tube-map"></div>
+    </section>
+
+    <!-- JOURNEY PLANNER (A -> B) -->
+    <section id="journey" class="journey">
+      <h2 class="section-title">Plan a run &mdash; anywhere to anywhere</h2>
+      <p class="section-sub">Pick any two stations on the network and we&rsquo;ll trace the shortest above-ground running route between them &mdash; hopping across lines wherever they meet, just like a Tube journey planner. Distance and rough run, cycle and walk times included.</p>
+      <div class="journey-controls">
+        <div class="field">
+          <label for="abFrom">From</label>
+          <input id="abFrom" class="ab-input" list="abStations" placeholder="e.g. Brixton" autocomplete="off" />
+        </div>
+        <button type="button" id="abSwap" class="ab-swap" title="Swap start and finish" aria-label="Swap start and finish">&#8645;</button>
+        <div class="field">
+          <label for="abTo">To</label>
+          <input id="abTo" class="ab-input" list="abStations" placeholder="e.g. Hampstead Heath" autocomplete="off" />
+        </div>
+        <button type="button" id="abGo" class="btn btn-primary">Find route</button>
+        <datalist id="abStations"></datalist>
+      </div>
+      <div class="journey-layout">
+        <div id="abMap" class="route-map"></div>
+        <div id="abResult" class="journey-result" aria-live="polite"></div>
+      </div>
     </section>
 
     <!-- LINE STATS -->
@@ -346,6 +370,6 @@
     <p class="fine">Not affiliated with Transport for London. Roundel-inspired branding used with affection, not endorsement.</p>
   </footer>
 
-  <script src="script.js?v=180" defer></script>
+  <script src="script.js?v=182" defer></script>
 </body>
 </html>
