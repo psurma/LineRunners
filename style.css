@@ -1050,6 +1050,9 @@ tr.ls-open .ls-caret { transform: rotate(90deg); }
 a.map-expand { width: 38px; height: 38px; line-height: 38px; font-size: 24px; font-weight: 700; color: var(--tfl-blue); display: flex; align-items: center; justify-content: center; }
 a.map-expand:hover { color: var(--tfl-red); }
 #routeMap:fullscreen, #busMap:fullscreen, #tmMap:fullscreen { width: 100%; height: 100%; border-radius: 0; }
+/* Full-window: a fixed overlay filling the viewport (keeps the browser chrome) */
+.leaflet-container.map-fullwindow { position: fixed !important; inset: 0 !important; z-index: 9999 !important; width: 100vw !important; height: 100vh !important; height: 100dvh !important; margin: 0 !important; border-radius: 0 !important; }
+body.map-fullwindow-open { overflow: hidden; }
 #routeMap:-webkit-full-screen, #busMap:-webkit-full-screen, #tmMap:-webkit-full-screen { width: 100%; height: 100%; border-radius: 0; }
 
 /* Collector distances + badge wall */

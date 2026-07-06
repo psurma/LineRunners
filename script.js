@@ -2680,6 +2680,44 @@
     document.addEventListener("webkitfullscreenchange", onChange);
   }
 
+  // Expand a map to fill the browser window — a fixed overlay that keeps the
+  // browser chrome (unlike the native full-screen control). Adds a top-right
+  // button and exits on Escape or a second click.
+  function addFullWindowControl(map) {
+    const container = map.getContainer();
+    const isOpen = () => container.classList.contains("map-fullwindow");
+    const setOpen = (open) => {
+      container.classList.toggle("map-fullwindow", open);
+      document.body.classList.toggle("map-fullwindow-open", open);
+      if (map._fwBtn) {
+        map._fwBtn.innerHTML = open ? "✕" : "⛶";
+        map._fwBtn.title = open ? "Exit full window" : "Fill the browser window";
+        map._fwBtn.setAttribute("aria-label", map._fwBtn.title);
+      }
+      setTimeout(() => map.invalidateSize(false), 80);
+    };
+    const ctl = L.control({ position: "topright" });
+    ctl.onAdd = () => {
+      const a = L.DomUtil.create("a", "leaflet-bar map-expand");
+      a.href = "#";
+      a.title = "Fill the browser window";
+      a.setAttribute("role", "button");
+      a.setAttribute("aria-label", "Fill the browser window");
+      a.innerHTML = "⛶";
+      L.DomEvent.on(a, "click", L.DomEvent.stop);
+      L.DomEvent.on(a, "click", () => setOpen(!isOpen()));
+      map._fwBtn = a;
+      return a;
+    };
+    ctl.addTo(map);
+    // Escape exits full-window; drop the listener once the map leaves the DOM.
+    const onKey = (e) => {
+      if (!document.body.contains(container)) { document.removeEventListener("keydown", onKey); return; }
+      if (e.key === "Escape" && isOpen()) setOpen(false);
+    };
+    document.addEventListener("keydown", onKey);
+  }
+
   // Small persistent hint on the geo map so mouse users know how to zoom.
   function addZoomHint(map) {
     const c = L.control({ position: "bottomleft" });
@@ -2698,6 +2736,7 @@
     modifierWheelZoom(map);
     observeMapSize(map);
     if (opts.zoomHint) addZoomHint(map);
+    addFullWindowControl(map);
     addFullscreenControl(map);
     return map;
   }
