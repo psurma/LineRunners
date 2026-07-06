@@ -1053,6 +1053,9 @@ a.map-expand:hover { color: var(--tfl-red); }
 /* Full-window: a fixed overlay filling the viewport (keeps the browser chrome) */
 .leaflet-container.map-fullwindow { position: fixed !important; inset: 0 !important; z-index: 9999 !important; width: 100vw !important; height: 100vh !important; height: 100dvh !important; margin: 0 !important; border-radius: 0 !important; }
 body.map-fullwindow-open { overflow: hidden; }
+/* Hide the nav while a map fills the window, so it can't be clicked to navigate
+   away and leave the fixed map overlaying a different section. */
+body.map-fullwindow-open .site-header { display: none !important; }
 #routeMap:-webkit-full-screen, #busMap:-webkit-full-screen, #tmMap:-webkit-full-screen { width: 100%; height: 100%; border-radius: 0; }
 
 /* Collector distances + badge wall */
