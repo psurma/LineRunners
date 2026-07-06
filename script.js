@@ -423,6 +423,11 @@
     const total = Math.round(mins), h = Math.floor(total / 60), m = total % 60;
     return h ? `${h}h ${m}m` : `${m} min`;
   }
+  // The run/cycle/walk time-estimate row, shared by the distance planner, bus
+  // tracer and A→B journey planner. paceKm defaults to the site-wide run pace.
+  function timesRowHtml(km, paceKm = rtPace) {
+    return `<div class="cr-times"><span class="cr-run">🏃 run ~${fmtTime(km * paceKm)}</span> <span class="cr-cycle">🚴 cycle ~${fmtTime(km * CYCLE_MIN_PER_KM)}</span> <span class="cr-walk">🚶 walk ~${fmtTime(km * WALK_MIN_PER_KM)}</span></div>`;
+  }
 
   // Overall run direction as one of the four cardinals (Northbound/Eastbound/…),
   // start → finish. Compares north/south vs east/west travel and picks the larger.
@@ -986,8 +991,6 @@
     if (a > b) [a, b] = [b, a];
     const km = legDistanceKm(pts, a, b);
     const paceKm = rtPace;
-    const runMins = km * paceKm;          // running time at the chosen pace
-    const walkMins = km * WALK_MIN_PER_KM; // walking time at ~5 km/h
     const stops = Math.max(0, b - a - 1);
 
     // Expected arrival clock time: running time from the route's actual start
@@ -1004,11 +1007,7 @@
     const result = document.getElementById("calcResult");
     result.innerHTML = `
       <div class="cr-main"><span class="cr-km">${dist}</span></div>
-      <div class="cr-times">
-        <span class="cr-run">🏃 run ~${fmtTime(runMins)}</span>
-        <span class="cr-cycle">🚴 cycle ~${fmtTime(km * CYCLE_MIN_PER_KM)}</span>
-        <span class="cr-walk">🚶 walk ~${fmtTime(walkMins)}</span>
-      </div>
+      ${timesRowHtml(km, paceKm)}
       <div class="cr-detail">
         ${escapeHtml(pts[a][0])} → ${escapeHtml(pts[b][0])}
         · ${b - a} leg${b - a > 1 ? "s" : ""}${stops ? ` · passes ${stops} stop${stops > 1 ? "s" : ""}` : ""}
@@ -1293,6 +1292,13 @@
   function flowLineOptions(colour, overrides) {
     return { renderer: L.svg(), color: colour, weight: 5, opacity: 0.95, lineCap: "round", lineJoin: "round", className: "route-flow", dashArray: "2 13", ...overrides };
   }
+  // A route drawn as two stacked polylines: a soft translucent base + the dashed
+  // animated "flow" overlay. Shared by the segment, run-route and journey drawers.
+  function addFlowLine(grp, latlngs, colour, opts = {}) {
+    const baseWeight = opts.baseWeight || 6, baseOpacity = opts.baseOpacity || 0.3, flowWeight = opts.flowWeight || 4;
+    L.polyline(latlngs, { color: colour, weight: baseWeight, opacity: baseOpacity, lineJoin: "round", lineCap: "round" }).addTo(grp);
+    L.polyline(latlngs, flowLineOptions(colour, { weight: flowWeight })).addTo(grp);
+  }
 
   // Draw route segments as a two-layer animated "flow" line (soft base + dashed
   // overlay) with start/finish markers, swap the group in as `holder.layer`, and
@@ -1301,8 +1307,7 @@
     if (holder.layer) map.removeLayer(holder.layer);
     const grp = L.layerGroup(), all = [];
     segs.forEach((seg) => {
-      L.polyline(seg, { color: colour, weight: 5, opacity: 0.3, lineJoin: "round", lineCap: "round" }).addTo(grp);
-      L.polyline(seg, flowLineOptions(colour)).addTo(grp);
+      addFlowLine(grp, seg, colour, { baseWeight: 5, flowWeight: 5 });
       seg.forEach((p) => all.push(p));
     });
     L.circleMarker(marks.start.at, { radius: 6, color: "#fff", weight: 2, fillColor: colour, fillOpacity: 1 })
@@ -1577,7 +1582,6 @@
       }
       const wp = stops.map((s) => [s.name, s.lat, s.lon]);
       const km = legDistanceKm(wp, 0, wp.length - 1);
-      const paceKm = rtPace;
       const from = wp[0][0], to = wp[wp.length - 1][0];
       const banner = `Route ${id} · ${from} → ${to}`;
       busMapObj.currentId = id;
@@ -1585,7 +1589,7 @@
       result.innerHTML = `
         <div class="bus-summary">
           <div class="cr-main"><span class="cr-km">${fmtKm(km, 1)}</span></div>
-          <div class="cr-times"><span class="cr-run">🏃 run ~${fmtTime(km * paceKm)}</span> <span class="cr-cycle">🚴 cycle ~${fmtTime(km * CYCLE_MIN_PER_KM)}</span> <span class="cr-walk">🚶 walk ~${fmtTime(km * WALK_MIN_PER_KM)}</span></div>
+          ${timesRowHtml(km)}
           <div class="cr-detail">${escapeHtml(from)} → ${escapeHtml(to)} · ${wp.length} stops</div>
           <button type="button" id="busMark" class="bus-mark" data-id="${escapeHtml(id)}">＋ Mark as run</button>
           <div class="cr-note">Distance along the stops × ${ROAD_FACTOR} for the road. Buses run on-road — mind the traffic and lights.</div>
@@ -2278,7 +2282,17 @@
       holder.scrollLeft = px * scale - ox;
       holder.scrollTop = py * scale - oy;
     }, { passive: false });
-    loadMap();
+    // Defer the first map build until the section nears the viewport — the geo
+    // map pulls ~1 MB of geojson + GPX and sits below the fold. Tab clicks and
+    // refreshes still call loadMap() directly.
+    if ("IntersectionObserver" in window) {
+      const io = new IntersectionObserver((entries, obs) => {
+        if (entries.some((e) => e.isIntersecting)) { obs.disconnect(); loadMap(); }
+      }, { rootMargin: "300px" });
+      io.observe(root);
+    } else {
+      loadMap();
+    }
   }
 
   let mapSeq = 0; // invalidates in-flight async renders when the user switches tabs mid-load
@@ -2523,8 +2537,7 @@
     let routeLine = gpxLine && gpxLine.length > 1 ? gpxLine : wl;
     if (opts.reverse && routeLine === gpxLine) routeLine = [...gpxLine].reverse();
     const grp = L.layerGroup().addTo(map);
-    L.polyline(routeLine, { color: line.colour, weight: 6, opacity: 0.3, lineJoin: "round", lineCap: "round" }).addTo(grp);
-    L.polyline(routeLine, flowLineOptions(line.colour, { weight: 4 })).addTo(grp);
+    addFlowLine(grp, routeLine, line.colour);
     L.circleMarker(wl[0], { radius: 6, color: "#fff", weight: 2, fillColor: line.colour, fillOpacity: 1 })
       .bindTooltip("Start · " + escapeHtml(wp[0][0]), { direction: "top" }).addTo(grp);
     L.marker(wl[wl.length - 1], { icon: L.divIcon({ className: "route-finish", html: "◉", iconSize: [15, 15], iconAnchor: [7, 7] }) })
@@ -2996,8 +3009,7 @@
     for (const seg of segments) {
       const col = (graph.lines[seg.line] || {}).colour || "#0019a8";
       const dense = await segmentPavement(seg.nodes, seg.line, graph.nodes);
-      L.polyline(dense, { color: col, weight: 6, opacity: 0.28, lineJoin: "round", lineCap: "round" }).addTo(grp);
-      L.polyline(dense, flowLineOptions(col, { weight: 4 })).addTo(grp);
+      addFlowLine(grp, dense, col, { baseOpacity: 0.28 });
       for (const p of dense) {
         if (prevPt) elevKm += haversineKm([0, prevPt[0], prevPt[1]], [0, p[0], p[1]]);
         if (p.length > 2 && isFinite(p[2])) elevPts.push([elevKm, p[2]]);
@@ -3084,11 +3096,7 @@
     return `
       <div class="jr-head"><strong>${escapeHtml(from)}</strong><span class="jr-arrow">→</span><strong>${escapeHtml(to)}</strong></div>
       <div class="cr-main"><span class="cr-km">${fmtKm(km, 1)}</span> <span class="jr-stops">${path.length} stops · ${changes} change${changes === 1 ? "" : "s"}</span></div>
-      <div class="cr-times">
-        <span class="cr-run">🏃 run ~${fmtTime(km * rtPace)}</span>
-        <span class="cr-cycle">🚴 cycle ~${fmtTime(km * CYCLE_MIN_PER_KM)}</span>
-        <span class="cr-walk">🚶 walk ~${fmtTime(km * WALK_MIN_PER_KM)}</span>
-      </div>
+      ${timesRowHtml(km)}
       ${journeyStripHtml(segments, graph)}
       <div class="jr-elev" aria-live="polite"></div>
       <p class="jr-note">The map traces the real pavement route (GPX) leg by leg where available. Distance is on-street (crow-flies &times; 1.3); elevation is measured along the traced pavement.</p>`;
@@ -3284,27 +3292,23 @@
     document.querySelectorAll(".section-title").forEach((h, i) => h.style.setProperty("--accent", cols[i % cols.length]));
   }
 
-  themeSections();
-  renderLive();
-  renderTubeMap();
-  renderLineStats();
-  renderNext();
-  renderHeroCard();
-  renderJourneyBoard();
-  renderList();
-  renderRoutes();
-  setupPaceState();
-  setupPlanner();
-  setupBusRunner();
-  setupJourneyPlanner();
-  renderLineCollector();
-  renderGallery();
-  wireSocials();
-  loadWeather();
-  setupScrollSpy();
-  setupUnitToggle();
-  setupLiveClock();
-  loadLiveNow();
+  // Run each top-level init independently so a throw in one renderer degrades to
+  // that one feature instead of aborting bootstrap and blanking the page.
+  [
+    ["themeSections", themeSections], ["renderLive", renderLive],
+    ["renderTubeMap", renderTubeMap], ["renderLineStats", renderLineStats],
+    ["renderNext", renderNext], ["renderHeroCard", renderHeroCard],
+    ["renderJourneyBoard", renderJourneyBoard], ["renderList", renderList],
+    ["renderRoutes", renderRoutes], ["setupPaceState", setupPaceState],
+    ["setupPlanner", setupPlanner], ["setupBusRunner", setupBusRunner],
+    ["setupJourneyPlanner", setupJourneyPlanner], ["renderLineCollector", renderLineCollector],
+    ["renderGallery", renderGallery], ["wireSocials", wireSocials],
+    ["loadWeather", loadWeather], ["setupScrollSpy", setupScrollSpy],
+    ["setupUnitToggle", setupUnitToggle], ["setupLiveClock", setupLiveClock],
+    ["loadLiveNow", loadLiveNow],
+  ].forEach(([name, fn]) => {
+    try { fn(); } catch (e) { console.error("init " + name + " failed:", e); }
+  });
 
   // Keep the time-sensitive views live. The "next run" and its phase are
   // otherwise a snapshot frozen when the page's JS first ran, so a left-open
