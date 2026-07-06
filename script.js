@@ -1893,7 +1893,7 @@
     if (hiId && net[hiId]) {
       const base = rtStations(net, net[hiId].name);
       const ends = base && base.length > 1 ? ` · ${base[0][0]} → ${base[base.length - 1][0]}` : "";
-      entries.push({ id: hiId, gpx: true, group: "This month's run", label: net[hiId].name + ends });
+      entries.push({ id: hiId, gpx: true, wp: base, group: "This month's run", label: net[hiId].name + ends });
     }
     for (const id of Object.keys(LINE_VARIANTS)) {
       if (!net[id]) continue;
@@ -2652,21 +2652,32 @@
     const ctl = L.control({ position: "topleft" });
     ctl.onAdd = () => {
       const div = L.DomUtil.create("div", "leaflet-bar geo-variant");
-      const sel = L.DomUtil.create("select", "", div);
+      const row = L.DomUtil.create("div", "geo-variant-row", div);
+      const sel = L.DomUtil.create("select", "", row);
       sel.setAttribute("aria-label", "Choose which route to show on the map");
       sel.innerHTML = groupedOptionsHtml(entries, (e) => e.group, selectedIdx);
       // GPX download for the selected line, kept in sync as the choice changes.
-      const gpx = L.DomUtil.create("a", "gpx-dl geo-gpx", div);
+      const gpx = L.DomUtil.create("a", "gpx-dl geo-gpx", row);
       gpx.textContent = "↓ GPX";
+      // Distance / stops / running time of the selected route, under the picker.
+      const stats = L.DomUtil.create("div", "geo-stats", div);
       const syncGpx = (i) => {
         const id = entries[i] && entries[i].id;
         if (id && GPX_LINES.has(id)) { gpx.href = `routes/${id}.gpx`; gpx.download = `TubeRun-${id}.gpx`; gpx.title = "Download this line's pavement route as a GPX file for your watch"; gpx.style.display = ""; }
         else { gpx.removeAttribute("href"); gpx.style.display = "none"; }
       };
-      syncGpx(selectedIdx);
+      const syncStats = (i) => {
+        const wp = entries[i] && entries[i].wp;
+        if (!wp || wp.length < 2) { stats.style.display = "none"; return; }
+        const km = waypointsKm(wp) * ROAD_FACTOR;
+        stats.style.display = "";
+        stats.textContent = `${geoDistStr(km)} · ${wp.length} stops · 🏃 ${fmtTime(km * rtPace)}`;
+      };
+      const sync = (i) => { syncGpx(i); syncStats(i); };
+      sync(selectedIdx);
       L.DomEvent.disableClickPropagation(div);
       L.DomEvent.disableScrollPropagation(div);
-      L.DomEvent.on(sel, "change", () => { syncGpx(+sel.value); onChange(+sel.value); });
+      L.DomEvent.on(sel, "change", () => { sync(+sel.value); onChange(+sel.value); });
       return div;
     };
     ctl.addTo(map);

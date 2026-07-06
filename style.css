@@ -859,11 +859,13 @@ tr.ls-open { background: rgba(0, 25, 168, 0.05); }
 tr.ls-open .ls-caret { transform: rotate(90deg); }
 .ls-detail-row td { padding: 0; }
 .ls-detail-inner { padding: 4px 14px 16px; }
-.ls-variant { display: block; width: 100%; max-width: 360px; margin: 0 0 10px; padding: 8px 12px;
+.ls-variant { display: block; width: 100%; max-width: 620px; margin: 0 0 10px; padding: 8px 12px;
   font: inherit; font-weight: 600; color: #10131c; background: #fff;
   border: 1.5px solid var(--line); border-radius: 10px; cursor: pointer; }
 .ls-variant:focus-visible { outline: none; border-color: #0019a8; box-shadow: 0 0 0 3px rgba(0, 25, 168, 0.14); }
-.geo-variant { display: flex; align-items: center; gap: 4px; background: #fff; padding: 2px 4px; }
+.geo-variant { display: flex; flex-direction: column; align-items: stretch; gap: 2px; background: #fff; padding: 3px 5px; }
+.geo-variant-row { display: flex; align-items: center; gap: 6px; }
+.geo-stats { font-size: 11px; font-weight: 600; color: #3a4256; padding: 0 2px 1px; white-space: nowrap; }
 .geo-variant select { font: inherit; font-size: 12px; font-weight: 600; color: #10131c; background: #fff; border: 0; max-width: 42vw; padding: 3px 4px; cursor: pointer; }
 @media (min-width: 560px) { .geo-variant select { max-width: 240px; } }
 
@@ -876,7 +878,7 @@ tr.ls-open .ls-caret { transform: rotate(90deg); }
 .ls-reverse.on { background: #0019a8; border-color: #0019a8; color: #fff; }
 .jb-gpx { vertical-align: middle; margin-left: 8px; font-size: 11px; padding: 1px 9px; }
 .plan-gpx-row { margin: 14px 0 0; color: var(--muted); font-size: 14px; }
-.geo-gpx { flex: none; }
+.geo-variant .geo-variant-row .geo-gpx { flex: none; width: auto; height: auto; line-height: normal; display: inline-flex; align-items: center; }
 
 /* "Suggested" tag for tentative future runs */
 .r-suggest { display: inline-block; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #92600a; background: #fff4dc; border: 1px solid #f0d48a; border-radius: 999px; padding: 1px 8px; vertical-align: middle; }
