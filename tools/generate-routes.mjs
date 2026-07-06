@@ -45,6 +45,37 @@ const WP = loadWaypoints();
 // The 4 lines with no `route` in tube-network.json are exactly the WAYPOINTS lines.
 const WP_SLUG = { Victoria: "victoria", Bakerloo: "bakerloo", Central: "central", Metropolitan: "metropolitan" };
 
+// Guard against silent drift: those 4 lines duplicate station coordinates that
+// also live in tube-network.json. Warn loudly at build time if any diverge beyond
+// ~40 m, or if a waypoint names a station the network JSON doesn't know — either
+// means the two sources have fallen out of sync (the site draws one, the GPX the
+// other). Doesn't block: reconciling is a data decision, but it can't go unseen.
+function checkWaypointDrift() {
+  const R = 6371000, toR = Math.PI / 180;
+  const distM = (aLat, aLon, bLat, bLon) => {
+    const dLa = (bLat - aLat) * toR, dLo = (bLon - aLon) * toR;
+    const s = Math.sin(dLa / 2) ** 2 + Math.cos(aLat * toR) * Math.cos(bLat * toR) * Math.sin(dLo / 2) ** 2;
+    return 2 * R * Math.asin(Math.sqrt(s));
+  };
+  const norm = (s) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+  const TOL = 40; // metres
+  let issues = 0;
+  for (const [key, slug] of Object.entries(WP_SLUG)) {
+    const ln = NET[slug];
+    if (!ln) { console.warn(`! drift: ${key} has no "${slug}" in tube-network.json`); issues++; continue; }
+    const byName = {};
+    for (const id in ln.stations) byName[norm(ln.stations[id].n)] = ln.stations[id];
+    for (const [name, lat, lon] of WP[key]) {
+      const st = byName[norm(name)];
+      if (!st) { console.warn(`! drift: ${key} waypoint "${name}" is not in tube-network.json`); issues++; continue; }
+      const d = distM(lat, lon, st.lat, st.lon);
+      if (d > TOL) { console.warn(`! drift: ${key} "${name}" — WAYPOINTS and JSON differ by ${Math.round(d)} m`); issues++; }
+    }
+  }
+  if (issues) console.warn(`\n${issues} WAYPOINTS/network drift issue(s) — reconcile the two sources.\n`);
+  else console.log("Waypoint/network coordinates consistent.\n");
+}
+
 // Ordered [{name, lat, lon}] per line, from whichever source carries the ordering.
 // `stations` is the main route (drawn as the first track); `branches` are every
 // other branch's ordered stations, so the GPX traces the whole line — not just
@@ -171,6 +202,7 @@ ${trksegs}
 }
 
 mkdirSync(join(ROOT, "routes"), { recursive: true });
+checkWaypointDrift();
 const lines = loadLines();
 const when = new Date().toISOString();
 console.log(`Generating GPX for ${lines.length} lines via BRouter (${PROFILE})...\n`);
