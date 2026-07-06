@@ -1318,15 +1318,24 @@
       addFlowLine(grp, seg, colour, { baseWeight: 5, flowWeight: 5 });
       seg.forEach((p) => all.push(p));
     });
+    // Click any marker to recentre the map on that stop (zooming in if far out)
+    // and name it in a popup. `safeName` must already be HTML-escaped.
+    const centerOn = (lat, lon, safeName) => {
+      map.setView([lat, lon], Math.max(map.getZoom(), 16), { animate: true });
+      L.popup({ offset: [0, -2] }).setLatLng([lat, lon]).setContent(safeName).openOn(map);
+    };
     // Optional dot at every stop along the route (e.g. each bus stop), tube-map style.
     if (marks.stops) marks.stops.forEach((s) => {
       L.circleMarker([s[1], s[2]], { radius: 3.2, color: "#fff", weight: 1.3, fillColor: colour, fillOpacity: 1 })
-        .bindTooltip(escapeHtml(s[0]), { direction: "top" }).addTo(grp);
+        .bindTooltip(escapeHtml(s[0]), { direction: "top" })
+        .on("click", () => centerOn(s[1], s[2], escapeHtml(s[0]))).addTo(grp);
     });
     L.circleMarker(marks.start.at, { radius: 6, color: "#fff", weight: 2, fillColor: colour, fillOpacity: 1 })
-      .bindTooltip(marks.start.label, { direction: "top" }).addTo(grp);
+      .bindTooltip(marks.start.label, { direction: "top" })
+      .on("click", () => centerOn(marks.start.at[0], marks.start.at[1], marks.start.label)).addTo(grp);
     if (marks.finish) L.circleMarker(marks.finish.at, { radius: 6, color: colour, weight: 2, fillColor: "#fff", fillOpacity: 1 })
-      .bindTooltip(marks.finish.label, { direction: "top" }).addTo(grp);
+      .bindTooltip(marks.finish.label, { direction: "top" })
+      .on("click", () => centerOn(marks.finish.at[0], marks.finish.at[1], marks.finish.label)).addTo(grp);
     grp.addTo(map);
     holder.layer = grp;
     if (all.length) map.fitBounds(L.latLngBounds(all), { padding });
