@@ -1013,6 +1013,13 @@ tr.ls-open .ls-caret { transform: rotate(90deg); }
 .jr-arrow { color: var(--tfl-blue); font-weight: 800; }
 .jr-stops { font-size: 15px; font-weight: 700; color: var(--muted); }
 .jr-note { margin: 12px 0 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
+.jr-elev { margin: 14px 0 0; }
+.jr-elev-fig { font-size: 13.5px; font-weight: 600; color: #3a4256; margin: 0 0 6px; }
+.jr-elev-fig b { color: var(--tfl-blue); font-weight: 800; white-space: nowrap; }
+.jr-elev-range { color: #4b5563; font-weight: 600; }
+.jr-elev-svg { display: block; width: 100%; height: 60px; background: linear-gradient(180deg, #f7f9ff, #eef2fb); border: 1px solid #e2e8f5; border-radius: 10px; }
+.jr-elev-area { fill: rgba(0, 25, 168, 0.12); stroke: none; }
+.jr-elev-line { fill: none; stroke: var(--tfl-blue); stroke-width: 1.7; vector-effect: non-scaling-stroke; stroke-linejoin: round; stroke-linecap: round; }
 
 /* Tube-map-style journey diagram: legs coloured by line, changes marked */
 .jrn { margin: 14px 0 4px; }

@@ -2494,7 +2494,10 @@
       if (!res.ok) throw new Error("gpx " + res.status);
       const doc = new DOMParser().parseFromString(await res.text(), "application/xml");
       const segs = [...doc.getElementsByTagName("trkseg")]
-        .map((seg) => [...seg.getElementsByTagName("trkpt")].map((t) => [+t.getAttribute("lat"), +t.getAttribute("lon")]))
+        .map((seg) => [...seg.getElementsByTagName("trkpt")].map((t) => {
+          const ele = t.getElementsByTagName("ele")[0];
+          return [+t.getAttribute("lat"), +t.getAttribute("lon"), ele ? +ele.textContent : undefined];
+        }))
         .filter((s) => s.length > 1);
       routeGpxCache[slug] = segs.length ? segs : null;
     } catch (_) { routeGpxCache[slug] = null; }
@@ -2987,12 +2990,18 @@
   async function drawJourney(map, segments, graph) {
     const grp = L.layerGroup().addTo(map);
     const all = [];
+    const elevPts = []; let elevKm = 0, prevPt = null; // cumulative (distance, elevation) series across every leg
     for (const seg of segments) {
       const col = (graph.lines[seg.line] || {}).colour || "#0019a8";
       const dense = await segmentPavement(seg.nodes, seg.line, graph.nodes);
       L.polyline(dense, { color: col, weight: 6, opacity: 0.28, lineJoin: "round", lineCap: "round" }).addTo(grp);
       L.polyline(dense, flowLineOptions(col, { weight: 4 })).addTo(grp);
-      dense.forEach((p) => all.push(p));
+      for (const p of dense) {
+        if (prevPt) elevKm += haversineKm([0, prevPt[0], prevPt[1]], [0, p[0], p[1]]);
+        if (p.length > 2 && isFinite(p[2])) elevPts.push([elevKm, p[2]]);
+        prevPt = p;
+        all.push(p);
+      }
       seg.nodes.forEach((k) => {
         const n = graph.nodes[k];
         L.circleMarker([n.lat, n.lon], { radius: 3.2, color: "#fff", weight: 1.4, fillColor: col, fillOpacity: 1, interactive: false }).addTo(grp);
@@ -3005,7 +3014,41 @@
       .bindTooltip("Start · " + escapeHtml(A.name), { direction: "top" }).addTo(grp);
     L.marker([B.lat, B.lon], { icon: L.divIcon({ className: "route-finish", html: "◉", iconSize: [15, 15], iconAnchor: [7, 7] }) })
       .bindTooltip("Finish · " + escapeHtml(B.name), { direction: "top" }).addTo(grp);
-    return { group: grp, latlngs: all };
+    return { group: grp, latlngs: all, elev: elevProfile(elevPts) };
+  }
+  // Reduce a (distance-km, elevation-m) series to total climb/drop (hysteresis
+  // threshold filters GPS/DEM jitter) plus min/max and the series itself for a
+  // profile sparkline. Null when there aren't enough elevation points.
+  function elevProfile(pts) {
+    if (!pts || pts.length < 3) return null;
+    let gain = 0, loss = 0, ref = pts[0][1], min = pts[0][1], max = pts[0][1];
+    const TH = 3; // metres — ignore wiggles smaller than this
+    for (const [, e] of pts) {
+      if (e > max) max = e;
+      if (e < min) min = e;
+      const dz = e - ref;
+      if (dz > TH) { gain += dz; ref = e; }
+      else if (dz < -TH) { loss += -dz; ref = e; }
+    }
+    return { pts, maxD: pts[pts.length - 1][0], gain: Math.round(gain), loss: Math.round(loss), min: Math.round(min), max: Math.round(max) };
+  }
+  // A compact SVG area/line chart of the journey's elevation, with climb/drop figures.
+  function elevationHtml(elev) {
+    if (!elev) return "";
+    const W = 320, H = 60, pad = 5, span = Math.max(1, elev.max - elev.min), maxD = elev.maxD || 1;
+    const x = (d) => pad + (d / maxD) * (W - 2 * pad);
+    const y = (e) => H - pad - ((e - elev.min) / span) * (H - 2 * pad);
+    const step = Math.max(1, Math.floor(elev.pts.length / 160));
+    let line = "";
+    for (let i = 0; i < elev.pts.length; i += step) line += (line ? "L" : "M") + x(elev.pts[i][0]).toFixed(1) + " " + y(elev.pts[i][1]).toFixed(1);
+    const last = elev.pts[elev.pts.length - 1];
+    line += "L" + x(last[0]).toFixed(1) + " " + y(last[1]).toFixed(1);
+    const bottom = (H - pad).toFixed(1);
+    const area = "M" + pad + " " + bottom + " L" + line.slice(1) + " L" + x(maxD).toFixed(1) + " " + bottom + " Z";
+    return `<div class="jr-elev-fig">Elevation <b>&uarr; ${elev.gain} m</b> climb &middot; <b>&darr; ${elev.loss} m</b> drop <span class="jr-elev-range">&middot; ${elev.min}&ndash;${elev.max} m above sea level</span></div>
+      <svg class="jr-elev-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="Elevation profile: ${elev.gain} metres of climb and ${elev.loss} metres of descent, ranging ${elev.min} to ${elev.max} metres above sea level">
+        <path d="${area}" class="jr-elev-area"/><path d="${line}" class="jr-elev-line"/>
+      </svg>`;
   }
   // A tube-map-style diagram of the journey: one coloured leg per line, its
   // stations listed on a coloured rail, with a "change here" marker between legs.
@@ -3045,7 +3088,8 @@
         <span class="cr-walk">🚶 walk ~${fmtTime(km * WALK_MIN_PER_KM)}</span>
       </div>
       ${journeyStripHtml(segments, graph)}
-      <p class="jr-note">The map traces the real pavement route (GPX) leg by leg where available. Distance is on-street (crow-flies &times; 1.3).</p>`;
+      <div class="jr-elev" aria-live="polite"></div>
+      <p class="jr-note">The map traces the real pavement route (GPX) leg by leg where available. Distance is on-street (crow-flies &times; 1.3); elevation is measured along the traced pavement.</p>`;
   }
   function setupJourneyPlanner() {
     const fromEl = document.getElementById("abFrom");
@@ -3080,6 +3124,8 @@
         if (!drawn || !drawn.latlngs.length) return;
         jLayer = drawn.group;
         map.fitBounds(L.latLngBounds(drawn.latlngs), { padding: [28, 28] });
+        const box = result.querySelector(".jr-elev");
+        if (box) box.innerHTML = elevationHtml(drawn.elev);
       });
       result.innerHTML = journeyResultHtml(res, segments, graph);
     }
