@@ -386,9 +386,13 @@
   const nearPinned = (sun) => pinned.some((p) => Math.abs(p - sun) <= 2 * 86400000);
   const sundays = upcomingSundays(autoCount + pinned.length).filter((s) => !nearPinned(s)).slice(0, autoCount);
   let si = 0;
+  // Runs from the start of next month on are tentative "suggestions" — the plan is
+  // only firmed up a month out. Pinned specials (explicit dates) stay confirmed.
+  const suggestFrom = new Date(); suggestFrom.setHours(0, 0, 0, 0); suggestFrom.setDate(1); suggestFrom.setMonth(suggestFrom.getMonth() + 1);
   const runs = RUN_PLAN
-    .map((r) => ({ ...normalise(r), date: r.date ? parseISO(r.date) : sundays[si++] }))
+    .map((r) => ({ ...normalise(r), date: r.date ? parseISO(r.date) : sundays[si++], pinned: !!r.date }))
     .sort((a, b) => a.date - b.date);
+  runs.forEach((r) => { r.suggested = !r.pinned && r.date >= suggestFrom; });
   const runEnd = (r) => new Date(r.date.getTime() + ((r.days ? r.days.length : 1) - 1) * 86400000);
   // "Next" = first run whose final day hasn't passed (a pinned date can be in
   // the past). Recomputed live rather than frozen at page-load, so a tab left
@@ -454,6 +458,7 @@
       <div class="next-body">
         <span class="line-tag" style="background:${c};color:${tc}">${escapeHtml(nextRun.badge)}</span>
         ${md ? `<span class="multiday-badge">${md.length}-day run</span>` : ""}
+        ${nextRun.suggested ? `<span class="r-suggest" title="Tentative — the plan is only firmed up about a month ahead">Suggested</span>` : ""}
         ${bound ? `<span class="run-dir">🧭 ${bound}</span>` : ""}
         <h3>${escapeHtml(meet.leg)}</h3>
         <div class="next-meta">
@@ -652,7 +657,7 @@
       liveIdx: live && live.dayIdx === di ? live.absIdx : null,
     })).join("");
     el.innerHTML = `
-      <h3 class="jb-title">Journey board</h3>
+      <h3 class="jb-title">Journey board ${gpxDownloadHtml(lineSlug(nextRun.key), nextRun.key, "jb-gpx")}</h3>
       ${sections}
       <p class="jb-foot">Expected arrival windows at a steady 6:30/km from each day's start — add time for regroups and photos.</p>`;
     jbRenderedKey = nextRun.key; jbRenderedDay = curDay;
@@ -684,7 +689,7 @@
           .filter(Boolean).map(escapeHtml).join(" · ")}</span>
       </div>`).join("")}</div>` : "";
     const exits = r.exits ? `<div class="d-block"><h4>Escape points</h4>
-      <div class="d-tags">${r.exits.map((e) => `<span class="d-tag">${escapeHtml(e.name)} · ${escapeHtml(e.at)}</span>`).join("")}</div></div>` : "";
+      <div class="d-tags">${r.exits.map((e) => `<span class="d-tag">${escapeHtml(e.name)} · ${distText(e.at)}</span>`).join("")}</div></div>` : "";
     const stay = r.stay ? `<div class="d-block"><h4>Where to stay</h4><ul class="d-list">${r.stay.map((s) =>
       `<li><a href="${escapeAttr(s.url)}" target="_blank" rel="noopener">${escapeHtml(s.name)} ↗</a></li>`).join("")}</ul></div>` : "";
     const link = routeLinksHtml(r);
@@ -702,12 +707,12 @@
       const loc = r.location !== "London" ? `<span class="r-loc">${escapeHtml(r.location)}</span>` : "";
       const toggle = hasDetails(r) ? `<button class="r-toggle" data-i="${i}" aria-expanded="false">Details</button>` : "";
       return `
-      <div class="run-row">
+      <div class="run-row${r.suggested ? " is-suggested" : ""}">
         <div class="r-date">${r.date.getDate()} ${MON[r.date.getMonth()]}
           <small>${DOW[r.date.getDay()]} · ${r.date.getFullYear()}</small>
         </div>
         <div class="r-swatch" style="background:${r.colour}"></div>
-        <div class="r-title">${escapeHtml(r.badge)} ${loc}
+        <div class="r-title">${escapeHtml(r.badge)} ${loc}${r.suggested ? ` <span class="r-suggest" title="Tentative — the plan is only firmed up about a month ahead">Suggested</span>` : ""}
           <small>${escapeHtml(r.leg)}</small>
         </div>
         <div class="r-dist">${escapeHtml(distText(r.distance))}${toggle}</div>
@@ -830,6 +835,23 @@
     return `${Math.floor(totalSec / 60)}:${String(totalSec % 60).padStart(2, "0")}`;
   }
 
+  // Escape points + route links for an adventure/non-tube run. Distances run
+  // through distText() so they honour the km/mi toggle like everywhere else.
+  function adventurePlanHtml(run) {
+    const exits = run.exits ? `<div class="d-block"><h4>Escape points to bail early</h4>
+      <div class="d-tags">${run.exits.map((e) => `<span class="d-tag">${escapeHtml(e.name)} · ${distText(e.at)}</span>`).join("")}</div></div>` : "";
+    return `<div class="adventure-plan">${exits}${routeLinksHtml(run)}</div>`;
+  }
+  // Re-render just the planner's distance-bearing output at the current unit
+  // (called by the km/mi toggle). update() covers tube runs; the adventure block
+  // covers the rest. Both no-op when they don't apply.
+  function refreshPlanner() {
+    if (!nextRun) return;
+    if (pts) { update(); return; }
+    const diagram = document.getElementById("lineDiagram");
+    if (diagram && (nextRun.exits || nextRun.routeLink)) diagram.innerHTML = adventurePlanHtml(nextRun);
+  }
+
   function setupPlanner() {
     const diagram = document.getElementById("lineDiagram");
     const result = document.getElementById("calcResult");
@@ -846,10 +868,7 @@
       if (calc) calc.style.display = "none";
       if (nextRun.exits || nextRun.routeLink) {
         // Show escape points + route link instead of the tube-style planner.
-        const exits = nextRun.exits ? `<div class="d-block"><h4>Escape points to bail early</h4>
-          <div class="d-tags">${nextRun.exits.map((e) => `<span class="d-tag">${escapeHtml(e.name)} · ${escapeHtml(e.at)}</span>`).join("")}</div></div>` : "";
-        const link = routeLinksHtml(nextRun);
-        if (diagram) diagram.innerHTML = `<div class="adventure-plan">${exits}${link}</div>`;
+        if (diagram) diagram.innerHTML = adventurePlanHtml(nextRun);
       } else if (diagram) {
         diagram.innerHTML =
           `<p class="diagram-empty">Route map for <strong>${escapeHtml(nextRun.key)}</strong>
@@ -867,6 +886,10 @@
     [fromSel, toSel, paceSel, startSel].filter(Boolean).forEach((s) => s.addEventListener("input", update));
     renderDiagram();
     update();
+    // Full-line pavement GPX for this month's line — a sibling of the diagram, so
+    // it survives the diagram's re-renders. setupPlanner runs once, so no dupes.
+    const planGpx = gpxDownloadHtml(lineSlug(nextRun.key), nextRun.key, "plan-gpx");
+    if (diagram && planGpx) diagram.insertAdjacentHTML("afterend", `<p class="plan-gpx-row">Take it with you: ${planGpx}</p>`);
     // Enrich the strip with interchange tags once the network data loads.
     // Only the fetch failure is swallowed — errors in the render work below must surface.
     loadNetwork().catch(() => null).then((net) => {
@@ -1121,6 +1144,17 @@
     return urls.map((u) =>
       `<a class="route-link${extraClass ? " " + extraClass : ""}" href="${escapeAttr(u)}" target="_blank" rel="noopener">${escapeHtml(routeLinkLabel(u))} ↗</a>`
     ).join("");
+  }
+
+  // Downloadable pavement GPX per Tube line (generated into routes/<slug>.gpx and
+  // also used to draw the maps). Accepts a line slug (network id) or a line name.
+  const GPX_LINES = new Set(["bakerloo", "central", "circle", "district", "hammersmith-city", "jubilee", "metropolitan", "northern", "piccadilly", "victoria", "waterloo-city"]);
+  function lineSlug(name) { return String(name || "").toLowerCase().replace(/\s*&\s*/g, "-").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""); }
+  function gpxDownloadHtml(slugOrName, lineName, extraClass) {
+    const slug = GPX_LINES.has(slugOrName) ? slugOrName : lineSlug(slugOrName);
+    if (!GPX_LINES.has(slug)) return "";
+    const label = lineName || slug;
+    return `<a class="gpx-dl${extraClass ? " " + extraClass : ""}" href="routes/${slug}.gpx" download="TubeRun-${slug}.gpx" title="Download the ${escapeHtml(label)} line's pavement route as a GPX file for your watch">↓ GPX</a>`;
   }
 
   // --- Render: Live now banner ------------------------------------------
@@ -1775,10 +1809,26 @@
       const wp = assembleVariant(net, id, v);
       if (!wp || wp.length < 2) continue;
       const a = wp[0][0], b = wp[wp.length - 1][0], via = v.via ? " · via " + v.via : "";
-      options.push({ label: `${a} → ${b}${via}`, wp });
-      options.push({ label: `${b} → ${a}${via}`, wp: [...wp].reverse() });
+      const pair = `${a} ↔ ${b}`; // groups both directions (and any via-variants) of the same route
+      options.push({ label: `${a} → ${b}${via}`, wp, pair });
+      options.push({ label: `${b} → ${a}${via}`, wp: [...wp].reverse(), pair });
     }
     return options.length ? options : null;
+  }
+  // Build <option>/<optgroup> markup, grouping consecutive entries by groupOf(e).
+  function groupedOptionsHtml(entries, groupOf, selectedIdx) {
+    let html = "", cur = null, open = false;
+    entries.forEach((e, i) => {
+      const g = groupOf(e) || "";
+      if (g !== cur) {
+        if (open) { html += "</optgroup>"; open = false; }
+        if (g) { html += `<optgroup label="${escapeHtml(g)}">`; open = true; }
+        cur = g;
+      }
+      html += `<option value="${i}"${i === selectedIdx ? " selected" : ""}>${escapeHtml(e.label)}</option>`;
+    });
+    if (open) html += "</optgroup>";
+    return html;
   }
   function waypointsKm(wp) {
     let km = 0;
@@ -1822,7 +1872,8 @@
     btn.setAttribute("aria-expanded", "true");
     const detail = document.createElement("tr");
     detail.className = "ls-detail-row";
-    detail.innerHTML = `<td colspan="6"><div class="ls-detail-inner"><div class="ls-map"></div></div></td>`;
+    const gpx = gpxDownloadHtml(lineSlug(tr.dataset.line), tr.dataset.line, "ls-gpx");
+    detail.innerHTML = `<td colspan="6"><div class="ls-detail-inner">${gpx ? `<div class="ls-gpx-row">${gpx}</div>` : ""}<div class="ls-map"></div></div></td>`;
     tr.after(detail);
     lineRouteMap(detail.querySelector(".ls-map"), tr.dataset.line, tr);
   }
@@ -1860,7 +1911,7 @@
       const sel = document.createElement("select");
       sel.className = "ls-variant";
       sel.setAttribute("aria-label", "Choose a route and direction for the " + name + " line");
-      sel.innerHTML = options.map((o, i) => `<option value="${i}">${escapeHtml(o.label)}</option>`).join("");
+      sel.innerHTML = groupedOptionsHtml(options, (o) => o.pair, 0);
       sel.addEventListener("change", () => drawVariant(+sel.value));
       mapDiv.parentNode.insertBefore(sel, mapDiv);
     }
@@ -2515,17 +2566,19 @@
       const div = L.DomUtil.create("div", "leaflet-bar geo-variant");
       const sel = L.DomUtil.create("select", "", div);
       sel.setAttribute("aria-label", "Choose which route to show on the map");
-      let html = "", cur = null;
-      entries.forEach((e, i) => {
-        const g = e.group || "";
-        if (g !== cur) { if (cur !== null) html += "</optgroup>"; html += `<optgroup label="${escapeHtml(g)}">`; cur = g; }
-        html += `<option value="${i}"${i === selectedIdx ? " selected" : ""}>${escapeHtml(e.label)}</option>`;
-      });
-      if (cur !== null) html += "</optgroup>";
-      sel.innerHTML = html;
+      sel.innerHTML = groupedOptionsHtml(entries, (e) => e.group, selectedIdx);
+      // GPX download for the selected line, kept in sync as the choice changes.
+      const gpx = L.DomUtil.create("a", "gpx-dl geo-gpx", div);
+      gpx.textContent = "↓ GPX";
+      const syncGpx = (i) => {
+        const id = entries[i] && entries[i].id;
+        if (id && GPX_LINES.has(id)) { gpx.href = `routes/${id}.gpx`; gpx.download = `TubeRun-${id}.gpx`; gpx.title = "Download this line's pavement route as a GPX file for your watch"; gpx.style.display = ""; }
+        else { gpx.removeAttribute("href"); gpx.style.display = "none"; }
+      };
+      syncGpx(selectedIdx);
       L.DomEvent.disableClickPropagation(div);
       L.DomEvent.disableScrollPropagation(div);
-      L.DomEvent.on(sel, "change", () => onChange(+sel.value));
+      L.DomEvent.on(sel, "change", () => { syncGpx(+sel.value); onChange(+sel.value); });
       return div;
     };
     ctl.addTo(map);
@@ -2897,7 +2950,7 @@
       if (typeof busMapObj.retrace === "function") busMapObj.retrace(); // bus result panel
       renderLineStats();
       renderLineCollector();
-      update();
+      refreshPlanner(); // tube calc or adventure escape-point distances, at the new unit
       if (typeof geoRefresh === "function") geoRefresh(); // live network-map labels
       if (curMap === "running") loadMap();                // running-times table
     }));

@@ -863,9 +863,21 @@ tr.ls-open .ls-caret { transform: rotate(90deg); }
   font: inherit; font-weight: 600; color: #10131c; background: #fff;
   border: 1.5px solid var(--line); border-radius: 10px; cursor: pointer; }
 .ls-variant:focus-visible { outline: none; border-color: #0019a8; box-shadow: 0 0 0 3px rgba(0, 25, 168, 0.14); }
-.geo-variant { background: #fff; padding: 2px; }
-.geo-variant select { font: inherit; font-size: 12px; font-weight: 600; color: #10131c; background: #fff; border: 0; max-width: 46vw; padding: 3px 4px; cursor: pointer; }
+.geo-variant { display: flex; align-items: center; gap: 4px; background: #fff; padding: 2px 4px; }
+.geo-variant select { font: inherit; font-size: 12px; font-weight: 600; color: #10131c; background: #fff; border: 0; max-width: 42vw; padding: 3px 4px; cursor: pointer; }
 @media (min-width: 560px) { .geo-variant select { max-width: 240px; } }
+
+/* Download-GPX links (line-by-line, planner, journey board, network map) */
+.gpx-dl { display: inline-block; font-size: 12px; font-weight: 700; color: #0019a8; background: #eef1ff; border: 1px solid #cdd6ff; border-radius: 999px; padding: 2px 10px; text-decoration: none; white-space: nowrap; cursor: pointer; }
+.gpx-dl:hover { background: #dfe5ff; }
+.ls-gpx-row { margin: 0 0 10px; }
+.jb-gpx { vertical-align: middle; margin-left: 8px; font-size: 11px; padding: 1px 9px; }
+.plan-gpx-row { margin: 14px 0 0; color: var(--muted); font-size: 14px; }
+.geo-gpx { flex: none; }
+
+/* "Suggested" tag for tentative future runs */
+.r-suggest { display: inline-block; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #92600a; background: #fff4dc; border: 1px solid #f0d48a; border-radius: 999px; padding: 1px 8px; vertical-align: middle; }
+.run-row.is-suggested { opacity: 0.9; }
 .ls-map { height: 320px; border-radius: 12px; overflow: hidden; border: 1px solid var(--line); }
 @media (max-width: 560px) { .ls-map { height: 240px; } }
 .ls-foot { margin-top: 14px; color: var(--muted); font-size: 13px; }
