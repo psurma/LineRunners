@@ -1152,7 +1152,7 @@
   // Downloadable pavement GPX per Tube line (generated into routes/<slug>.gpx and
   // also used to draw the maps). Accepts a line slug (network id) or a line name.
   const GPX_LINES = new Set(["bakerloo", "central", "circle", "district", "hammersmith-city", "jubilee", "metropolitan", "northern", "piccadilly", "victoria", "waterloo-city",
-    "lioness", "mildmay", "windrush", "weaver", "suffragette", "liberty"]);
+    "lioness", "mildmay", "windrush", "weaver", "suffragette", "liberty", "elizabeth"]);
   function lineSlug(name) { return String(name || "").toLowerCase().replace(/\s*&\s*/g, "-").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""); }
   function gpxDownloadHtml(slugOrName, lineName, extraClass) {
     const slug = GPX_LINES.has(slugOrName) ? slugOrName : lineSlug(slugOrName);
@@ -1697,6 +1697,8 @@
     // London Overground — km + stops of each line's main route (branches also shown on the map).
     ["Lioness", 34.2, 19], ["Mildmay", 24.4, 18], ["Windrush", 11.5, 12],
     ["Weaver", 14.1, 7], ["Suffragette", 29.5, 13], ["Liberty", 6.6, 3],
+    // Elizabeth line — main spine Reading to Abbey Wood (branches also on the map).
+    ["Elizabeth", 99.6, 25],
   ];
 
   // Sortable "Line by line" columns. Run/Cycle/Walk are all distance × a constant,
@@ -1820,6 +1822,15 @@
       { segs: [[0, 0], [5, 0]] },                   // Liverpool Street – Chingford
       { segs: [[0, 0], [1, 0], [2, 0], [3, 0]] },   // Liverpool Street – Cheshunt
       { segs: [[0, 0], [1, 0], [2, 0], [4, 0]] },   // Liverpool Street – Enfield Town
+    ],
+    elizabeth: [
+      { segs: [[8, 1], [4, 1], [3, 1], [2, 1], [9, 1]] },                 // Reading – Abbey Wood
+      { segs: [[8, 1], [4, 1], [3, 1], [2, 1], [1, 1], [0, 1]] },         // Reading – Shenfield
+      { segs: [[6, 1], [5, 1], [4, 1], [3, 1], [2, 1], [9, 1]] },         // Heathrow T4 – Abbey Wood
+      { segs: [[6, 1], [5, 1], [4, 1], [3, 1], [2, 1], [1, 1], [0, 1]] }, // Heathrow T4 – Shenfield
+      { segs: [[7, 1], [5, 1], [4, 1], [3, 1], [2, 1], [9, 1]] },         // Heathrow T5 – Abbey Wood
+      { segs: [[7, 1], [5, 1], [4, 1], [3, 1], [2, 1], [1, 1], [0, 1]] }, // Heathrow T5 – Shenfield
+      { segs: [[0, 0], [11, 0]] },                                        // Shenfield – Liverpool Street
     ],
   };
   function assembleVariant(net, id, variant) {
