@@ -112,7 +112,7 @@ function loadLines() {
 }
 
 const BROUTER = "https://brouter.de/brouter";
-const PROFILE = "hiking-beta"; // BRouter's foot profile
+const PROFILE = "shortest"; // BRouter shortest-distance profile — most direct route (follows the line's road corridor rather than detouring for green/quiet paths)
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // Route through the given points as hard via-points; returns [[lon,lat(,ele)], ...].
