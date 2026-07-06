@@ -2918,7 +2918,9 @@
   }
   // Split a shortest path (node keys) into legs on a single line each, greedily
   // choosing lines to minimize changes when a hop is served by several.
-  function journeySegments(graph, path) {
+  // (Named distinctly from the timeline's journeySegments(run, wp) — same-scope
+  // function declarations with one name would shadow each other.)
+  function pathToLegs(graph, path) {
     if (path.length < 2) return [];
     const { edgeLines, ekey } = graph;
     const chosen = [];
@@ -3117,7 +3119,7 @@
     }
     function render(res) {
       last = res;
-      const segments = journeySegments(graph, res.path);
+      const segments = pathToLegs(graph, res.path);
       const map = ensureMap();
       if (jLayer) { map.removeLayer(jLayer); jLayer = null; }
       drawJourney(map, segments, graph).then((drawn) => {
