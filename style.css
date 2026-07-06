@@ -1020,6 +1020,8 @@ tr.ls-open .ls-caret { transform: rotate(90deg); }
 .jr-elev-svg { display: block; width: 100%; height: 60px; background: linear-gradient(180deg, #f7f9ff, #eef2fb); border: 1px solid #e2e8f5; border-radius: 10px; }
 .jr-elev-area { fill: rgba(0, 25, 168, 0.12); stroke: none; }
 .jr-elev-line { fill: none; stroke: var(--tfl-blue); stroke-width: 1.7; vector-effect: non-scaling-stroke; stroke-linejoin: round; stroke-linecap: round; }
+.jr-elev:empty { margin: 0; }
+.ls-elev-load { font-size: 12.5px; font-weight: 600; color: #4b5563; margin: 6px 0 2px; }
 
 /* Tube-map-style journey diagram: legs coloured by line, changes marked */
 .jrn { margin: 14px 0 4px; }

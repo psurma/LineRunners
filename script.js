@@ -34,11 +34,12 @@
 
   // --- LINE COLLECTOR ----------------------------------------------------
   // Direction matters: running a line one way is a different run from running
-  // it back, so every line has TWO collectible directions (22 in total).
+  // it back, so every line has TWO collectible directions (36 in total).
   // LINE_DIRS gives each line's two direction labels [dir0, dir1].
   const TUBE_LINES = [
     "Bakerloo", "Central", "Circle", "District", "Hammersmith & City",
     "Jubilee", "Metropolitan", "Northern", "Piccadilly", "Victoria", "Waterloo & City",
+    "Lioness", "Mildmay", "Windrush", "Weaver", "Suffragette", "Liberty", "Elizabeth",
   ];
   const LINE_DIRS = {
     Bakerloo: ["→ Harrow & Wealdstone", "→ Elephant & Castle"],
@@ -52,6 +53,13 @@
     Piccadilly: ["→ Cockfosters", "→ Heathrow / Uxbridge"],
     Victoria: ["→ Walthamstow Central", "→ Brixton"],
     "Waterloo & City": ["→ Bank", "→ Waterloo"],
+    Lioness: ["→ Watford Junction", "→ Euston"],
+    Mildmay: ["→ Stratford", "→ Richmond / Clapham Junction"],
+    Windrush: ["→ Highbury & Islington", "→ New Cross / Croydon / Crystal Palace"],
+    Weaver: ["→ Liverpool Street", "→ Chingford / Enfield Town / Cheshunt"],
+    Suffragette: ["→ Gospel Oak", "→ Barking Riverside"],
+    Liberty: ["→ Romford", "→ Upminster"],
+    Elizabeth: ["→ Reading / Heathrow", "→ Shenfield / Abbey Wood"],
   };
   // Personal line-collector progress ("Line|0"/"Line|1", index into LINE_DIRS) is kept
   // per-visitor in the browser (localStorage) — see loadCollector/renderLineCollector.
@@ -1310,6 +1318,11 @@
       addFlowLine(grp, seg, colour, { baseWeight: 5, flowWeight: 5 });
       seg.forEach((p) => all.push(p));
     });
+    // Optional dot at every stop along the route (e.g. each bus stop), tube-map style.
+    if (marks.stops) marks.stops.forEach((s) => {
+      L.circleMarker([s[1], s[2]], { radius: 3.2, color: "#fff", weight: 1.3, fillColor: colour, fillOpacity: 1 })
+        .bindTooltip(escapeHtml(s[0]), { direction: "top" }).addTo(grp);
+    });
     L.circleMarker(marks.start.at, { radius: 6, color: "#fff", weight: 2, fillColor: colour, fillOpacity: 1 })
       .bindTooltip(marks.start.label, { direction: "top" }).addTo(grp);
     if (marks.finish) L.circleMarker(marks.finish.at, { radius: 6, color: colour, weight: 2, fillColor: "#fff", fillOpacity: 1 })
@@ -1533,6 +1546,7 @@
     drawFlowSegments(m, busMapObj, segs, BUS_COL, {
       start: { at: [a[1], a[2]], label: "Start · " + escapeHtml(a[0]) },
       finish: { at: [b[1], b[2]], label: "Finish · " + escapeHtml(b[0]) },
+      stops: wp,
     }, [30, 30]);
   }
 
@@ -1591,6 +1605,7 @@
           <div class="cr-main"><span class="cr-km">${fmtKm(km, 1)}</span></div>
           ${timesRowHtml(km)}
           <div class="cr-detail">${escapeHtml(from)} → ${escapeHtml(to)} · ${wp.length} stops</div>
+          <div class="bus-elev jr-elev"></div>
           <button type="button" id="busMark" class="bus-mark" data-id="${escapeHtml(id)}">＋ Mark as run</button>
           <div class="cr-note">Distance along the stops × ${ROAD_FACTOR} for the road. Buses run on-road — mind the traffic and lights.</div>
         </div>
@@ -1610,6 +1625,13 @@
         if (busRun.has(rid)) busRun.delete(rid); else busRun.add(rid);
         saveBuses(busRun); syncBusMark(); renderBusProgress();
       });
+      // Elevation profile — buses carry no GPX, so sample open-meteo along the stops.
+      const elBox = result.querySelector(".bus-elev");
+      if (elBox) {
+        elBox.innerHTML = `<p class="ls-elev-load">Reading elevation…</p>`;
+        const elev = await routeElevation(wp.map((s) => [s[1], s[2]]));
+        if (mySeq === traceSeq && elBox.isConnected) elBox.innerHTML = elev ? elevationHtml(elev) : "";
+      }
     };
   }
 
@@ -1928,7 +1950,7 @@
     detail.className = "ls-detail-row";
     const gpx = gpxDownloadHtml(lineSlug(tr.dataset.line), tr.dataset.line, "ls-gpx");
     const reverseBtn = gpx ? `<button type="button" class="ls-reverse" aria-pressed="false" title="Reverse the route direction — and download the GPX the other way round">⇄ Reverse</button>` : "";
-    detail.innerHTML = `<td colspan="6"><div class="ls-detail-inner">${gpx ? `<div class="ls-gpx-row">${gpx}${reverseBtn}</div>` : ""}<div class="ls-map"></div></div></td>`;
+    detail.innerHTML = `<td colspan="6"><div class="ls-detail-inner">${gpx ? `<div class="ls-gpx-row">${gpx}${reverseBtn}</div>` : ""}<div class="ls-map"></div><div class="ls-elev jr-elev"></div></div></td>`;
     tr.after(detail);
     lineRouteMap(detail.querySelector(".ls-map"), tr.dataset.line, tr);
   }
@@ -1965,7 +1987,7 @@
     const detailInner = mapDiv.parentNode;
     const reverseBtn = detailInner.querySelector(".ls-reverse");
     const gpxLink = detailInner.querySelector(".ls-gpx");
-    let reversed = false, curIdx = 0, gpxText = null, revUrl = null;
+    let reversed = false, curIdx = 0, gpxText = null, revUrl = null, drawSeq = 0;
     if (options) {
       const sel = document.createElement("select");
       sel.className = "ls-variant";
@@ -2000,15 +2022,23 @@
       if (reverseBtn) { reverseBtn.setAttribute("aria-pressed", String(reversed)); reverseBtn.classList.toggle("on", reversed); }
     }
     async function drawVariant(idx) {
+      const my = ++drawSeq;
       curIdx = idx;
       if (routeGrp) { routeGrp.remove(); routeGrp = null; }
       const opt = options ? options[idx] : null;
       const dOpts = opt && !opt.gpx ? { waypoints: opt.wp } : {};
       if (reversed) dOpts.reverse = true;
       const r = await drawRunRoute(map, net, id, dOpts);
+      if (my !== drawSeq || lsMap !== map) return; // a newer draw (variant change / reverse) superseded this one
       routeGrp = r && r.group;
       if (r && r.latlngs.length) map.fitBounds(L.latLngBounds(r.latlngs), { padding: [18, 18] });
       if (opt && opt.wp) setRowStats(tr, waypointsKm(opt.wp) * ROAD_FACTOR, opt.wp.length); // reflect the route in the row
+      const elBox = detailInner.querySelector(".ls-elev");
+      if (elBox && r && r.latlngs) {
+        elBox.innerHTML = `<p class="ls-elev-load">Reading elevation…</p>`;
+        const elev = await routeElevation(r.latlngs);
+        if (my === drawSeq && lsMap === map && elBox.isConnected) elBox.innerHTML = elev ? elevationHtml(elev) : "";
+      }
     }
     if (reverseBtn) reverseBtn.addEventListener("click", () => { setReversed(!reversed); drawVariant(curIdx); syncGpxDir(); });
     await drawVariant(0);
@@ -2032,7 +2062,7 @@
     { icon: "🖐", name: "High Five", desc: "Five directions collected", test: (c) => c.count >= 5 },
     { icon: "🔄", name: "There & Back", desc: "Any line, both ways", test: (c) => c.linesBoth >= 1 },
     { icon: "🌗", name: "Round-Trip Regular", desc: "Five lines both ways", test: (c) => c.linesBoth >= 5 },
-    { icon: "🏃", name: "Halfway There", desc: "Eleven directions — half the network", test: (c) => c.count >= 11 },
+    { icon: "🏃", name: "Halfway There", desc: "Eighteen directions — half the network", test: (c) => c.count >= 18 },
     { icon: "🏅", name: "Marathon Distance", desc: "Collect 42.2 km", test: (c) => c.km >= 42.195 },
     { icon: "💯", name: "Century Club", desc: "Collect 100 km", test: (c) => c.km >= 100 },
     { icon: "🗺", name: "Double Century", desc: "Collect 250 km", test: (c) => c.km >= 250 },
@@ -2047,7 +2077,7 @@
     { icon: "⚫", name: "Northern Soul", desc: "The Northern line, both ways", test: (c) => c.both("Northern") },
     { icon: "🔵", name: "Piccadilly Pro", desc: "The Piccadilly line, both ways", test: (c) => c.both("Piccadilly") },
     { icon: "💙", name: "Victoria Victor", desc: "The Victoria line, both ways", test: (c) => c.both("Victoria") },
-    { icon: "👑", name: "Tube Run Royalty", desc: "Every line, both ways", test: (c) => c.linesBoth >= 11 },
+    { icon: "👑", name: "Tube Run Royalty", desc: "Every line, both ways", test: (c) => c.linesBoth >= 18 },
   ];
 
   function renderLineCollector() {
@@ -3029,6 +3059,47 @@
     L.marker([B.lat, B.lon], { icon: L.divIcon({ className: "route-finish", html: "◉", iconSize: [15, 15], iconAnchor: [7, 7] }) })
       .bindTooltip("Finish · " + escapeHtml(B.name), { direction: "top" }).addTo(grp);
     return { group: grp, latlngs: all, elev: elevProfile(elevPts) };
+  }
+  // Reduce a path to at most `max` points (endpoints kept) for the elevation API.
+  function sampleCoords(coords, max) {
+    if (coords.length <= max) return coords;
+    const out = [], step = (coords.length - 1) / (max - 1);
+    for (let i = 0; i < max; i++) out.push(coords[Math.round(i * step)]);
+    return out;
+  }
+  // Ground elevation (m) per [lat,lon] from open-meteo's elevation API (already in
+  // our CSP connect-src). Up to 100 points per request; null on failure.
+  async function fetchElevations(coords) {
+    try {
+      const lat = coords.map((c) => c[0].toFixed(5)).join(",");
+      const lon = coords.map((c) => c[1].toFixed(5)).join(",");
+      const res = await fetch(`https://api.open-meteo.com/v1/elevation?latitude=${lat}&longitude=${lon}`);
+      if (!res.ok) return null;
+      const j = await res.json();
+      return Array.isArray(j.elevation) && j.elevation.length === coords.length ? j.elevation : null;
+    } catch (_) { return null; }
+  }
+  // Elevation profile for a drawn route (points as [lat,lon] or [lat,lon,ele]):
+  // uses embedded GPX elevation when present (dense), else samples open-meteo (for
+  // GPX-less routes like buses and variant lines). Null if unavailable. Async.
+  async function routeElevation(coords) {
+    if (!coords || coords.length < 3) return null;
+    const hasEle = coords.some((c) => c.length > 2 && isFinite(c[2]));
+    let pts = coords, eles = null;
+    if (!hasEle) {
+      pts = sampleCoords(coords, 100);
+      eles = await fetchElevations(pts);
+      if (!eles) return null;
+    }
+    const series = []; let km = 0, prev = null;
+    for (let i = 0; i < pts.length; i++) {
+      const c = pts[i];
+      if (prev) km += haversineKm([0, prev[0], prev[1]], [0, c[0], c[1]]);
+      prev = c;
+      const e = hasEle ? c[2] : eles[i];
+      if (isFinite(e)) series.push([km, e]);
+    }
+    return elevProfile(series);
   }
   // Reduce a (distance-km, elevation-m) series to total climb/drop (hysteresis
   // threshold filters GPS/DEM jitter) plus min/max and the series itself for a
