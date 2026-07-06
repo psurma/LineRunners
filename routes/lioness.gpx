@@ -2,11 +2,11 @@
 <gpx version="1.1" creator="TubeRun route generator" xmlns="http://www.topografix.com/GPX/1/1">
   <metadata>
     <name>Lioness line — TubeRun</name>
-    <desc>Above-ground running route tracing the Lioness Overground line, station to station. Routed on pavements and footways from OpenStreetMap data (BRouter, hiking-beta).</desc>
+    <desc>Above-ground running route tracing the Lioness line and its branches, station to station. Routed on pavements and footways from OpenStreetMap data (BRouter, hiking-beta).</desc>
     <author><name>TubeRun</name></author>
     <copyright author="OpenStreetMap contributors"><license>https://opendatacommons.org/licenses/odbl/1-0/</license></copyright>
     <link href="https://www.openstreetmap.org/copyright"><text>© OpenStreetMap contributors</text></link>
-    <time>2026-07-06T08:30:05.816Z</time>
+    <time>2026-07-06T10:27:03.648Z</time>
   </metadata>
   <wpt lat="51.528136" lon="-0.133924"><name>Euston</name></wpt>
   <wpt lat="51.541432" lon="-0.178878"><name>South Hampstead</name></wpt>

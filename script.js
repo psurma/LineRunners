@@ -2409,7 +2409,8 @@
   }
   // Real pavement run route for a line, from the generated routes/<slug>.gpx
   // (built offline by tools/generate-routes.mjs — foot-routed on OpenStreetMap).
-  // Same-origin fetch, cached per slug; returns [[lat, lon], …] or null.
+  // Same-origin fetch, cached per slug; returns an array of track segments
+  // ([[[lat, lon], …], …], the main route first, then each branch) or null.
   const routeGpxCache = {};
   async function loadRouteGpx(slug) {
     if (!slug) return null;
@@ -2418,8 +2419,10 @@
       const res = await fetch(`routes/${slug}.gpx`);
       if (!res.ok) throw new Error("gpx " + res.status);
       const doc = new DOMParser().parseFromString(await res.text(), "application/xml");
-      const pts = [...doc.getElementsByTagName("trkpt")].map((t) => [+t.getAttribute("lat"), +t.getAttribute("lon")]);
-      routeGpxCache[slug] = pts.length > 1 ? pts : null;
+      const segs = [...doc.getElementsByTagName("trkseg")]
+        .map((seg) => [...seg.getElementsByTagName("trkpt")].map((t) => [+t.getAttribute("lat"), +t.getAttribute("lon")]))
+        .filter((s) => s.length > 1);
+      routeGpxCache[slug] = segs.length ? segs : null;
     } catch (_) { routeGpxCache[slug] = null; }
     return routeGpxCache[slug];
   }
@@ -2435,9 +2438,10 @@
     if (!wp || wp.length < 2) return null;
     const wl = wp.map((s) => [s[1], s[2]]);
     // Explicit variant waypoints draw as station-to-station hops; the default
-    // whole-line route prefers the real pavement GPX when one exists.
-    const gpxLine = opts.waypoints ? null : await loadRouteGpx(id);
+    // whole-line route prefers the real pavement GPX (track 0, the main route).
+    const gpxSegs = opts.waypoints ? null : await loadRouteGpx(id);
     if (opts.stale && opts.stale()) return null;
+    const gpxLine = gpxSegs && gpxSegs[0];
     const routeLine = gpxLine && gpxLine.length > 1 ? gpxLine : wl;
     const grp = L.layerGroup().addTo(map);
     L.polyline(routeLine, { color: line.colour, weight: 6, opacity: 0.3, lineJoin: "round", lineCap: "round" }).addTo(grp);
@@ -2862,16 +2866,33 @@
   // between the leg's first and last station. Falls back to straight station
   // hops when the line has no GPX, or the stations don't sit on its main route
   // (e.g. a secondary branch the GPX doesn't cover).
+  // Best pavement slice for one station→station hop, across all of the line's
+  // branch tracks — so each hop follows whichever branch actually runs it, and a
+  // leg that crosses a branch boundary still traces real pavement throughout.
+  // Straight A→B when no track carries the hop.
+  function hopPavement(segs, A, B) {
+    let best = null, bestScore = Infinity;
+    for (const track of segs) {
+      const ia = nearestIdx(track, A[0], A[1]), ib = nearestIdx(track, B[0], B[1]);
+      const score = Math.max(
+        haversineKm([0, A[0], A[1]], [0, track[ia][0], track[ia][1]]),
+        haversineKm([0, B[0], B[1]], [0, track[ib][0], track[ib][1]]));
+      if (score < bestScore) { bestScore = score; best = { track, ia, ib }; }
+    }
+    if (!best || bestScore >= 0.4 || best.ia === best.ib) return [A, B];
+    return best.ia < best.ib ? best.track.slice(best.ia, best.ib + 1) : best.track.slice(best.ib, best.ia + 1).reverse();
+  }
+  // Stitch a leg's real pavement hop by hop from the line's branch tracks.
   async function segmentPavement(segNodes, slug, nodes) {
     const coords = segNodes.map((k) => [nodes[k].lat, nodes[k].lon]);
-    const track = GPX_LINES.has(slug) ? await loadRouteGpx(slug) : null;
-    if (!track || track.length < 2) return coords;
-    const idxs = coords.map((c) => nearestIdx(track, c[0], c[1]));
-    const onTrack = coords.every((c, i) => haversineKm([0, c[0], c[1]], [0, track[idxs[i]][0], track[idxs[i]][1]]) < 0.4);
-    if (!onTrack) return coords;
-    const a = idxs[0], b = idxs[idxs.length - 1];
-    if (a === b) return coords;
-    return a < b ? track.slice(a, b + 1) : track.slice(b, a + 1).reverse();
+    const segs = GPX_LINES.has(slug) ? await loadRouteGpx(slug) : null;
+    if (!segs || !segs.length) return coords;
+    const out = [];
+    for (let i = 0; i < coords.length - 1; i++) {
+      const hop = hopPavement(segs, coords[i], coords[i + 1]);
+      for (let j = out.length ? 1 : 0; j < hop.length; j++) out.push(hop[j]);
+    }
+    return out.length > 1 ? out : coords;
   }
   // Draw an A→B journey onto a map: each leg as its own line-coloured pavement
   // route (soft base + animated flow), a dot at every station, and start/finish
