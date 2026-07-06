@@ -1785,6 +1785,24 @@
     for (let i = 1; i < wp.length; i++) km += haversineKm(wp[i - 1], wp[i]);
     return km;
   }
+  // Entries for the network map's route picker: this month's run (when it's a Tube
+  // line, drawn from its pavement GPX) followed by every branching line's routes,
+  // grouped by line. Each carries the line id + waypoints so any can be highlighted.
+  function mapRouteEntries(net, hiId) {
+    const entries = [];
+    if (hiId && net[hiId]) {
+      const base = rtStations(net, net[hiId].name);
+      const ends = base && base.length > 1 ? ` · ${base[0][0]} → ${base[base.length - 1][0]}` : "";
+      entries.push({ id: hiId, gpx: true, group: "This month's run", label: net[hiId].name + ends });
+    }
+    for (const id of Object.keys(LINE_VARIANTS)) {
+      if (!net[id]) continue;
+      const opts = buildVariantOptions(net, id);
+      if (!opts) continue;
+      for (const o of opts) entries.push({ id, wp: o.wp, group: net[id].name, label: o.label });
+    }
+    return entries;
+  }
 
   // "Line by line" row expansion: show a selected line's run route on a mini-map.
   let lsMap = null; // the single open mini-map (accordion — one line at a time)
@@ -2488,15 +2506,23 @@
     return map;
   }
 
-  // A dropdown control (top-left) to choose which route of the highlighted line is
-  // shown on the geographic map. Options come from buildVariantOptions().
-  function addMapVariantControl(map, options, onChange) {
+  // A dropdown control (top-left) to choose which route is highlighted on the
+  // geographic map. Entries come from mapRouteEntries() and are grouped by line
+  // into <optgroup>s; selectedIdx is pre-selected.
+  function addMapVariantControl(map, entries, selectedIdx, onChange) {
     const ctl = L.control({ position: "topleft" });
     ctl.onAdd = () => {
       const div = L.DomUtil.create("div", "leaflet-bar geo-variant");
       const sel = L.DomUtil.create("select", "", div);
       sel.setAttribute("aria-label", "Choose which route to show on the map");
-      sel.innerHTML = options.map((o, i) => `<option value="${i}">${escapeHtml(o.label)}</option>`).join("");
+      let html = "", cur = null;
+      entries.forEach((e, i) => {
+        const g = e.group || "";
+        if (g !== cur) { if (cur !== null) html += "</optgroup>"; html += `<optgroup label="${escapeHtml(g)}">`; cur = g; }
+        html += `<option value="${i}"${i === selectedIdx ? " selected" : ""}>${escapeHtml(e.label)}</option>`;
+      });
+      if (cur !== null) html += "</optgroup>";
+      sel.innerHTML = html;
       L.DomEvent.disableClickPropagation(div);
       L.DomEvent.disableScrollPropagation(div);
       L.DomEvent.on(sel, "change", () => onChange(+sel.value));
@@ -2577,29 +2603,22 @@
       return { color: f.properties.colour, weight: on ? 5 : 3, opacity: on ? 1 : (hi ? 0.3 : 0.9), lineJoin: "round", lineCap: "round" }; } }).addTo(map);
     lineLayer.eachLayer((l) => { if (hi && l.feature.properties.line === hi) l.bringToFront(); });
 
-    // Run route for the highlighted line — the real pavement route drawn as a
-    // soft base + animated flow line, with start/finish markers and arrows.
-    // Multi-path lines get a dropdown (top-left) to switch which route is shown.
+    // Route overlay + picker (top-left). The picker always lists this month's run
+    // (when it's a Tube line) plus every branching line's routes grouped by line,
+    // so any route can be explored on the map. drawMapRoute swaps the highlight:
+    // a soft base + animated flow line with start/finish markers and arrows, and
+    // brings the chosen line's track to the front.
     let hiRouteGrp = null;
-    async function drawHiRoute(opt) {
+    async function drawMapRoute(entry) {
       if (hiRouteGrp) { hiRouteGrp.remove(); hiRouteGrp = null; }
-      const r = await drawRunRoute(map, net, hi, opt && !opt.gpx ? { waypoints: opt.wp, stale } : { stale });
+      const r = await drawRunRoute(map, net, entry.id, entry.gpx ? { stale } : { waypoints: entry.wp, stale });
       hiRouteGrp = r && r.group;
+      lineLayer.eachLayer((l) => { if (l.feature.properties.line === entry.id) l.bringToFront(); });
     }
-    let vopts = null;
-    if (hi) {
-      const variants = buildVariantOptions(net, hi);
-      if (variants) {
-        // Keep this month's actual run (pavement GPX) as the default; the dropdown
-        // adds every route variant of the highlighted line.
-        const base = rtStations(net, net[hi].name);
-        const ends = base && base.length > 1 ? ` · ${base[0][0]} → ${base[base.length - 1][0]}` : "";
-        vopts = [{ label: "This month's run" + ends, gpx: true }, ...variants];
-      }
-      await drawHiRoute(vopts ? vopts[0] : null);
-    }
+    const routeEntries = mapRouteEntries(net, hi);
+    if (routeEntries.length) await drawMapRoute(routeEntries[0]);
     if (stale && stale()) return;
-    if (hi && vopts) addMapVariantControl(map, vopts, (i) => drawHiRoute(vopts[i]));
+    if (routeEntries.length) addMapVariantControl(map, routeEntries, 0, (i) => drawMapRoute(routeEntries[i]));
 
     // Station lookup: dedup by id, count lines per station (interchange), colour.
     const count = {}, coordById = {}, colourById = {};
