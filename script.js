@@ -2429,9 +2429,8 @@
   // route (routes/<id>.gpx), falling back to straight station hops. Returns the
   // drawn latlngs (for fitBounds), or null if the line has no usable route.
   async function drawRunRoute(map, net, id, opts = {}) {
-    const line = net[id] || null;
-    if (!line && !opts.waypoints) return null;
-    const col = opts.colour || (line && line.colour) || "#0019a8";
+    const line = net[id];
+    if (!line) return null;
     const wp = opts.waypoints || rtStations(net, line.name);
     if (!wp || wp.length < 2) return null;
     const wl = wp.map((s) => [s[1], s[2]]);
@@ -2441,9 +2440,9 @@
     if (opts.stale && opts.stale()) return null;
     const routeLine = gpxLine && gpxLine.length > 1 ? gpxLine : wl;
     const grp = L.layerGroup().addTo(map);
-    L.polyline(routeLine, { color: col, weight: 6, opacity: 0.3, lineJoin: "round", lineCap: "round" }).addTo(grp);
-    L.polyline(routeLine, flowLineOptions(col, { weight: 4 })).addTo(grp);
-    L.circleMarker(wl[0], { radius: 6, color: "#fff", weight: 2, fillColor: col, fillOpacity: 1 })
+    L.polyline(routeLine, { color: line.colour, weight: 6, opacity: 0.3, lineJoin: "round", lineCap: "round" }).addTo(grp);
+    L.polyline(routeLine, flowLineOptions(line.colour, { weight: 4 })).addTo(grp);
+    L.circleMarker(wl[0], { radius: 6, color: "#fff", weight: 2, fillColor: line.colour, fillOpacity: 1 })
       .bindTooltip("Start · " + escapeHtml(wp[0][0]), { direction: "top" }).addTo(grp);
     L.marker(wl[wl.length - 1], { icon: L.divIcon({ className: "route-finish", html: "◉", iconSize: [15, 15], iconAnchor: [7, 7] }) })
       .bindTooltip("Finish · " + escapeHtml(wp[wp.length - 1][0]), { direction: "top" }).addTo(grp);
@@ -2453,7 +2452,7 @@
       const deg = bearingDeg(wp[i], wp[i + 1]);
       L.marker(wl[i], { interactive: false, keyboard: false, icon: L.divIcon({
         className: "route-arrow",
-        html: `<span style="transform:rotate(${Math.round(deg - 90)}deg);color:${col}">➤</span>`,
+        html: `<span style="transform:rotate(${Math.round(deg - 90)}deg);color:${line.colour}">➤</span>`,
         iconSize: [22, 22], iconAnchor: [11, 11],
       }) }).addTo(grp);
     }
@@ -2770,13 +2769,15 @@
   // ROAD_FACTOR), matching every other estimate on the site.
   function buildStationGraph(net) {
     const norm = (s) => String(s).toLowerCase().replace(/&/g, "and").replace(/[^a-z0-9]/g, "");
-    const nodes = {}, adj = {};
+    const ekey = (a, b) => (a < b ? a + " " + b : b + " " + a);
+    const nodes = {}, adj = {}, edgeLines = {}, lines = {};
     const node = (st) => {
       const k = norm(st.n);
       if (!nodes[k]) { nodes[k] = { name: st.n, lat: st.lat, lon: st.lon }; adj[k] = new Map(); }
       return k;
     };
     for (const id in net) {
+      lines[id] = { name: net[id].name, colour: net[id].colour };
       for (const branch of net[id].branches || []) {
         let prev = null;
         for (const sid of branch) {
@@ -2786,12 +2787,14 @@
           if (prev && prev.k !== k) {
             const w = haversineKm([0, prev.lat, prev.lon], [0, st.lat, st.lon]) * ROAD_FACTOR;
             if (!adj[k].has(prev.k) || adj[k].get(prev.k) > w) { adj[k].set(prev.k, w); adj[prev.k].set(k, w); }
+            const ek = ekey(k, prev.k);
+            (edgeLines[ek] || (edgeLines[ek] = new Set())).add(id); // which line(s) run this hop
           }
           prev = { k, lat: st.lat, lon: st.lon };
         }
       }
     }
-    return { nodes, adj, norm };
+    return { nodes, adj, edgeLines, lines, ekey, norm };
   }
   // Dijkstra over the station graph (a few hundred nodes — a sorted-array queue
   // is ample). Returns { path: [nodeKey…], km } or null if either end is unknown
@@ -2819,23 +2822,122 @@
     for (let cur = end; cur !== undefined; cur = prev[cur]) path.unshift(cur);
     return { path, km: dist[end] };
   }
-  // Distance/time summary for an A→B route (respects the km/mi toggle).
-  function journeyResultHtml(wp, km) {
-    const from = wp[0][0], to = wp[wp.length - 1][0], mid = wp.slice(1, -1);
-    const via = mid.slice(0, 3).map((s) => escapeHtml(s[0])).join(" · ");
-    const viaLine = mid.length
-      ? `<p class="jr-via"><span class="jr-via-k">via</span> ${via}${mid.length > 3 ? ` <span class="jr-more">+${mid.length - 3} more</span>` : ""}</p>`
-      : "";
+  // Split a shortest path (node keys) into legs on a single line each, greedily
+  // choosing lines to minimize changes when a hop is served by several.
+  function journeySegments(graph, path) {
+    if (path.length < 2) return [];
+    const { edgeLines, ekey } = graph;
+    const chosen = [];
+    let cur = null;
+    for (let i = 0; i < path.length - 1; i++) {
+      const cand = edgeLines[ekey(path[i], path[i + 1])] || new Set();
+      let line = cur && cand.has(cur) ? cur : null; // stay on the current line if it runs this hop
+      if (!line) {
+        const next = i + 1 < path.length - 1 ? edgeLines[ekey(path[i + 1], path[i + 2])] : null;
+        for (const l of cand) { if (next && next.has(l)) { line = l; break; } } // else prefer one that also runs the next hop
+        if (!line) line = cand.values().next().value || cur;
+      }
+      chosen.push(line);
+      cur = line;
+    }
+    const segs = [];
+    for (let i = 0; i < chosen.length; i++) {
+      if (segs.length && segs[segs.length - 1].line === chosen[i]) segs[segs.length - 1].nodes.push(path[i + 1]);
+      else segs.push({ line: chosen[i], nodes: [path[i], path[i + 1]] });
+    }
+    return segs;
+  }
+  // Index of the trackpoint nearest a lat/lon (squared-degree distance is ample
+  // for a nearest-point search at city scale).
+  function nearestIdx(track, lat, lon) {
+    let best = 0, bd = Infinity;
+    for (let i = 0; i < track.length; i++) {
+      const dy = track[i][0] - lat, dx = track[i][1] - lon;
+      const d = dy * dy + dx * dx;
+      if (d < bd) { bd = d; best = i; }
+    }
+    return best;
+  }
+  // The real pavement polyline for one leg: slice the line's foot-routed GPX
+  // between the leg's first and last station. Falls back to straight station
+  // hops when the line has no GPX, or the stations don't sit on its main route
+  // (e.g. a secondary branch the GPX doesn't cover).
+  async function segmentPavement(segNodes, slug, nodes) {
+    const coords = segNodes.map((k) => [nodes[k].lat, nodes[k].lon]);
+    const track = GPX_LINES.has(slug) ? await loadRouteGpx(slug) : null;
+    if (!track || track.length < 2) return coords;
+    const idxs = coords.map((c) => nearestIdx(track, c[0], c[1]));
+    const onTrack = coords.every((c, i) => haversineKm([0, c[0], c[1]], [0, track[idxs[i]][0], track[idxs[i]][1]]) < 0.4);
+    if (!onTrack) return coords;
+    const a = idxs[0], b = idxs[idxs.length - 1];
+    if (a === b) return coords;
+    return a < b ? track.slice(a, b + 1) : track.slice(b, a + 1).reverse();
+  }
+  // Draw an A→B journey onto a map: each leg as its own line-coloured pavement
+  // route (soft base + animated flow), a dot at every station, and start/finish
+  // markers. Returns { group, latlngs } for fitBounds.
+  async function drawJourney(map, segments, graph) {
+    const grp = L.layerGroup().addTo(map);
+    const all = [];
+    for (const seg of segments) {
+      const col = (graph.lines[seg.line] || {}).colour || "#0019a8";
+      const dense = await segmentPavement(seg.nodes, seg.line, graph.nodes);
+      L.polyline(dense, { color: col, weight: 6, opacity: 0.28, lineJoin: "round", lineCap: "round" }).addTo(grp);
+      L.polyline(dense, flowLineOptions(col, { weight: 4 })).addTo(grp);
+      dense.forEach((p) => all.push(p));
+      seg.nodes.forEach((k) => {
+        const n = graph.nodes[k];
+        L.circleMarker([n.lat, n.lon], { radius: 3.2, color: "#fff", weight: 1.4, fillColor: col, fillOpacity: 1, interactive: false }).addTo(grp);
+      });
+    }
+    const A = graph.nodes[segments[0].nodes[0]];
+    const lastSeg = segments[segments.length - 1];
+    const B = graph.nodes[lastSeg.nodes[lastSeg.nodes.length - 1]];
+    L.circleMarker([A.lat, A.lon], { radius: 6, color: "#fff", weight: 2, fillColor: "#111", fillOpacity: 1 })
+      .bindTooltip("Start · " + escapeHtml(A.name), { direction: "top" }).addTo(grp);
+    L.marker([B.lat, B.lon], { icon: L.divIcon({ className: "route-finish", html: "◉", iconSize: [15, 15], iconAnchor: [7, 7] }) })
+      .bindTooltip("Finish · " + escapeHtml(B.name), { direction: "top" }).addTo(grp);
+    return { group: grp, latlngs: all };
+  }
+  // A tube-map-style diagram of the journey: one coloured leg per line, its
+  // stations listed on a coloured rail, with a "change here" marker between legs.
+  function journeyStripHtml(segments, graph) {
+    const nodes = graph.nodes;
+    let html = `<div class="jrn">`;
+    segments.forEach((seg, si) => {
+      const info = graph.lines[seg.line] || { name: seg.line, colour: "#0019a8" };
+      const col = info.colour, hops = seg.nodes.length - 1;
+      const stops = si === 0 ? seg.nodes : seg.nodes.slice(1); // the interchange is shown in the change divider above
+      html += `<div class="jrn-leg" style="--c:${col}">`;
+      html += `<div class="jrn-badge" style="background:${col};color:${contrastText(col)}">${escapeHtml(info.name)} line <span class="jrn-badge-n">${hops} stop${hops === 1 ? "" : "s"}</span></div>`;
+      html += `<ol class="jrn-stops">`;
+      stops.forEach((k, i) => {
+        const isStart = si === 0 && i === 0;
+        const isEnd = si === segments.length - 1 && i === stops.length - 1;
+        html += `<li class="jrn-stop${isStart ? " is-start" : ""}${isEnd ? " is-end" : ""}"><span class="jrn-dot"></span><span class="jrn-nm">${escapeHtml(nodes[k].name)}</span></li>`;
+      });
+      html += `</ol></div>`;
+      if (si < segments.length - 1) {
+        html += `<div class="jrn-change"><span class="jrn-change-i">⇄</span> Change at <strong>${escapeHtml(nodes[seg.nodes[seg.nodes.length - 1]].name)}</strong></div>`;
+      }
+    });
+    return html + `</div>`;
+  }
+  // Distance/time summary + the tube-map strip for a routed journey.
+  function journeyResultHtml(res, segments, graph) {
+    const path = res.path, km = res.km, nodes = graph.nodes;
+    const from = nodes[path[0]].name, to = nodes[path[path.length - 1]].name;
+    const changes = Math.max(0, segments.length - 1);
     return `
       <div class="jr-head"><strong>${escapeHtml(from)}</strong><span class="jr-arrow">→</span><strong>${escapeHtml(to)}</strong></div>
-      <div class="cr-main"><span class="cr-km">${fmtKm(km, 1)}</span> <span class="jr-stops">${wp.length} stops</span></div>
+      <div class="cr-main"><span class="cr-km">${fmtKm(km, 1)}</span> <span class="jr-stops">${path.length} stops · ${changes} change${changes === 1 ? "" : "s"}</span></div>
       <div class="cr-times">
         <span class="cr-run">🏃 run ~${fmtTime(km * rtPace)}</span>
         <span class="cr-cycle">🚴 cycle ~${fmtTime(km * CYCLE_MIN_PER_KM)}</span>
         <span class="cr-walk">🚶 walk ~${fmtTime(km * WALK_MIN_PER_KM)}</span>
       </div>
-      ${viaLine}
-      <p class="jr-note">Shortest above-ground route, changing lines where they meet. Distance is on-street (crow-flies &times; 1.3).</p>`;
+      ${journeyStripHtml(segments, graph)}
+      <p class="jr-note">The map traces the real pavement route (GPX) leg by leg where available. Distance is on-street (crow-flies &times; 1.3).</p>`;
   }
   function setupJourneyPlanner() {
     const fromEl = document.getElementById("abFrom");
@@ -2863,15 +2965,15 @@
     }
     function render(res) {
       last = res;
-      const wp = res.path.map((k) => { const n = graph.nodes[k]; return [n.name, n.lat, n.lon]; });
+      const segments = journeySegments(graph, res.path);
       const map = ensureMap();
       if (jLayer) { map.removeLayer(jLayer); jLayer = null; }
-      drawRunRoute(map, {}, null, { waypoints: wp, colour: "#0019a8" }).then((drawn) => {
-        if (!drawn) return;
+      drawJourney(map, segments, graph).then((drawn) => {
+        if (!drawn || !drawn.latlngs.length) return;
         jLayer = drawn.group;
         map.fitBounds(L.latLngBounds(drawn.latlngs), { padding: [28, 28] });
       });
-      result.innerHTML = journeyResultHtml(wp, res.km);
+      result.innerHTML = journeyResultHtml(res, segments, graph);
     }
     function plan() {
       if (!graph) return;
