@@ -15,10 +15,10 @@
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-title" content="Tube Run" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-  <link rel="stylesheet" href="vendor/fonts/fonts.css?v=203" />
+  <link rel="stylesheet" href="vendor/fonts/fonts.css?v=204" />
   <link rel="stylesheet" href="vendor/leaflet/leaflet.css" />
   <script src="vendor/leaflet/leaflet.js" defer></script>
-  <link rel="stylesheet" href="style.css?v=203" />
+  <link rel="stylesheet" href="style.css?v=204" />
 </head>
 <body>
   <header class="site-header">
@@ -29,11 +29,11 @@
     <nav class="nav">
       <a href="#next">Next run</a>
       <a href="#plan">Plan</a>
+      <a href="#schedule">Schedule</a>
       <a href="#network">Map</a>
       <a href="#journey">Journey</a>
       <a href="#stats">Lines</a>
       <a href="#newhere">New here?</a>
-      <a href="#schedule">Schedule</a>
       <a href="#routes">Routes</a>
       <a href="#busrun">Buses</a>
       <a href="#collector">Progress</a>
@@ -154,6 +154,13 @@
       <div class="calc-result" id="calcResult"></div>
     </section>
 
+    <!-- SCHEDULE -->
+    <section id="schedule" class="schedule">
+      <h2 class="section-title">Upcoming runs</h2>
+      <p class="section-sub">Mostly the first Sunday of every month &mdash; plus the odd adventure further afield. Here's what's coming up.</p>
+      <div class="run-list" id="runList"></div>
+    </section>
+
     <!-- NETWORK MAP -->
     <section id="network" class="network">
       <h2 class="section-title">The whole network</h2>
@@ -219,13 +226,6 @@
           <p class="nh-note">We share the exact route in advance, stick to lit and populated streets and paths, and keep the group together. Run within your limits, and tell a group lead if you're heading off early.</p>
         </div>
       </div>
-    </section>
-
-    <!-- SCHEDULE -->
-    <section id="schedule" class="schedule">
-      <h2 class="section-title">Upcoming runs</h2>
-      <p class="section-sub">Mostly the first Sunday of every month &mdash; plus the odd adventure further afield. Here's what's coming up.</p>
-      <div class="run-list" id="runList"></div>
     </section>
 
     <!-- ROUTE IDEAS -->
@@ -379,6 +379,6 @@
     <p class="fine">Not affiliated with Transport for London. Roundel-inspired branding used with affection, not endorsement.</p>
   </footer>
 
-  <script src="script.js?v=203" defer></script>
+  <script src="script.js?v=204" defer></script>
 </body>
 </html>
