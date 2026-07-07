@@ -3610,6 +3610,10 @@
       const segments = pathToLegs(graph, res.path);
       const map = ensureMap();
       if (jLayer) { map.removeLayer(jLayer); jLayer = null; }
+      // Accent the pane's left bar with the journey's main line (the leg with the most stops).
+      const mainSeg = segments.reduce((a, b) => (b.nodes.length > a.nodes.length ? b : a), segments[0]);
+      const mainInfo = mainSeg && graph.lines[mainSeg.line];
+      result.style.borderLeftColor = mainInfo ? mainInfo.colour : "";
       result.innerHTML = journeyResultHtml(res, segments, graph); // set first so the map can stretch to the pane's height
       requestAnimationFrame(() => {
         map.invalidateSize(false); // the pane (and the map stretched to it) may have changed height
@@ -3624,6 +3628,7 @@
     }
     function plan() {
       if (!graph) return;
+      result.style.borderLeftColor = ""; // reset to the default accent; render() re-colours it when a route is found
       const a = fromEl.value.trim(), b = toEl.value.trim();
       if (!a || !b) { result.innerHTML = `<p class="journey-hint">Pick a start and a finish station to trace a route.</p>`; return; }
       const res = shortestPath(graph, a, b);
