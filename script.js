@@ -1914,9 +1914,11 @@
     return best;
   }
 
-  function startFollowAlong(run) {
+  // Track any route: wp = ordered [[name,lat,lon],...] station polyline, colour +
+  // label for the HUD. Used for the next run and, from the Lines table, any line.
+  function startFollowAlong(wp, colour, label) {
     if (followActive) return;
-    const route = run && WAYPOINTS[run.key];
+    const route = wp;
     if (!route || route.length < 2) return;
     if (!("geolocation" in navigator)) { window.alert("This device can't share its location."); return; }
     followActive = true;
@@ -1925,14 +1927,14 @@
     for (let i = 1; i < route.length; i++) cum[i] = cum[i - 1] + haversineKm(route[i - 1], route[i]);
     const totalRaw = cum[route.length - 1];
     const totalKm = totalRaw * ROAD_FACTOR;
-    const colour = run.colour || BUS_COL;
+    colour = colour || BUS_COL;
 
     const ov = document.createElement("div");
     ov.className = "follow-overlay";
     ov.innerHTML = `
       <div class="follow-map" id="followMap"></div>
       <div class="follow-hud">
-        <div class="fh-line" style="--fc:${colour};color:${contrastText(colour)}">${escapeHtml(run.badge || run.key)}</div>
+        <div class="fh-line" style="--fc:${colour};color:${contrastText(colour)}">${escapeHtml(label || "Run")}</div>
         <div class="fh-next">
           <span class="fh-lbl">Next stop</span>
           <span class="fh-stop" id="fhStop">Locating…</span>
@@ -2033,7 +2035,7 @@
     const route = run && WAYPOINTS[run.key];
     if (!route || route.length < 2) { btn.hidden = true; return; }
     btn.hidden = false;
-    btn.addEventListener("click", () => startFollowAlong(run));
+    btn.addEventListener("click", () => startFollowAlong(route, run.colour, run.badge));
   }
 
   // --- Render: Line stats ------------------------------------------------
@@ -2270,11 +2272,22 @@
     btn.setAttribute("aria-expanded", "true");
     const detail = document.createElement("tr");
     detail.className = "ls-detail-row";
-    const gpx = gpxDownloadHtml(lineSlug(tr.dataset.line), tr.dataset.line, "ls-gpx");
+    const name = tr.dataset.line;
+    const gpx = gpxDownloadHtml(lineSlug(name), name, "ls-gpx");
     const reverseBtn = gpx ? `<button type="button" class="ls-reverse" aria-pressed="false" title="Reverse the route direction — and download the GPX the other way round">⇄ Reverse</button>` : "";
-    detail.innerHTML = `<td colspan="6"><div class="ls-detail-inner">${gpx ? `<div class="ls-gpx-row">${gpx}${reverseBtn}</div>` : ""}<div class="ls-map"></div><div class="ls-elev jr-elev"></div></div></td>`;
+    // Any line whose stations we know is followable live with GPS, not just the next run.
+    const followWp = netData ? rtStations(netData, name) : null;
+    const followBtn = followWp && followWp.length >= 2 ? `<button type="button" class="ls-follow" title="Follow this line live with GPS — next stop, progress and pace">▶ Follow live</button>` : "";
+    const ctrlRow = gpx || followBtn ? `<div class="ls-gpx-row">${gpx}${reverseBtn}${followBtn}</div>` : "";
+    detail.innerHTML = `<td colspan="6"><div class="ls-detail-inner">${ctrlRow}<div class="ls-map"></div><div class="ls-elev jr-elev"></div></div></td>`;
     tr.after(detail);
-    lineRouteMap(detail.querySelector(".ls-map"), tr.dataset.line, tr);
+    lineRouteMap(detail.querySelector(".ls-map"), name, tr);
+    const fb = detail.querySelector(".ls-follow");
+    if (fb) fb.addEventListener("click", () => {
+      let colour = null;
+      for (const id in netData) { if (netData[id].name === name) { colour = netData[id].colour; break; } }
+      startFollowAlong(followWp, colour, name + " line");
+    });
   }
   // Update / restore a line row's Length·Stops·Run·Cycle·Walk cells so they reflect
   // the route variant currently shown on its mini-map (stashing the line's overall

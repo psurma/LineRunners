@@ -896,6 +896,8 @@ tr.ls-open .ls-caret { transform: rotate(90deg); }
 .ls-reverse { font: 700 12px Inter, sans-serif; color: #0019a8; background: #fff; border: 1px solid #cdd6ff; border-radius: 999px; padding: 3px 12px; cursor: pointer; white-space: nowrap; transition: background 0.12s, border-color 0.12s; }
 .ls-reverse:hover { background: #eef1ff; border-color: #9fb0ff; }
 .ls-reverse.on { background: #0019a8; border-color: #0019a8; color: #fff; }
+.ls-follow { font: 700 12px Inter, sans-serif; color: #fff; background: var(--tfl-blue); border: 1px solid var(--tfl-blue); border-radius: 999px; padding: 3px 12px; cursor: pointer; white-space: nowrap; transition: filter 0.12s; }
+.ls-follow:hover { filter: brightness(1.15); }
 .jb-gpx { vertical-align: middle; margin-left: 8px; font-size: 11px; padding: 1px 9px; }
 .plan-gpx-row { margin: 14px 0 0; color: var(--muted); font-size: 14px; }
 .geo-variant .geo-variant-row .geo-gpx { flex: none; width: auto; height: auto; line-height: normal; display: inline-flex; align-items: center; }
