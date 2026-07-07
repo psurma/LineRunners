@@ -15,10 +15,10 @@
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-title" content="Tube Run" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-  <link rel="stylesheet" href="vendor/fonts/fonts.css?v=215" />
+  <link rel="stylesheet" href="vendor/fonts/fonts.css?v=216" />
   <link rel="stylesheet" href="vendor/leaflet/leaflet.css" />
   <script src="vendor/leaflet/leaflet.js" defer></script>
-  <link rel="stylesheet" href="style.css?v=215" />
+  <link rel="stylesheet" href="style.css?v=216" />
 </head>
 <body>
   <header class="site-header">
@@ -176,7 +176,11 @@
     <section id="journey" class="journey">
       <h2 class="section-title">Plan a run &mdash; anywhere to anywhere</h2>
       <p class="section-sub">Pick any two stations on the network and we&rsquo;ll trace the shortest above-ground running route between them &mdash; hopping across lines wherever they meet, just like a Tube journey planner. Distance and rough run, cycle and walk times included.</p>
-      <div class="journey-controls">
+      <div class="journey-mode" role="tablist" aria-label="Route type">
+        <button type="button" id="modePtp" class="jm-tab is-on" role="tab" aria-selected="true">Point to point</button>
+        <button type="button" id="modeLoop" class="jm-tab" role="tab" aria-selected="false">&#8635; Loop from a spot</button>
+      </div>
+      <div class="journey-controls" id="ptpControls">
         <div class="field">
           <label for="abFrom">From</label>
           <input id="abFrom" class="ab-input" list="abStations" placeholder="e.g. Brixton" autocomplete="off" />
@@ -188,7 +192,23 @@
         </div>
         <button type="button" id="abGo" class="btn btn-primary">Find route</button>
         <button type="button" id="abRandom" class="btn ab-random" title="Surprise me with a random route">&#127922; Random</button>
-        <datalist id="abStations"></datalist>
+      </div>
+      <datalist id="abStations"></datalist>
+      <div class="loop-controls" id="loopControls" hidden>
+        <div class="field">
+          <label for="loopStart">Start</label>
+          <input id="loopStart" class="ab-input" list="abStations" placeholder="e.g. Brixton" autocomplete="off" />
+        </div>
+        <button type="button" id="loopHere" class="ab-swap loop-here" title="Use my location" aria-label="Use my current location">&#9673;</button>
+        <div class="field loop-slider">
+          <label for="loopDist">Distance: <b id="loopDistVal">10 km</b></label>
+          <input type="range" id="loopDist" min="3" max="25" step="1" value="10" />
+        </div>
+        <div class="field loop-slider">
+          <label for="loopRad">Max radius: <b id="loopRadVal">any</b></label>
+          <input type="range" id="loopRad" min="0" max="12" step="1" value="0" />
+        </div>
+        <button type="button" id="loopGo" class="btn btn-primary">Generate loop</button>
       </div>
       <div class="journey-filters" id="abFilters" hidden>
         <span class="jf-label">Stick to lines <span class="jf-hint">optional &middot; leave clear for any</span></span>
@@ -382,6 +402,6 @@
     <p class="fine">Not affiliated with Transport for London. Roundel-inspired branding used with affection, not endorsement.</p>
   </footer>
 
-  <script src="script.js?v=215" defer></script>
+  <script src="script.js?v=216" defer></script>
 </body>
 </html>

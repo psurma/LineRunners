@@ -3400,6 +3400,105 @@
     }
     return segs;
   }
+  // --- Circular "loop from a spot" route generation ---------------------
+  // Full Dijkstra sweep from one node: shortest running km to every reachable
+  // station (respecting the preferred-line filter). Powers turnaround selection.
+  function allDistances(graph, startKey, allowed) {
+    const { adj, edgeLines, ekey } = graph;
+    const dist = { [startKey]: 0 }, done = new Set();
+    const q = [[0, startKey]];
+    while (q.length) {
+      q.sort((a, b) => a[0] - b[0]);
+      const [d, u] = q.shift();
+      if (done.has(u)) continue;
+      done.add(u);
+      for (const [v, w] of adj[u]) {
+        if (allowed) { const ls = edgeLines[ekey(u, v)]; if (!ls || ![...ls].some((l) => allowed.has(l))) continue; }
+        const nd = d + w;
+        if (dist[v] === undefined || nd < dist[v]) { dist[v] = nd; q.push([nd, v]); }
+      }
+    }
+    return dist;
+  }
+  // Shortest path that DISCOURAGES a set of edges (each penalised ×4) so a loop's
+  // return leg takes a different way round where one exists, yet still completes
+  // (retracing) when that's the only option. Returns the real (un-penalised) km.
+  function pathAvoiding(graph, fromKey, toKey, avoidEdges, allowed) {
+    const { adj, edgeLines, ekey } = graph;
+    const dist = { [fromKey]: 0 }, prev = {}, done = new Set();
+    const q = [[0, fromKey]];
+    while (q.length) {
+      q.sort((a, b) => a[0] - b[0]);
+      const [d, u] = q.shift();
+      if (done.has(u)) continue;
+      done.add(u);
+      if (u === toKey) break;
+      for (const [v, w] of adj[u]) {
+        if (allowed) { const ls = edgeLines[ekey(u, v)]; if (!ls || ![...ls].some((l) => allowed.has(l))) continue; }
+        const nd = d + (avoidEdges.has(ekey(u, v)) ? w * 4 : w);
+        if (dist[v] === undefined || nd < dist[v]) { dist[v] = nd; prev[v] = u; q.push([nd, v]); }
+      }
+    }
+    if (dist[toKey] === undefined) return null;
+    const path = [];
+    for (let c = toKey; c !== undefined; c = prev[c]) path.unshift(c);
+    let km = 0;
+    for (let i = 0; i < path.length - 1; i++) km += adj[path[i]].get(path[i + 1]);
+    return { path, km };
+  }
+  // Generate a circular running route from a start station: out to a turnaround
+  // ~half the target distance away (optionally within a crow-flies radius), then
+  // a different way back. Scores candidates on closeness to target + how little
+  // they retrace. Returns { path, km, loop:true, turnaround } or null.
+  function buildLoop(graph, startName, targetKm, radiusKm, allowed) {
+    const { adj, norm, nodes } = graph;
+    const s = norm(startName);
+    if (!adj[s]) return null;
+    const distS = allDistances(graph, s, allowed);
+    const sLat = nodes[s].lat, sLon = nodes[s].lon;
+    const within = (k) => !radiusKm || haversineKm([0, sLat, sLon], [0, nodes[k].lat, nodes[k].lon]) <= radiusKm;
+    // Turnarounds ~40–58% of the target out (the return is usually a touch longer,
+    // so aim the out-leg a little under half), and inside the radius if one is set.
+    const pick = (lo, hi) => Object.keys(distS).filter((k) => k !== s && distS[k] >= targetKm * lo && distS[k] <= targetKm * hi && within(k));
+    let cands = pick(0.4, 0.58);
+    if (cands.length < 4) cands = pick(0.3, 0.7); // relax when options are few (short target / tight radius)
+    if (!cands.length) return null;
+    for (let i = cands.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [cands[i], cands[j]] = [cands[j], cands[i]]; }
+    cands = cands.slice(0, 28);
+    let best = null;
+    // Prefer hitting the target distance; then, gently, not doubling back — so a
+    // near-target out-and-back beats a giant "true loop" round half the network
+    // (common off a dead-end start), but a real loop near the target still wins.
+    const consider = (path, km, retrace, turn) => {
+      const score = Math.abs(km - targetKm) / targetKm + retrace * 0.6;
+      if (!best || score < best.score) best = { path, km, retrace, turnaround: turn, score };
+    };
+    for (const t of cands) {
+      const out = shortestPath(graph, nodes[s].name, nodes[t].name, allowed);
+      if (!out || out.path.length < 2) continue;
+      const avoid = new Set();
+      for (let i = 0; i < out.path.length - 1; i++) avoid.add(graph.ekey(out.path[i], out.path[i + 1]));
+      // (a) a genuinely different way back — a true loop where the network allows one
+      const back = pathAvoiding(graph, t, s, avoid, allowed);
+      if (back && back.path.length > 1) {
+        let shared = 0;
+        for (let i = 0; i < back.path.length - 1; i++) if (avoid.has(graph.ekey(back.path[i], back.path[i + 1]))) shared++;
+        consider(out.path.concat(back.path.slice(1)), out.km + back.km, shared / (back.path.length - 1), nodes[t].name);
+      }
+      // (b) plain out-and-back — always available; the fallback when there's no separate return
+      consider(out.path.concat(out.path.slice(0, -1).reverse()), out.km * 2, 1, nodes[t].name);
+    }
+    return best ? { path: best.path, km: best.km, loop: true, retrace: best.retrace, turnaround: best.turnaround } : null;
+  }
+  // Nearest graph station to a lat/lon (for "use my location").
+  function nearestStation(graph, lat, lon) {
+    let best = null, bd = Infinity;
+    for (const k in graph.nodes) {
+      const n = graph.nodes[k], d = haversineKm([0, lat, lon], [0, n.lat, n.lon]);
+      if (d < bd) { bd = d; best = n; }
+    }
+    return best ? { name: best.name, km: bd } : null;
+  }
   // Index of the trackpoint nearest a lat/lon (squared-degree distance is ample
   // for a nearest-point search at city scale).
   function nearestIdx(track, lat, lon) {
@@ -3578,13 +3677,25 @@
     const path = res.path, km = res.km, nodes = graph.nodes;
     const from = nodes[path[0]].name, to = nodes[path[path.length - 1]].name;
     const changes = Math.max(0, segments.length - 1);
+    const isOB = res.loop && res.retrace > 0.85;
+    const head = res.loop
+      ? `<div class="jr-head"><span class="jr-loop" aria-hidden="true">↻</span><strong>${isOB ? "Out &amp; back from" : "Loop from"} ${escapeHtml(from)}</strong></div>`
+      : `<div class="jr-head"><strong>${escapeHtml(from)}</strong><span class="jr-arrow">→</span><strong>${escapeHtml(to)}</strong></div>`;
+    const meta = res.loop
+      ? `${path.length - 1} stops · ${isOB ? "turn at" : "out to"} ${escapeHtml(res.turnaround)} · ${changes} change${changes === 1 ? "" : "s"}`
+      : `${path.length} stops · ${changes} change${changes === 1 ? "" : "s"}`;
+    const loopNote = res.loop
+      ? (res.retrace < 0.15 ? "A circular route back to your start. "
+        : isOB ? "An out-and-back to the turnaround and home again — no separate way round on the network from here. "
+          : "A loop back to your start; part of it doubles back where the network had no separate way round. ")
+      : "";
     return `
-      <div class="jr-head"><strong>${escapeHtml(from)}</strong><span class="jr-arrow">→</span><strong>${escapeHtml(to)}</strong></div>
-      <div class="cr-main"><span class="cr-km">${fmtKm(km, 1)}</span> <span class="jr-stops">${path.length} stops · ${changes} change${changes === 1 ? "" : "s"}</span></div>
+      ${head}
+      <div class="cr-main"><span class="cr-km">${fmtKm(km, 1)}</span> <span class="jr-stops">${meta}</span></div>
       ${timesRowHtml(km)}
       ${journeyStripHtml(segments, graph)}
       <div class="jr-elev" aria-live="polite"></div>
-      <p class="jr-note">The map traces the real pavement route (GPX) leg by leg where available. Distance is on-street (crow-flies &times; 1.3); elevation is measured along the traced pavement.</p>`;
+      <p class="jr-note">${loopNote}The map traces the real pavement route (GPX) leg by leg where available. Distance is on-street (crow-flies &times; 1.3); elevation is measured along the traced pavement.</p>`;
   }
   function setupJourneyPlanner() {
     const fromEl = document.getElementById("abFrom");
@@ -3701,6 +3812,66 @@
         refresh();
       });
     }
+    // --- Loop mode: circular route from a start + target distance / radius ---
+    const loopStart = document.getElementById("loopStart");
+    const loopDist = document.getElementById("loopDist");
+    const loopRad = document.getElementById("loopRad");
+    const loopDistVal = document.getElementById("loopDistVal");
+    const loopRadVal = document.getElementById("loopRadVal");
+    const loopGoBtn = document.getElementById("loopGo");
+    const loopHereBtn = document.getElementById("loopHere");
+    const ptpControls = document.getElementById("ptpControls");
+    const loopControls = document.getElementById("loopControls");
+    const modePtpBtn = document.getElementById("modePtp");
+    const modeLoopBtn = document.getElementById("modeLoop");
+    function setMode(loop) {
+      if (ptpControls) ptpControls.hidden = loop;
+      if (loopControls) loopControls.hidden = !loop;
+      if (modePtpBtn) { modePtpBtn.classList.toggle("is-on", !loop); modePtpBtn.setAttribute("aria-selected", String(!loop)); }
+      if (modeLoopBtn) { modeLoopBtn.classList.toggle("is-on", loop); modeLoopBtn.setAttribute("aria-selected", String(loop)); }
+    }
+    if (modePtpBtn) modePtpBtn.addEventListener("click", () => setMode(false));
+    if (modeLoopBtn) modeLoopBtn.addEventListener("click", () => setMode(true));
+    function syncLoopLabels() {
+      if (loopDistVal && loopDist) loopDistVal.textContent = `${loopDist.value} km`;
+      if (loopRadVal && loopRad) loopRadVal.textContent = +loopRad.value ? `${loopRad.value} km` : "any";
+    }
+    if (loopDist) loopDist.addEventListener("input", syncLoopLabels);
+    if (loopRad) loopRad.addEventListener("input", syncLoopLabels);
+    syncLoopLabels();
+    function generateLoop() {
+      if (!graph) return;
+      result.style.borderLeftColor = "";
+      const start = loopStart.value.trim();
+      if (!start) { result.innerHTML = `<p class="journey-hint">Pick a start station (or use your location) and I&rsquo;ll trace a loop back to it.</p>`; return; }
+      if (!graph.adj[graph.norm(start)]) { result.innerHTML = `<p class="journey-hint">${escapeHtml(start)} isn&rsquo;t a station on the map — start typing and pick from the list.</p>`; return; }
+      const target = +loopDist.value, radius = +loopRad.value || 0;
+      const res = buildLoop(graph, start, target, radius, allowed);
+      if (!res) {
+        result.innerHTML = `<p class="journey-hint">Couldn&rsquo;t fit a ${target}&nbsp;km loop from ${escapeHtml(start)}${radius ? ` within ${radius}&nbsp;km` : ""}${allowed ? " on just those lines" : ""} — try a longer distance, a wider radius, or a more connected start.</p>`;
+        if (jLayer && jMap) { jMap.removeLayer(jLayer); jLayer = null; }
+        last = null;
+        return;
+      }
+      render(res);
+      if (window.matchMedia("(max-width: 860px)").matches) mapEl.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+    if (loopGoBtn) loopGoBtn.addEventListener("click", generateLoop);
+    if (loopStart) loopStart.addEventListener("change", () => { if (loopStart.value.trim()) generateLoop(); });
+    if (loopHereBtn) loopHereBtn.addEventListener("click", () => {
+      if (!navigator.geolocation) { result.innerHTML = `<p class="journey-hint">Your browser won&rsquo;t share a location — type a start station instead.</p>`; return; }
+      loopHereBtn.disabled = true;
+      navigator.geolocation.getCurrentPosition((pos) => {
+        loopHereBtn.disabled = false;
+        const near = graph && nearestStation(graph, pos.coords.latitude, pos.coords.longitude);
+        if (!near) return;
+        loopStart.value = near.name;
+        generateLoop();
+      }, () => {
+        loopHereBtn.disabled = false;
+        result.innerHTML = `<p class="journey-hint">Couldn&rsquo;t get your location — type a start station instead.</p>`;
+      }, { enableHighAccuracy: true, timeout: 8000 });
+    });
     if (goBtn) goBtn.addEventListener("click", plan);
     const randomBtn = document.getElementById("abRandom");
     if (randomBtn) randomBtn.addEventListener("click", randomRoute);
