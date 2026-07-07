@@ -1728,7 +1728,7 @@
   // Build the trace action for the bus runner — fetches the picked route's
   // stop sequence from TfL, draws it and renders the summary panel. A factory
   // so the staleness token stays private to the tracer.
-  function makeBusTracer(pick, dir, result) {
+  function makeBusTracer(pick, result) {
     let traceSeq = 0; // two rapid picks can resolve out of order — only the latest may render
     return async function trace() {
       const id = (pick.value || "").trim();
@@ -1737,12 +1737,14 @@
       result.innerHTML = `<p class="bus-loading">Loading route ${escapeHtml(id)}…</p>`;
       let seq;
       try {
-        const res = await fetch(`https://api.tfl.gov.uk/Line/${encodeURIComponent(id)}/Route/Sequence/${dir.value}`);
+        // Always fetch the outbound sequence — the Reverse button flips it to run
+        // the other way, so there's no separate inbound/outbound picker.
+        const res = await fetch(`https://api.tfl.gov.uk/Line/${encodeURIComponent(id)}/Route/Sequence/outbound`);
         if (!res.ok) throw new Error("http " + res.status);
         seq = await res.json();
       } catch (_) {
         if (mySeq !== traceSeq) return;
-        result.innerHTML = `<p class="bus-error">Couldn't load route <strong>${escapeHtml(id)}</strong> (${escapeHtml(dir.value)}). Check the number, or try the other direction.</p>`;
+        result.innerHTML = `<p class="bus-error">Couldn't load route <strong>${escapeHtml(id)}</strong>. Check the number and try again.</p>`;
         return;
       }
       if (mySeq !== traceSeq) return;
@@ -1752,7 +1754,7 @@
       const main = sps.reduce((a, b) => (b.stopPoint.length > a.stopPoint.length ? b : a), sps[0]);
       const stops = main ? main.stopPoint : [];
       if (!stops || stops.length < 2) {
-        result.innerHTML = `<p class="bus-error">No <strong>${escapeHtml(dir.value)}</strong> stops for route ${escapeHtml(id)} — try the other direction.</p>`;
+        result.innerHTML = `<p class="bus-error">No stops found for route ${escapeHtml(id)} — check the number and try again.</p>`;
         return;
       }
       const fwd = stops.map((s) => [s.name, s.lat, s.lon]);
@@ -1868,7 +1870,6 @@
 
   function setupBusRunner() {
     const pick = document.getElementById("busPick");
-    const dir = document.getElementById("busDir");
     const go = document.getElementById("busGo");
     const result = document.getElementById("busResult");
     const mapEl = document.getElementById("busMap");
@@ -1877,13 +1878,12 @@
 
     loadBusList();
     initBusMap(mapEl);
-    const trace = makeBusTracer(pick, dir, result);
+    const trace = makeBusTracer(pick, result);
     go.addEventListener("click", trace);
     pick.addEventListener("change", trace);
     // Let the site-wide unit toggle re-render the last traced route in the new units.
     busMapObj.retrace = () => { if (busMapObj.currentId) { pick.value = busMapObj.currentId; trace(); } };
-    dir.addEventListener("change", () => { if ((pick.value || "").trim()) trace(); });
-    const runRoute = (id) => { pick.value = id; dir.value = "outbound"; trace(); };
+    const runRoute = (id) => { pick.value = id; trace(); };
     setupBusQuickPicks(runRoute);
     setupBusPlaceSearch(runRoute, mapEl);
     renderBusProgress();

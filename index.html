@@ -15,10 +15,10 @@
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-title" content="Tube Run" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-  <link rel="stylesheet" href="vendor/fonts/fonts.css?v=205" />
+  <link rel="stylesheet" href="vendor/fonts/fonts.css?v=206" />
   <link rel="stylesheet" href="vendor/leaflet/leaflet.css" />
   <script src="vendor/leaflet/leaflet.js" defer></script>
-  <link rel="stylesheet" href="style.css?v=205" />
+  <link rel="stylesheet" href="style.css?v=206" />
 </head>
 <body>
   <header class="site-header">
@@ -243,19 +243,12 @@
     <!-- BUS ROUTE RUNNER -->
     <section id="busrun" class="busrun">
       <h2 class="section-title">Run a bus route</h2>
-      <p class="section-sub">Every London bus route &mdash; all 676 of them, both directions &mdash; as a run. Pick a route and direction to see its stops, distance and rough run/walk time, traced on the map. Live from the TfL network.</p>
+      <p class="section-sub">Every London bus route &mdash; all 676 of them, both directions &mdash; as a run. Pick a route to see its stops, distance and rough run/walk time traced on the map, then hit Reverse to run it the other way. Live from the TfL network.</p>
       <div class="busrun-controls">
         <div class="field">
           <label for="busPick">Route</label>
           <input id="busPick" list="busList" placeholder="e.g. 24, 159, N29" autocomplete="off" />
           <datalist id="busList"></datalist>
-        </div>
-        <div class="field">
-          <label for="busDir">Direction</label>
-          <select id="busDir">
-            <option value="outbound" selected>Outbound</option>
-            <option value="inbound">Inbound</option>
-          </select>
         </div>
         <button type="button" id="busGo" class="btn btn-primary">Trace it</button>
         <div class="field bus-place-field">
@@ -379,6 +372,6 @@
     <p class="fine">Not affiliated with Transport for London. Roundel-inspired branding used with affection, not endorsement.</p>
   </footer>
 
-  <script src="script.js?v=205" defer></script>
+  <script src="script.js?v=206" defer></script>
 </body>
 </html>
