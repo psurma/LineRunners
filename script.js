@@ -1895,39 +1895,61 @@
   // Reference line = the WAYPOINTS station polyline (no GPX parse needed).
   let followActive = false;
 
-  // Closest point on the [[name,lat,lon],...] polyline to (lat,lon). Planar
-  // per-segment projection — fine at running scale. Returns how far along the
-  // line that point is (km), the next station index and how far off-line (km).
-  function projectOnRoute(lat, lon, route, cum) {
-    let best = { off: Infinity, alongKm: 0, nextIdx: route.length - 1 };
+  // Cumulative distance (km) at each vertex of a [[lat,lon],...] path.
+  function pathCumKm(path) {
+    const cum = [0];
+    for (let i = 1; i < path.length; i++) cum[i] = cum[i - 1] + haversineKm([0, path[i - 1][0], path[i - 1][1]], [0, path[i][0], path[i][1]]);
+    return cum;
+  }
+  // Closest point on a [[lat,lon],...] path to (lat,lon). Planar per-segment
+  // projection — fine at running scale. Returns how far along the path that point
+  // lies (km) and how far off the path it is (km).
+  function projectOnPath(lat, lon, path, cum) {
+    let best = { off: Infinity, alongKm: 0 };
     const kLat = 111.32, kLon = 111.32 * Math.cos((lat * Math.PI) / 180); // km per degree
-    for (let i = 0; i < route.length - 1; i++) {
-      const aLat = route[i][1], aLon = route[i][2], bLat = route[i + 1][1], bLon = route[i + 1][2];
-      const bx = (bLon - aLon) * kLon, by = (bLat - aLat) * kLat;
-      const px = (lon - aLon) * kLon, py = (lat - aLat) * kLat;
+    for (let i = 0; i < path.length - 1; i++) {
+      const a = path[i], b = path[i + 1];
+      const bx = (b[1] - a[1]) * kLon, by = (b[0] - a[0]) * kLat;
+      const px = (lon - a[1]) * kLon, py = (lat - a[0]) * kLat;
       const len2 = bx * bx + by * by || 1e-9;
       let t = (px * bx + py * by) / len2;
       t = t < 0 ? 0 : t > 1 ? 1 : t;
       const off = Math.hypot(px - t * bx, py - t * by);
-      if (off < best.off) best = { off, alongKm: cum[i] + t * (cum[i + 1] - cum[i]), nextIdx: Math.min(i + 1, route.length - 1) };
+      if (off < best.off) best = { off, alongKm: cum[i] + t * (cum[i + 1] - cum[i]) };
     }
     return best;
   }
 
-  // Track any route: wp = ordered [[name,lat,lon],...] station polyline, colour +
-  // label for the HUD. Used for the next run and, from the Lines table, any line.
-  function startFollowAlong(wp, colour, label) {
+  // Track any route live. stops = ordered [[name,lat,lon],...] stations, used for
+  // the "next stop" logic and the dots on the map. slug = the pavement route to
+  // follow (routes/<slug>.gpx): the drawn line and every distance follow that real
+  // road path. Without a GPX we fall back to straight station hops × the road
+  // factor. Used for the next run and, from the Lines table, any line.
+  async function startFollowAlong(stops, colour, label, slug) {
     if (followActive) return;
-    const route = wp;
-    if (!route || route.length < 2) return;
+    if (!stops || stops.length < 2) return;
     if (!("geolocation" in navigator)) { window.alert("This device can't share its location."); return; }
     followActive = true;
-
-    const cum = [0];
-    for (let i = 1; i < route.length; i++) cum[i] = cum[i - 1] + haversineKm(route[i - 1], route[i]);
-    const totalRaw = cum[route.length - 1];
-    const totalKm = totalRaw * ROAD_FACTOR;
     colour = colour || BUS_COL;
+
+    // Prefer the real pavement route (dense, road-following); else station hops.
+    const gpxSegs = slug ? await loadRouteGpx(slug) : null;
+    const gpxLine = gpxSegs && gpxSegs[0] && gpxSegs[0].length > 1 ? gpxSegs[0] : null;
+    const usingGpx = !!gpxLine;
+    let path = usingGpx ? gpxLine.map((p) => [p[0], p[1]]) : stops.map((s) => [s[1], s[2]]);
+    let cum = pathCumKm(path);
+    // Align the GPX direction with the station order (the track may run the other way).
+    if (usingGpx) {
+      const a = projectOnPath(stops[0][1], stops[0][2], path, cum).alongKm;
+      const b = projectOnPath(stops[stops.length - 1][1], stops[stops.length - 1][2], path, cum).alongKm;
+      if (a > b) { path = path.slice().reverse(); cum = pathCumKm(path); }
+    }
+    const pathRaw = cum[path.length - 1];
+    const factor = usingGpx ? 1 : ROAD_FACTOR; // GPX is the real road; hops need the fudge
+    const totalKm = pathRaw * factor;
+    // Distance along the path to each station (clamped monotone), for next-stop logic.
+    const stopAt = []; let acc = 0;
+    for (const s of stops) { acc = Math.max(acc, projectOnPath(s[1], s[2], path, cum).alongKm); stopAt.push(acc); }
 
     const ov = document.createElement("div");
     ov.className = "follow-overlay";
@@ -1952,14 +1974,13 @@
     document.body.classList.add("follow-lock");
 
     const map = createSiteMap(document.getElementById("followMap"));
-    const line = route.map((s) => [s[1], s[2]]);
-    L.polyline(line, { color: colour, weight: 6, opacity: 0.9, lineJoin: "round" }).addTo(map);
-    route.forEach((s, i) => {
-      const end = i === 0 || i === route.length - 1;
+    L.polyline(path, { color: colour, weight: 6, opacity: 0.9, lineJoin: "round" }).addTo(map);
+    stops.forEach((s, i) => {
+      const end = i === 0 || i === stops.length - 1;
       L.circleMarker([s[1], s[2]], { radius: end ? 6 : 4, color: "#fff", weight: 2, fillColor: colour, fillOpacity: 1 })
         .bindTooltip(escapeHtml(s[0]), { direction: "top" }).addTo(map);
     });
-    map.fitBounds(L.latLngBounds(line), { padding: [50, 50] });
+    map.fitBounds(L.latLngBounds(path), { padding: [50, 50] });
 
     const $ = (id) => document.getElementById(id);
     const paceStr = (minPerKm) => fmtPace(distUnit === "mi" ? minPerKm / MI_PER_KM : minPerKm) + " /" + distUnit;
@@ -1968,11 +1989,13 @@
 
     const onFix = (pos) => {
       const { latitude: lat, longitude: lon, accuracy } = pos.coords;
-      const p = projectOnRoute(lat, lon, route, cum);
-      const alongKm = p.alongKm * ROAD_FACTOR;
-      const pct = Math.max(0, Math.min(100, Math.round((p.alongKm / totalRaw) * 100)));
-      const next = route[p.nextIdx];
-      const toNext = Math.max(0, (cum[p.nextIdx] - p.alongKm)) * ROAD_FACTOR;
+      const p = projectOnPath(lat, lon, path, cum);
+      const alongKm = p.alongKm * factor;
+      const pct = Math.max(0, Math.min(100, Math.round((p.alongKm / pathRaw) * 100)));
+      let nextIdx = stopAt.findIndex((sa) => sa > p.alongKm + 0.03);
+      if (nextIdx === -1) nextIdx = stops.length - 1;
+      const next = stops[nextIdx];
+      const toNext = Math.max(0, stopAt[nextIdx] - p.alongKm) * factor;
       $("fhStop").textContent = next[0];
       $("fhDist").textContent = fmtKm(toNext, toNext < 1 ? 2 : 1);
       $("fhPct").textContent = pct + "%";
@@ -2035,7 +2058,7 @@
     const route = run && WAYPOINTS[run.key];
     if (!route || route.length < 2) { btn.hidden = true; return; }
     btn.hidden = false;
-    btn.addEventListener("click", () => startFollowAlong(route, run.colour, run.badge));
+    btn.addEventListener("click", () => startFollowAlong(route, run.colour, run.badge, lineSlug(run.key)));
   }
 
   // --- Render: Line stats ------------------------------------------------
@@ -2286,7 +2309,7 @@
     if (fb) fb.addEventListener("click", () => {
       let colour = null;
       for (const id in netData) { if (netData[id].name === name) { colour = netData[id].colour; break; } }
-      startFollowAlong(followWp, colour, name + " line");
+      startFollowAlong(followWp, colour, name + " line", lineSlug(name));
     });
   }
   // Update / restore a line row's Length·Stops·Run·Cycle·Walk cells so they reflect
