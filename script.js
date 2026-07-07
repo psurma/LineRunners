@@ -3460,35 +3460,42 @@
     // Turnarounds ~40–58% of the target out (the return is usually a touch longer,
     // so aim the out-leg a little under half), and inside the radius if one is set.
     const pick = (lo, hi) => Object.keys(distS).filter((k) => k !== s && distS[k] >= targetKm * lo && distS[k] <= targetKm * hi && within(k));
-    let cands = pick(0.4, 0.58);
-    if (cands.length < 4) cands = pick(0.3, 0.7); // relax when options are few (short target / tight radius)
+    let cands = pick(0.35, 0.62);
+    if (cands.length < 6) cands = pick(0.28, 0.72); // relax when options are few (short target / tight radius)
     if (!cands.length) return null;
     for (let i = cands.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [cands[i], cands[j]] = [cands[j], cands[i]]; }
-    cands = cands.slice(0, 28);
-    let best = null;
-    // Prefer hitting the target distance; then, gently, not doubling back — so a
-    // near-target out-and-back beats a giant "true loop" round half the network
-    // (common off a dead-end start), but a real loop near the target still wins.
-    const consider = (path, km, retrace, turn) => {
-      const score = Math.abs(km - targetKm) / targetKm + retrace * 0.6;
-      if (!best || score < best.score) best = { path, km, retrace, turnaround: turn, score };
-    };
+    cands = cands.slice(0, 40);
+    // One best option per turnaround (a true loop where the network allows one,
+    // else a plain out-and-back). Score = distance miss + a gentle doubling-back
+    // penalty; distance is only a rough guide, so we keep a whole band of options.
+    const options = [];
     for (const t of cands) {
       const out = shortestPath(graph, nodes[s].name, nodes[t].name, allowed);
       if (!out || out.path.length < 2) continue;
       const avoid = new Set();
       for (let i = 0; i < out.path.length - 1; i++) avoid.add(graph.ekey(out.path[i], out.path[i + 1]));
-      // (a) a genuinely different way back — a true loop where the network allows one
+      let bestForT = null;
+      const consider = (path, km, retrace) => {
+        const score = Math.abs(km - targetKm) / targetKm + retrace * 0.6;
+        if (!bestForT || score < bestForT.score) bestForT = { path, km, retrace, score, turnaround: nodes[t].name };
+      };
       const back = pathAvoiding(graph, t, s, avoid, allowed);
       if (back && back.path.length > 1) {
         let shared = 0;
         for (let i = 0; i < back.path.length - 1; i++) if (avoid.has(graph.ekey(back.path[i], back.path[i + 1]))) shared++;
-        consider(out.path.concat(back.path.slice(1)), out.km + back.km, shared / (back.path.length - 1), nodes[t].name);
+        consider(out.path.concat(back.path.slice(1)), out.km + back.km, shared / (back.path.length - 1));
       }
-      // (b) plain out-and-back — always available; the fallback when there's no separate return
-      consider(out.path.concat(out.path.slice(0, -1).reverse()), out.km * 2, 1, nodes[t].name);
+      consider(out.path.concat(out.path.slice(0, -1).reverse()), out.km * 2, 1);
+      if (bestForT) options.push(bestForT);
     }
-    return best ? { path: best.path, km: best.km, loop: true, retrace: best.retrace, turnaround: best.turnaround } : null;
+    if (!options.length) return null;
+    // Keep everything that lands roughly near the target (a rough guide, not exact),
+    // then pick RANDOMLY among the best handful so repeat "Generate loop" clicks
+    // give genuinely different routes rather than the same one each time.
+    const near = options.filter((o) => o.km >= targetKm * 0.7 && o.km <= targetKm * 1.5);
+    const pool = (near.length ? near : options).sort((a, b) => a.score - b.score);
+    const p = pool[Math.floor(Math.random() * Math.min(10, pool.length))];
+    return { path: p.path, km: p.km, loop: true, retrace: p.retrace, turnaround: p.turnaround };
   }
   // Nearest graph station to a lat/lon (for "use my location").
   function nearestStation(graph, lat, lon) {
