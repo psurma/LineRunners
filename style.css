@@ -501,6 +501,7 @@ section { max-width: var(--max); margin: 0 auto; padding: clamp(48px, 8vw, 88px)
   transition: box-shadow 0.15s, transform 0.15s;
 }
 .run-row:hover { box-shadow: var(--shadow); transform: translateY(-1px); }
+.run-row.has-details { cursor: pointer; }
 .run-row .r-date { font-weight: 700; }
 .run-row .r-date small { display: block; color: var(--muted); font-weight: 500; font-size: 12px; }
 .run-row .r-swatch { width: 14px; height: 42px; border-radius: 6px; }
@@ -1029,6 +1030,18 @@ tr.ls-open .ls-caret { transform: rotate(90deg); }
 .field input, .field select, .calc select, .ab-input,
 .busrun-controls #busPick, .busrun-controls #busPlace { height: 48px; }
 .journey-controls .btn, .busrun-controls .btn { height: 48px; display: inline-flex; align-items: center; justify-content: center; }
+/* Line filter — chips to restrict a journey to preferred lines */
+.journey-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin: -4px 0 18px; }
+.jf-label { font: 700 13px Inter, sans-serif; color: #33425c; }
+.jf-hint { font-weight: 500; color: #6a7890; }
+.ab-lines { display: flex; flex-wrap: wrap; gap: 8px; }
+.ab-line { display: inline-flex; align-items: center; gap: 7px; font: 700 12.5px Inter, sans-serif; padding: 6px 13px; border-radius: 999px; border: 1.5px solid var(--line); color: #2b3a52; background: #fff; cursor: pointer; transition: background 0.12s, color 0.12s, border-color 0.12s; }
+.ab-line-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--lc); flex: 0 0 auto; }
+.ab-line:hover { border-color: var(--lc); }
+.ab-line.on { background: var(--lc); color: var(--lct); border-color: var(--lc); }
+.ab-line.on .ab-line-dot { background: var(--lct); }
+.jf-clear { font: 700 12.5px Inter, sans-serif; padding: 6px 12px; border-radius: 999px; border: none; background: none; color: var(--tfl-blue); cursor: pointer; text-decoration: underline; }
+.jf-clear:hover { color: #10131c; }
 #abGo { align-self: flex-end; flex: 0 0 auto; }
 .journey-layout { display: grid; grid-template-columns: 1fr; gap: 18px; }
 .journey-layout > * { min-width: 0; }

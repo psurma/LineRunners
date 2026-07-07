@@ -15,10 +15,10 @@
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-title" content="Tube Run" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-  <link rel="stylesheet" href="vendor/fonts/fonts.css?v=214" />
+  <link rel="stylesheet" href="vendor/fonts/fonts.css?v=215" />
   <link rel="stylesheet" href="vendor/leaflet/leaflet.css" />
   <script src="vendor/leaflet/leaflet.js" defer></script>
-  <link rel="stylesheet" href="style.css?v=214" />
+  <link rel="stylesheet" href="style.css?v=215" />
 </head>
 <body>
   <header class="site-header">
@@ -189,6 +189,11 @@
         <button type="button" id="abGo" class="btn btn-primary">Find route</button>
         <button type="button" id="abRandom" class="btn ab-random" title="Surprise me with a random route">&#127922; Random</button>
         <datalist id="abStations"></datalist>
+      </div>
+      <div class="journey-filters" id="abFilters" hidden>
+        <span class="jf-label">Stick to lines <span class="jf-hint">optional &middot; leave clear for any</span></span>
+        <div id="abLines" class="ab-lines"></div>
+        <button type="button" id="abLinesClear" class="jf-clear" hidden>Clear</button>
       </div>
       <div class="journey-layout">
         <div id="abMap" class="route-map"></div>
@@ -377,6 +382,6 @@
     <p class="fine">Not affiliated with Transport for London. Roundel-inspired branding used with affection, not endorsement.</p>
   </footer>
 
-  <script src="script.js?v=214" defer></script>
+  <script src="script.js?v=215" defer></script>
 </body>
 </html>

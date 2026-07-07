@@ -813,7 +813,7 @@
       const loc = r.location !== "London" ? `<span class="r-loc">${escapeHtml(r.location)}</span>` : "";
       const toggle = hasDetails(r) ? `<button class="r-toggle" data-i="${i}" aria-expanded="false">Details</button>` : "";
       return `
-      <div class="run-row${r.suggested ? " is-suggested" : ""}">
+      <div class="run-row${r.suggested ? " is-suggested" : ""}${hasDetails(r) ? " has-details" : ""}" data-i="${i}">
         <div class="r-date">${r.date.getDate()} ${MON[r.date.getMonth()]}
           <small>${DOW[r.date.getDay()]} · ${r.date.getFullYear()}</small>
         </div>
@@ -834,13 +834,15 @@
     el.querySelectorAll(".r-cal").forEach((btn) => {
       btn.addEventListener("click", () => downloadRunIcs(runs[+btn.dataset.i]));
     });
-    el.querySelectorAll(".r-toggle").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const wrap = document.getElementById(`det-${btn.dataset.i}`);
+    el.querySelectorAll(".run-row.has-details").forEach((row) => {
+      row.addEventListener("click", (e) => {
+        if (e.target.closest(".r-cal")) return; // the calendar button keeps its own action
+        const wrap = document.getElementById(`det-${row.dataset.i}`);
+        if (!wrap) return;
         const open = !wrap.hidden;
         wrap.hidden = open;
-        btn.setAttribute("aria-expanded", String(!open));
-        btn.textContent = open ? "Details" : "Hide";
+        const btn = row.querySelector(".r-toggle");
+        if (btn) { btn.setAttribute("aria-expanded", String(!open)); btn.textContent = open ? "Details" : "Hide"; }
       });
     });
   }
@@ -3345,8 +3347,8 @@
   // Dijkstra over the station graph (a few hundred nodes — a sorted-array queue
   // is ample). Returns { path: [nodeKey…], km } or null if either end is unknown
   // or the two sit on disconnected parts of the network.
-  function shortestPath(graph, fromName, toName) {
-    const { adj, norm } = graph;
+  function shortestPath(graph, fromName, toName, allowed) {
+    const { adj, norm, edgeLines, ekey } = graph;
     const start = norm(fromName), end = norm(toName);
     if (!adj[start] || !adj[end]) return null;
     if (start === end) return { path: [start], km: 0 };
@@ -3359,6 +3361,7 @@
       done.add(u);
       if (u === end) break;
       for (const [v, w] of adj[u]) {
+        if (allowed) { const ls = edgeLines[ekey(u, v)]; if (!ls || ![...ls].some((l) => allowed.has(l))) continue; } // stick to preferred lines only
         const nd = d + w;
         if (dist[v] === undefined || nd < dist[v]) { dist[v] = nd; prev[v] = u; q.push([nd, v]); }
       }
@@ -3372,16 +3375,18 @@
   // choosing lines to minimize changes when a hop is served by several.
   // (Named distinctly from the timeline's journeySegments(run, wp) — same-scope
   // function declarations with one name would shadow each other.)
-  function pathToLegs(graph, path) {
+  function pathToLegs(graph, path, allowed) {
     if (path.length < 2) return [];
     const { edgeLines, ekey } = graph;
+    // Narrow a hop's serving-lines to the preferred set (unless that would empty it).
+    const only = (set) => { if (!allowed) return set; const f = new Set([...set].filter((l) => allowed.has(l))); return f.size ? f : set; };
     const chosen = [];
     let cur = null;
     for (let i = 0; i < path.length - 1; i++) {
-      const cand = edgeLines[ekey(path[i], path[i + 1])] || new Set();
+      const cand = only(edgeLines[ekey(path[i], path[i + 1])] || new Set());
       let line = cur && cand.has(cur) ? cur : null; // stay on the current line if it runs this hop
       if (!line) {
-        const next = i + 1 < path.length - 1 ? edgeLines[ekey(path[i + 1], path[i + 2])] : null;
+        const next = i + 1 < path.length - 1 ? only(edgeLines[ekey(path[i + 1], path[i + 2])] || new Set()) : null;
         for (const l of cand) { if (next && next.has(l)) { line = l; break; } } // else prefer one that also runs the next hop
         if (!line) line = cand.values().next().value || cur;
       }
@@ -3590,13 +3595,14 @@
     const mapEl = document.getElementById("abMap");
     const result = document.getElementById("abResult");
     if (!fromEl || !toEl || !mapEl || !result) return;
-    let graph = null, jMap = null, jLayer = null, last = null;
+    let graph = null, jMap = null, jLayer = null, last = null, allowed = null; // allowed: null = any line, else a Set of line ids
 
     loadNetwork().catch(() => null).then((net) => {
       if (!net) { result.innerHTML = `<p class="journey-hint">Couldn't load the network map — try refreshing.</p>`; return; }
       graph = buildStationGraph(net);
       const names = Object.values(graph.nodes).map((n) => n.name).sort((a, b) => a.localeCompare(b));
       dl.innerHTML = names.map((n) => `<option value="${escapeHtml(n)}"></option>`).join("");
+      renderLineChips();
     });
 
     function ensureMap() {
@@ -3607,7 +3613,7 @@
     }
     function render(res) {
       last = res;
-      const segments = pathToLegs(graph, res.path);
+      const segments = pathToLegs(graph, res.path, allowed);
       const map = ensureMap();
       if (jLayer) { map.removeLayer(jLayer); jLayer = null; }
       // Accent the pane's left bar with the journey's main line (the leg with the most stops).
@@ -3631,12 +3637,14 @@
       result.style.borderLeftColor = ""; // reset to the default accent; render() re-colours it when a route is found
       const a = fromEl.value.trim(), b = toEl.value.trim();
       if (!a || !b) { result.innerHTML = `<p class="journey-hint">Pick a start and a finish station to trace a route.</p>`; return; }
-      const res = shortestPath(graph, a, b);
+      const res = shortestPath(graph, a, b, allowed);
       if (!res || res.path.length < 2) {
         const unknown = [a, b].filter((n) => !graph.adj[graph.norm(n)]);
         result.innerHTML = unknown.length
           ? `<p class="journey-hint">${unknown.map(escapeHtml).join(" and ")} ${unknown.length > 1 ? "aren't stations" : "isn't a station"} on the map — start typing and pick from the list.</p>`
-          : `<p class="journey-hint">Those two aren't connected on the running network. Try another pair.</p>`;
+          : allowed
+            ? `<p class="journey-hint">No running route from ${escapeHtml(a)} to ${escapeHtml(b)} on just the line${allowed.size > 1 ? "s" : ""} you picked — add a line or clear the filter.</p>`
+            : `<p class="journey-hint">Those two aren't connected on the running network. Try another pair.</p>`;
         if (jLayer && jMap) { jMap.removeLayer(jLayer); jLayer = null; }
         last = null;
         return;
@@ -3653,7 +3661,7 @@
       for (let i = 0; i < 40; i++) {
         const a = pick(), b = pick();
         if (a === b) continue;
-        const res = shortestPath(graph, a, b);
+        const res = shortestPath(graph, a, b, allowed);
         if (!res || res.path.length < 2) continue;
         best = { a, b, res };
         if (res.km >= 5 && res.km <= 25) break; // a decent run; otherwise keep looking
@@ -3662,6 +3670,36 @@
       fromEl.value = best.a; toEl.value = best.b;
       render(best.res);
       if (window.matchMedia("(max-width: 860px)").matches) mapEl.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+    // Build the "stick to lines" chip row from the network's lines.
+    function renderLineChips() {
+      const box = document.getElementById("abLines");
+      const wrap = document.getElementById("abFilters");
+      const clearBtn = document.getElementById("abLinesClear");
+      if (!box || !graph) return;
+      const lines = Object.entries(graph.lines)
+        .map(([id, info]) => ({ id, name: info.name, colour: info.colour }))
+        .sort((a, b) => a.name.localeCompare(b.name));
+      box.innerHTML = lines.map((l) =>
+        `<button type="button" class="ab-line" data-id="${escapeHtml(l.id)}" style="--lc:${l.colour};--lct:${contrastText(l.colour)}" aria-pressed="false"><span class="ab-line-dot"></span>${escapeHtml(l.name)}</button>`
+      ).join("");
+      if (wrap) wrap.hidden = false;
+      const refresh = () => {
+        const on = [...box.querySelectorAll(".ab-line.on")].map((b) => b.dataset.id);
+        allowed = on.length ? new Set(on) : null;
+        if (clearBtn) clearBtn.hidden = !on.length;
+        if (fromEl.value.trim() && toEl.value.trim()) plan();
+      };
+      box.addEventListener("click", (e) => {
+        const chip = e.target.closest(".ab-line");
+        if (!chip) return;
+        chip.setAttribute("aria-pressed", chip.classList.toggle("on") ? "true" : "false");
+        refresh();
+      });
+      if (clearBtn) clearBtn.addEventListener("click", () => {
+        box.querySelectorAll(".ab-line.on").forEach((b) => { b.classList.remove("on"); b.setAttribute("aria-pressed", "false"); });
+        refresh();
+      });
     }
     if (goBtn) goBtn.addEventListener("click", plan);
     const randomBtn = document.getElementById("abRandom");
