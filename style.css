@@ -406,6 +406,13 @@ section { max-width: var(--max); margin: 0 auto; padding: clamp(48px, 8vw, 88px)
   padding: 2px 5px; border-radius: 4px; max-width: 86px;
   white-space: normal; text-align: center; hyphens: auto;
 }
+/* Underground-connection pills inside a bus-stop map popup: compact horizontal
+   wrap under the stop name, not the strip's full-width vertical stack. */
+.leaflet-popup-content .stn-tags {
+  flex-direction: row; flex-wrap: wrap; justify-content: center;
+  width: auto; margin-top: 5px; gap: 4px;
+}
+.leaflet-popup-content .stn-tag { font-size: 10px; max-width: none; }
 .strip-line {
   display: inline-block; font-weight: 800; font-size: 13px; letter-spacing: 0.3px;
   padding: 4px 12px; border-radius: 6px; margin-bottom: 12px;

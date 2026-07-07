@@ -846,6 +846,43 @@
     return `<span class="stn-tags">${pills.join("")}</span>`;
   }
 
+  // --- Bus-stop -> Underground connections -----------------------------------
+  // Bus stops don't share names with Tube stations, so their interchanges are
+  // matched by proximity instead. tubeGeo is the unique station set (coords + the
+  // Tube / Overground / Elizabeth lines serving each), built once the net loads.
+  let tubeGeo = null;
+  function buildTubeGeo(net) {
+    const byName = {};
+    for (const id in net) {
+      const ln = net[id];
+      for (const sid in ln.stations) {
+        const st = ln.stations[sid];
+        const k = norm(st.n);
+        if (!byName[k]) byName[k] = { lat: st.lat, lon: st.lon, lines: [] };
+        if (!byName[k].lines.some((x) => x.name === ln.name)) byName[k].lines.push({ name: ln.name, colour: ln.colour });
+      }
+    }
+    return Object.values(byName);
+  }
+  // Lines serving the station nearest to (lat, lon), or [] if none within ~200 m.
+  function nearestTubeLines(lat, lon) {
+    if (!tubeGeo || !isFinite(lat) || !isFinite(lon)) return [];
+    let best = null, bd = Infinity;
+    for (const s of tubeGeo) {
+      const d = haversineKm([0, lat, lon], [0, s.lat, s.lon]);
+      if (d < bd) { bd = d; best = s; }
+    }
+    return best && bd <= 0.2 ? best.lines : [];
+  }
+  function tubePills(lines) {
+    return lines.map((x) => `<span class="stn-tag" style="background:${x.colour};color:${contrastText(x.colour)}">${escapeHtml(x.name)}</span>`).join("");
+  }
+  // Interchange tags for a stop identified only by coordinates (bus strips/maps).
+  function geoInterchangeTags(lat, lon) {
+    const lines = nearestTubeLines(lat, lon);
+    return lines.length ? `<span class="stn-tags">${tubePills(lines)}</span>` : "";
+  }
+
   function fmtPace(minPerUnit) {
     const totalSec = Math.round(minPerUnit * 60);
     return `${Math.floor(totalSec / 60)}:${String(totalSec % 60).padStart(2, "0")}`;
@@ -917,6 +954,7 @@
     loadNetwork().catch(() => null).then((net) => {
       if (!net) return;
       interchangeMap = buildInterchangeMap(net);
+      tubeGeo = buildTubeGeo(net);
       renderDiagram();
       renderJourneyBoard();
       // Re-render the schedule for interchange tags, restoring any details
@@ -950,7 +988,7 @@
       return `<${tag} class="stn${active ? " active" : ""}${endpoint ? " endpoint" : ""}"${tappable ? ` data-i="${i}"` : ""} title="${escapeHtml(p[0])}" aria-label="${escapeHtml(p[0])}">
                 <span class="stn-name">${escapeHtml(p[0])}</span>
                 <span class="rail"><span class="dot"></span></span>
-                ${interchangeTags(p[0], lineName)}
+                ${opts.geoInterchange ? geoInterchangeTags(p[1], p[2]) : interchangeTags(p[0], lineName)}
               </${tag}>`;
     }).join("");
     return banner + `<div class="line-track">${track}</div>`;
@@ -1330,7 +1368,8 @@
       // autoPan off so the popup doesn't fight setView's centring (it would nudge
       // the stop to the edge instead, especially when zooming in from a wide view).
       map.setView([lat, lon], Math.max(map.getZoom(), 16), { animate: true });
-      L.popup({ offset: [0, -2], autoPan: false }).setLatLng([lat, lon]).setContent(safeName).openOn(map);
+      const conns = marks.tubeConns ? geoInterchangeTags(lat, lon) : "";
+      L.popup({ offset: [0, -2], autoPan: false }).setLatLng([lat, lon]).setContent(safeName + conns).openOn(map);
     };
     // Optional dot at every stop along the route (e.g. each bus stop), tube-map style.
     if (marks.stops) marks.stops.forEach((s) => {
@@ -1564,6 +1603,7 @@
       start: { at: [a[1], a[2]], label: "Start · " + escapeHtml(a[0]) },
       finish: { at: [b[1], b[2]], label: "Finish · " + escapeHtml(b[0]) },
       stops: wp,
+      tubeConns: true,
     }, [30, 30]);
   }
 
@@ -1626,12 +1666,12 @@
           <button type="button" id="busMark" class="bus-mark" data-id="${escapeHtml(id)}">＋ Mark as run</button>
           <div class="cr-note">Distance along the stops × ${ROAD_FACTOR} for the road. Buses run on-road — mind the traffic and lights.</div>
         </div>
-        <div class="line-diagram strip bus-strip" style="--line-col:${BUS_COL}">${stripMapHtml(null, BUS_COL, banner, { wp, bannerLabel: banner, tap: true })}</div>`;
+        <div class="line-diagram strip bus-strip" style="--line-col:${BUS_COL}">${stripMapHtml(null, BUS_COL, banner, { wp, bannerLabel: banner, tap: true, geoInterchange: true })}</div>`;
       result.querySelectorAll(".bus-strip .stn").forEach((btn) => btn.addEventListener("click", () => {
         const s = wp[+btn.dataset.i];
         if (!s || !busMapObj.map) return;
         busMapObj.map.setView([s[1], s[2]], 16, { animate: true });
-        L.popup({ offset: [0, -2], autoPan: false }).setLatLng([s[1], s[2]]).setContent(escapeHtml(s[0])).openOn(busMapObj.map);
+        L.popup({ offset: [0, -2], autoPan: false }).setLatLng([s[1], s[2]]).setContent(escapeHtml(s[0]) + geoInterchangeTags(s[1], s[2])).openOn(busMapObj.map);
         if (window.matchMedia("(max-width: 860px)").matches)
           document.getElementById("busMap").scrollIntoView({ behavior: "smooth", block: "center" });
       }));
