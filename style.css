@@ -1558,3 +1558,32 @@ body {
 /* Running times: direction reverse button */
 .rt-reverse { appearance: none; font: inherit; font-weight: 700; font-size: 14px; padding: 8px 16px; border: 1.5px solid var(--tfl-blue); border-radius: 20px; background: #fff; color: var(--tfl-blue); cursor: pointer; }
 .rt-reverse.on, .rt-reverse:hover { background: var(--tfl-blue); color: #fff; }
+
+/* --- Live follow-along run mode --- */
+.follow-launch { display: flex; align-items: center; gap: 14px; width: 100%; margin: 20px 0 0; padding: 14px 18px; border: none; border-radius: 16px; background: linear-gradient(135deg, var(--tfl-blue), #3350d8); color: #fff; cursor: pointer; text-align: left; box-shadow: 0 6px 20px rgba(0, 25, 168, 0.22); transition: transform 0.12s, box-shadow 0.12s; }
+.follow-launch:hover { transform: translateY(-2px); box-shadow: 0 10px 28px rgba(0, 25, 168, 0.3); }
+.follow-launch .fl-play { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; flex: none; border-radius: 50%; background: rgba(255, 255, 255, 0.18); font-size: 14px; }
+.follow-launch .fl-txt { display: flex; flex-direction: column; font: 800 17px Inter, sans-serif; }
+.follow-launch .fl-sub { font: 500 13px Inter, sans-serif; opacity: 0.85; margin-top: 2px; }
+
+body.follow-lock { overflow: hidden; }
+.follow-overlay { position: fixed; inset: 0; z-index: 4000; background: #eef1f5; }
+.follow-map { position: absolute; inset: 0; }
+.follow-hud { position: absolute; left: 12px; right: 12px; top: 12px; z-index: 4010; max-width: 460px; margin: 0 auto; background: rgba(255, 255, 255, 0.96); border-radius: 16px; padding: 14px 16px; box-shadow: 0 6px 24px rgba(20, 20, 40, 0.18); }
+.fh-line { display: inline-block; font: 800 13px Inter, sans-serif; padding: 3px 11px; border-radius: 999px; background: var(--fc); margin-bottom: 10px; }
+.fh-next { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.fh-lbl { width: 100%; font: 700 11px Inter, sans-serif; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em; }
+.fh-stop { font: 800 25px Inter, sans-serif; color: var(--ink); line-height: 1.1; }
+.fh-dist { font: 800 20px Inter, sans-serif; color: var(--tfl-blue); }
+.fh-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 12px; text-align: center; }
+.fh-grid > div { background: #f2f4f8; border-radius: 10px; padding: 8px 4px; }
+.fh-grid b { display: block; font: 800 18px Inter, sans-serif; color: var(--ink); }
+.fh-grid span { font: 600 11px Inter, sans-serif; color: #6b7280; }
+.fh-msg { margin-top: 10px; font: 600 13px Inter, sans-serif; color: #6b7280; }
+.fh-msg:empty { display: none; }
+.fh-msg.off { color: var(--tfl-red); }
+.follow-stop { position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%); z-index: 4020; font: 800 15px Inter, sans-serif; padding: 12px 28px; border: none; border-radius: 999px; background: var(--tfl-red); color: #fff; cursor: pointer; box-shadow: 0 6px 20px rgba(220, 36, 31, 0.38); }
+.follow-stop:hover { background: #b81c17; }
+.follow-you { background: none; border: none; }
+.fy-dot { display: block; width: 18px; height: 18px; border-radius: 50%; background: #1a73e8; border: 3px solid #fff; box-shadow: 0 0 0 0 rgba(26, 115, 232, 0.5); animation: fy-pulse 1.8s ease-out infinite; }
+@keyframes fy-pulse { 0% { box-shadow: 0 0 0 0 rgba(26, 115, 232, 0.5); } 70% { box-shadow: 0 0 0 16px rgba(26, 115, 232, 0); } 100% { box-shadow: 0 0 0 0 rgba(26, 115, 232, 0); } }

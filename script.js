@@ -1889,6 +1889,153 @@
     renderBusProgress();
   }
 
+  // --- Live follow-along run mode ----------------------------------------
+  // On the day, track the runner's GPS along the next run's route: which stop is
+  // next and how far, how much of the line is done, distance to go and live pace.
+  // Reference line = the WAYPOINTS station polyline (no GPX parse needed).
+  let followActive = false;
+
+  // Closest point on the [[name,lat,lon],...] polyline to (lat,lon). Planar
+  // per-segment projection — fine at running scale. Returns how far along the
+  // line that point is (km), the next station index and how far off-line (km).
+  function projectOnRoute(lat, lon, route, cum) {
+    let best = { off: Infinity, alongKm: 0, nextIdx: route.length - 1 };
+    const kLat = 111.32, kLon = 111.32 * Math.cos((lat * Math.PI) / 180); // km per degree
+    for (let i = 0; i < route.length - 1; i++) {
+      const aLat = route[i][1], aLon = route[i][2], bLat = route[i + 1][1], bLon = route[i + 1][2];
+      const bx = (bLon - aLon) * kLon, by = (bLat - aLat) * kLat;
+      const px = (lon - aLon) * kLon, py = (lat - aLat) * kLat;
+      const len2 = bx * bx + by * by || 1e-9;
+      let t = (px * bx + py * by) / len2;
+      t = t < 0 ? 0 : t > 1 ? 1 : t;
+      const off = Math.hypot(px - t * bx, py - t * by);
+      if (off < best.off) best = { off, alongKm: cum[i] + t * (cum[i + 1] - cum[i]), nextIdx: Math.min(i + 1, route.length - 1) };
+    }
+    return best;
+  }
+
+  function startFollowAlong(run) {
+    if (followActive) return;
+    const route = run && WAYPOINTS[run.key];
+    if (!route || route.length < 2) return;
+    if (!("geolocation" in navigator)) { window.alert("This device can't share its location."); return; }
+    followActive = true;
+
+    const cum = [0];
+    for (let i = 1; i < route.length; i++) cum[i] = cum[i - 1] + haversineKm(route[i - 1], route[i]);
+    const totalRaw = cum[route.length - 1];
+    const totalKm = totalRaw * ROAD_FACTOR;
+    const colour = run.colour || BUS_COL;
+
+    const ov = document.createElement("div");
+    ov.className = "follow-overlay";
+    ov.innerHTML = `
+      <div class="follow-map" id="followMap"></div>
+      <div class="follow-hud">
+        <div class="fh-line" style="--fc:${colour};color:${contrastText(colour)}">${escapeHtml(run.badge || run.key)}</div>
+        <div class="fh-next">
+          <span class="fh-lbl">Next stop</span>
+          <span class="fh-stop" id="fhStop">Locating…</span>
+          <span class="fh-dist" id="fhDist"></span>
+        </div>
+        <div class="fh-grid">
+          <div><b id="fhPct">—</b><span>of the line</span></div>
+          <div><b id="fhLeft">${fmtKm(totalKm, 1)}</b><span>to go</span></div>
+          <div><b id="fhPace">—</b><span>pace</span></div>
+        </div>
+        <div class="fh-msg" id="fhMsg">Waiting for GPS — allow location access when asked.</div>
+      </div>
+      <button type="button" class="follow-stop" id="fhStopBtn" aria-label="Stop following the run">✕ Stop</button>`;
+    document.body.appendChild(ov);
+    document.body.classList.add("follow-lock");
+
+    const map = createSiteMap(document.getElementById("followMap"));
+    const line = route.map((s) => [s[1], s[2]]);
+    L.polyline(line, { color: colour, weight: 6, opacity: 0.9, lineJoin: "round" }).addTo(map);
+    route.forEach((s, i) => {
+      const end = i === 0 || i === route.length - 1;
+      L.circleMarker([s[1], s[2]], { radius: end ? 6 : 4, color: "#fff", weight: 2, fillColor: colour, fillOpacity: 1 })
+        .bindTooltip(escapeHtml(s[0]), { direction: "top" }).addTo(map);
+    });
+    map.fitBounds(L.latLngBounds(line), { padding: [50, 50] });
+
+    const $ = (id) => document.getElementById(id);
+    const paceStr = (minPerKm) => fmtPace(distUnit === "mi" ? minPerKm / MI_PER_KM : minPerKm) + " /" + distUnit;
+    const youIcon = L.divIcon({ className: "follow-you", html: '<span class="fy-dot"></span>', iconSize: [22, 22], iconAnchor: [11, 11] });
+    let youMarker = null, accCircle = null, watchId = null, wakeLock = null, paceEMA = null, last = null, centred = false;
+
+    const onFix = (pos) => {
+      const { latitude: lat, longitude: lon, accuracy } = pos.coords;
+      const p = projectOnRoute(lat, lon, route, cum);
+      const alongKm = p.alongKm * ROAD_FACTOR;
+      const pct = Math.max(0, Math.min(100, Math.round((p.alongKm / totalRaw) * 100)));
+      const next = route[p.nextIdx];
+      const toNext = Math.max(0, (cum[p.nextIdx] - p.alongKm)) * ROAD_FACTOR;
+      $("fhStop").textContent = next[0];
+      $("fhDist").textContent = fmtKm(toNext, toNext < 1 ? 2 : 1);
+      $("fhPct").textContent = pct + "%";
+      $("fhLeft").textContent = fmtKm(Math.max(0, totalKm - alongKm), 1);
+      // live pace, smoothed; ignore GPS jitter under 5 m or gaps over 5 min
+      if (last) {
+        const dKm = haversineKm([0, last.lat, last.lon], [0, lat, lon]);
+        const dMin = (pos.timestamp - last.t) / 60000;
+        if (dKm > 0.005 && dMin > 0 && dMin < 5) {
+          const inst = dMin / dKm;
+          paceEMA = paceEMA == null ? inst : 0.6 * paceEMA + 0.4 * inst;
+          $("fhPace").textContent = paceStr(paceEMA);
+        }
+      }
+      last = { lat, lon, t: pos.timestamp };
+      const far = p.off > 0.15;
+      $("fhMsg").textContent = far ? `You're ${fmtKm(p.off, 2)} off the route.` : "";
+      $("fhMsg").classList.toggle("off", far);
+      const ll = [lat, lon];
+      if (!youMarker) youMarker = L.marker(ll, { icon: youIcon, keyboard: false, zIndexOffset: 1000 }).addTo(map);
+      else youMarker.setLatLng(ll);
+      if (accuracy) {
+        if (!accCircle) accCircle = L.circle(ll, { radius: accuracy, color: colour, weight: 1, opacity: 0.35, fillOpacity: 0.08 }).addTo(map);
+        else accCircle.setLatLng(ll).setRadius(accuracy);
+      }
+      if (!centred) { map.setView(ll, 16, { animate: true }); centred = true; }
+      else map.panTo(ll, { animate: true, duration: 0.5 });
+    };
+    const onErr = (e) => {
+      $("fhMsg").textContent = e && e.code === 1 ? "Location denied — enable it to follow the run." : "Can't get a GPS fix yet…";
+      $("fhMsg").classList.add("off");
+    };
+    watchId = navigator.geolocation.watchPosition(onFix, onErr, { enableHighAccuracy: true, maximumAge: 2000, timeout: 20000 });
+
+    // Keep the screen awake while running; wake locks drop when the tab hides.
+    const lockScreen = () => { if ("wakeLock" in navigator) navigator.wakeLock.request("screen").then((wl) => { wakeLock = wl; }).catch(() => {}); };
+    lockScreen();
+    const onVis = () => { if (document.visibilityState === "visible") lockScreen(); };
+    document.addEventListener("visibilitychange", onVis);
+
+    const stop = () => {
+      if (watchId != null) navigator.geolocation.clearWatch(watchId);
+      if (wakeLock) { wakeLock.release().catch(() => {}); wakeLock = null; }
+      document.removeEventListener("visibilitychange", onVis);
+      document.removeEventListener("keydown", onKey);
+      map.remove();
+      ov.remove();
+      document.body.classList.remove("follow-lock");
+      followActive = false;
+    };
+    const onKey = (e) => { if (e.key === "Escape") stop(); };
+    document.addEventListener("keydown", onKey);
+    $("fhStopBtn").addEventListener("click", stop);
+  }
+
+  function setupFollowAlong() {
+    const btn = document.getElementById("followBtn");
+    if (!btn) return;
+    const run = typeof nextRun !== "undefined" ? nextRun : null;
+    const route = run && WAYPOINTS[run.key];
+    if (!route || route.length < 2) { btn.hidden = true; return; }
+    btn.hidden = false;
+    btn.addEventListener("click", () => startFollowAlong(run));
+  }
+
   // --- Render: Line stats ------------------------------------------------
   // Real end-to-end line data [name, length km, station count].
   const LINE_STATS = [
@@ -3586,6 +3733,7 @@
     ["renderJourneyBoard", renderJourneyBoard], ["renderList", renderList],
     ["renderRoutes", renderRoutes], ["setupPaceState", setupPaceState],
     ["setupPlanner", setupPlanner], ["enrichInterchanges", enrichInterchanges], ["setupBusRunner", setupBusRunner],
+    ["setupFollowAlong", setupFollowAlong],
     ["setupJourneyPlanner", setupJourneyPlanner], ["renderLineCollector", renderLineCollector],
     ["renderGallery", renderGallery], ["wireSocials", wireSocials],
     ["loadWeather", loadWeather], ["setupScrollSpy", setupScrollSpy],

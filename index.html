@@ -15,10 +15,10 @@
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-title" content="Tube Run" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-  <link rel="stylesheet" href="vendor/fonts/fonts.css?v=207" />
+  <link rel="stylesheet" href="vendor/fonts/fonts.css?v=208" />
   <link rel="stylesheet" href="vendor/leaflet/leaflet.css" />
   <script src="vendor/leaflet/leaflet.js" defer></script>
-  <link rel="stylesheet" href="style.css?v=207" />
+  <link rel="stylesheet" href="style.css?v=208" />
 </head>
 <body>
   <header class="site-header">
@@ -152,6 +152,10 @@
         </div>
       </div>
       <div class="calc-result" id="calcResult"></div>
+      <button type="button" id="followBtn" class="follow-launch" hidden>
+        <span class="fl-play" aria-hidden="true">▶</span>
+        <span class="fl-txt">Follow this run live<span class="fl-sub">GPS tracker: next stop, progress &amp; pace as you run</span></span>
+      </button>
     </section>
 
     <!-- SCHEDULE -->
@@ -372,6 +376,6 @@
     <p class="fine">Not affiliated with Transport for London. Roundel-inspired branding used with affection, not endorsement.</p>
   </footer>
 
-  <script src="script.js?v=207" defer></script>
+  <script src="script.js?v=208" defer></script>
 </body>
 </html>
