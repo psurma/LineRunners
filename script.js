@@ -1687,7 +1687,7 @@
     }));
   }
 
-  function drawBus(seq, wp) {
+  function drawBus(seq, wp, reversed) {
     const m = busMapObj.map;
     if (!m) return;
     let segs = [];
@@ -1699,6 +1699,9 @@
       } catch (_) { /* skip malformed */ }
     });
     if (!segs.length) segs = [wp.map((s) => [s[1], s[2]])];
+    // Flip the geometry too so the flow arrows run the reversed direction (wp is
+    // already reversed by the caller, which swaps the start/finish markers).
+    if (reversed) segs = segs.slice().reverse().map((s) => s.slice().reverse());
     const a = wp[0], b = wp[wp.length - 1];
     drawFlowSegments(m, busMapObj, segs, BUS_COL, {
       start: { at: [a[1], a[2]], label: "Start · " + escapeHtml(a[0]) },
@@ -1752,44 +1755,58 @@
         result.innerHTML = `<p class="bus-error">No <strong>${escapeHtml(dir.value)}</strong> stops for route ${escapeHtml(id)} — try the other direction.</p>`;
         return;
       }
-      const wp = stops.map((s) => [s.name, s.lat, s.lon]);
-      const km = legDistanceKm(wp, 0, wp.length - 1);
-      const from = wp[0][0], to = wp[wp.length - 1][0];
-      const banner = `Route ${id} · ${from} → ${to}`;
+      const fwd = stops.map((s) => [s.name, s.lat, s.lon]);
       busMapObj.currentId = id;
-      drawBus(seq, wp);
-      result.innerHTML = `
-        <div class="bus-summary">
-          <div class="cr-main"><span class="cr-km">${fmtKm(km, 1)}</span></div>
-          ${timesRowHtml(km)}
-          <div class="cr-detail">${escapeHtml(from)} → ${escapeHtml(to)} · ${wp.length} stops</div>
-          <div class="bus-elev jr-elev"></div>
-          <button type="button" id="busMark" class="bus-mark" data-id="${escapeHtml(id)}">＋ Mark as run</button>
-          <div class="cr-note">Distance along the stops × ${ROAD_FACTOR} for the road. Buses run on-road — mind the traffic and lights.</div>
-        </div>
-        <div class="line-diagram strip bus-strip" style="--line-col:${BUS_COL}">${stripMapHtml(null, BUS_COL, banner, { wp, bannerLabel: banner, tap: true, geoInterchange: true })}</div>`;
-      result.querySelectorAll(".bus-strip .stn").forEach((btn) => btn.addEventListener("click", () => {
-        const s = wp[+btn.dataset.i];
-        if (!s || !busMapObj.map) return;
-        busMapObj.map.setView([s[1], s[2]], 16, { animate: true });
-        L.popup({ offset: [0, -2], autoPan: false }).setLatLng([s[1], s[2]]).setContent(escapeHtml(s[0]) + geoInterchangeTags(s[1], s[2])).openOn(busMapObj.map);
-        if (window.matchMedia("(max-width: 860px)").matches)
-          document.getElementById("busMap").scrollIntoView({ behavior: "smooth", block: "center" });
-      }));
-      syncBusMark();
-      const mark = document.getElementById("busMark");
-      if (mark) mark.addEventListener("click", () => {
-        const rid = mark.dataset.id;
-        if (busRun.has(rid)) busRun.delete(rid); else busRun.add(rid);
-        saveBuses(busRun); syncBusMark(); renderBusProgress();
-      });
-      // Elevation profile — buses carry no GPX, so sample open-meteo along the stops.
-      const elBox = result.querySelector(".bus-elev");
-      if (elBox) {
-        elBox.innerHTML = `<p class="ls-elev-load">Reading elevation…</p>`;
-        const elev = await routeElevation(wp.map((s) => [s[1], s[2]]));
-        if (mySeq === traceSeq && elBox.isConnected) elBox.innerHTML = elev ? elevationHtml(elev) : "";
-      }
+      // Render the traced route in the current direction. Reverse flips `reversed`
+      // and re-renders — flipping the stops, the map's flow direction and the
+      // elevation profile — so you can plan running the route either way round.
+      let reversed = false, renderSeq = 0;
+      const render = async () => {
+        const myRender = ++renderSeq;
+        const wp = reversed ? [...fwd].reverse() : fwd;
+        const km = legDistanceKm(wp, 0, wp.length - 1);
+        const from = wp[0][0], to = wp[wp.length - 1][0];
+        const banner = `Route ${id} · ${from} → ${to}`;
+        drawBus(seq, wp, reversed);
+        result.innerHTML = `
+          <div class="bus-summary">
+            <div class="cr-main"><span class="cr-km">${fmtKm(km, 1)}</span></div>
+            ${timesRowHtml(km)}
+            <div class="cr-detail">${escapeHtml(from)} → ${escapeHtml(to)} · ${wp.length} stops</div>
+            <div class="bus-elev jr-elev"></div>
+            <div class="bus-actions">
+              <button type="button" id="busMark" class="bus-mark" data-id="${escapeHtml(id)}">＋ Mark as run</button>
+              <button type="button" class="bus-reverse${reversed ? " on" : ""}" title="Flip the route to run it the other way">⇄ Reverse</button>
+            </div>
+            <div class="cr-note">Distance along the stops × ${ROAD_FACTOR} for the road. Buses run on-road — mind the traffic and lights.</div>
+          </div>
+          <div class="line-diagram strip bus-strip" style="--line-col:${BUS_COL}">${stripMapHtml(null, BUS_COL, banner, { wp, bannerLabel: banner, tap: true, geoInterchange: true })}</div>`;
+        result.querySelectorAll(".bus-strip .stn").forEach((btn) => btn.addEventListener("click", () => {
+          const s = wp[+btn.dataset.i];
+          if (!s || !busMapObj.map) return;
+          busMapObj.map.setView([s[1], s[2]], 16, { animate: true });
+          L.popup({ offset: [0, -2], autoPan: false }).setLatLng([s[1], s[2]]).setContent(escapeHtml(s[0]) + geoInterchangeTags(s[1], s[2])).openOn(busMapObj.map);
+          if (window.matchMedia("(max-width: 860px)").matches)
+            document.getElementById("busMap").scrollIntoView({ behavior: "smooth", block: "center" });
+        }));
+        syncBusMark();
+        const mark = document.getElementById("busMark");
+        if (mark) mark.addEventListener("click", () => {
+          const rid = mark.dataset.id;
+          if (busRun.has(rid)) busRun.delete(rid); else busRun.add(rid);
+          saveBuses(busRun); syncBusMark(); renderBusProgress();
+        });
+        const revBtn = result.querySelector(".bus-reverse");
+        if (revBtn) revBtn.addEventListener("click", () => { reversed = !reversed; render(); });
+        // Elevation profile — buses carry no GPX, so sample open-meteo along the stops.
+        const elBox = result.querySelector(".bus-elev");
+        if (elBox) {
+          elBox.innerHTML = `<p class="ls-elev-load">Reading elevation…</p>`;
+          const elev = await routeElevation(wp.map((s) => [s[1], s[2]]));
+          if (myRender === renderSeq && mySeq === traceSeq && elBox.isConnected) elBox.innerHTML = elev ? elevationHtml(elev) : "";
+        }
+      };
+      render();
     };
   }
 
