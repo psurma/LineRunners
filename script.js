@@ -197,6 +197,32 @@
       ["Islington Tunnel (Angel)", 51.5330, -0.1030], ["Victoria Park", 51.5362, -0.0400],
       ["Mile End", 51.5250, -0.0330], ["Limehouse Basin", 51.5122, -0.0390],
     ],
+    // River-path landmarks (Thames bridges, downstream) — coords from OSM.
+    "Thames Path": [
+      ["Putney Bridge", 51.4683, -0.2088], ["Wandsworth Bridge", 51.4649, -0.1877],
+      ["Battersea Bridge", 51.4811, -0.1725], ["Albert Bridge", 51.4828, -0.1669],
+      ["Vauxhall Bridge", 51.4875, -0.1268], ["Westminster Bridge", 51.5009, -0.1218],
+      ["Waterloo Bridge", 51.5028, -0.1128], ["Blackfriars Bridge", 51.5098, -0.1044],
+      ["London Bridge", 51.5080, -0.0877], ["Tower Bridge", 51.5055, -0.0754],
+    ],
+    // Key stops along TfL bus route 38 (Clapton Pond → Victoria) — coords from TfL.
+    "Route 38": [
+      ["Clapton Pond", 51.5568, -0.0557], ["Hackney Central", 51.5475, -0.0557],
+      ["Dalston Junction", 51.5462, -0.0746], ["Essex Road", 51.5409, -0.0953],
+      ["Angel", 51.5337, -0.1055], ["Mount Pleasant", 51.5254, -0.1104],
+      ["Bloomsbury Square", 51.5186, -0.1217], ["Tottenham Court Road", 51.5167, -0.1281],
+      ["Piccadilly Circus", 51.5092, -0.1363], ["Green Park", 51.5067, -0.1428],
+      ["Hyde Park Corner", 51.5021, -0.1507], ["Victoria", 51.4961, -0.1436],
+    ],
+    // Shipwrights Way waymarked trail (Bentley → Portsmouth), heading south — coords from OSM.
+    "Shipwrights Way": [
+      ["Bentley Station", 51.1812, -0.8682], ["Alice Holt Forest", 51.1727, -0.8372],
+      ["Bordon", 51.1091, -0.8593], ["Liphook", 51.0718, -0.8003],
+      ["Liss", 51.0415, -0.8995], ["Petersfield", 51.0025, -0.9392],
+      ["Buriton", 50.9708, -0.9504], ["Queen Elizabeth Country Park", 50.9655, -0.9693],
+      ["Rowlands Castle", 50.9051, -0.9669], ["Havant", 50.8519, -0.9821],
+      ["Portsmouth Historic Dockyard", 50.8005, -1.1095],
+    ],
   };
 
   // --- Date helpers ------------------------------------------------------
@@ -908,7 +934,10 @@
     }
     const key = norm(name);
     const tube = interchangeMap ? (interchangeMap[key] || []).filter((x) => norm(x.name) !== norm(line)) : [];
-    const other = nonTubeByNorm[key] || [];
+    // Drop a hardcoded "<name> line" (e.g. "Elizabeth line") when the network already
+    // supplies that line as a Tube interchange, so it isn't listed twice.
+    const tubeNames = new Set(tube.map((x) => norm(x.name)));
+    const other = (nonTubeByNorm[key] || []).filter((n) => !tubeNames.has(norm(n.replace(/ line$/i, ""))));
     if (!tube.length && !other.length) return "";
     const pills = tube.map((x) => `<span class="stn-tag" style="background:${x.colour};color:${contrastText(x.colour)}">${escapeHtml(x.name)}</span>`)
       .concat(other.map((n) => {
