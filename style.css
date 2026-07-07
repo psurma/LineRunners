@@ -536,6 +536,16 @@ section { max-width: var(--max); margin: 0 auto; padding: clamp(48px, 8vw, 88px)
   cursor: pointer;
 }
 .r-toggle:hover { border-color: var(--tfl-blue); }
+.r-actions { display: flex; gap: 6px; justify-content: flex-end; align-items: center; flex-wrap: wrap; margin-top: 6px; }
+.r-actions .r-toggle { margin: 0; }
+.r-cal {
+  display: inline-flex; align-items: center; gap: 5px;
+  appearance: none; border: 1px solid var(--line); background: #fff;
+  color: var(--tfl-blue); font: inherit; font-size: 13px; font-weight: 600;
+  padding: 4px 11px; border-radius: 20px; cursor: pointer; white-space: nowrap;
+}
+.r-cal:hover { border-color: var(--tfl-blue); }
+.r-cal svg { width: 13px; height: 13px; }
 
 .run-details-wrap {
   background: #fbfcfe;

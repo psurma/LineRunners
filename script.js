@@ -716,6 +716,70 @@
     return `<div class="run-details">${notes}${strip}${days}${exits}${stay}${link}</div>`;
   }
 
+  // --- Add-to-calendar (.ics) -----------------------------------------------
+  // Client-side calendar export for a run — no backend. A timed 09:00 event on
+  // the run date (all-day span for multi-day adventures) so people stop missing
+  // the first-Sunday runs. Times are floating-local: the group meets in London.
+  const CAL_URL = "https://psurma.github.io/TubeRun/";
+  const CAL_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4.5" width="18" height="17" rx="2.5"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4"/></svg>`;
+  const pad2 = (n) => String(n).padStart(2, "0");
+  function icsEsc(s) { return String(s).replace(/([\\;,])/g, "\\$1").replace(/\n/g, "\\n"); }
+  // Fold physical lines at 75 octets per RFC 5545 (continuation lines start with a space).
+  function icsFold(line) {
+    if (line.length <= 74) return line;
+    let out = line.slice(0, 74), rest = line.slice(74);
+    while (rest.length) { out += "\r\n " + rest.slice(0, 73); rest = rest.slice(73); }
+    return out;
+  }
+  function icsDate(d, hh, mm) {
+    const base = `${d.getFullYear()}${pad2(d.getMonth() + 1)}${pad2(d.getDate())}`;
+    return hh == null ? base : `${base}T${pad2(hh)}${pad2(mm)}00`;
+  }
+  function icsStamp() {
+    const d = new Date();
+    return `${d.getUTCFullYear()}${pad2(d.getUTCMonth() + 1)}${pad2(d.getUTCDate())}T` +
+      `${pad2(d.getUTCHours())}${pad2(d.getUTCMinutes())}${pad2(d.getUTCSeconds())}Z`;
+  }
+  function runIcs(r) {
+    const [mh, mm] = MEET_TIME.split(":").map(Number);
+    const multi = r.days && r.days.length > 1;
+    const slug = (r.key || r.badge).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+    let dtStart, dtEnd;
+    if (multi) {
+      const end = new Date(r.date.getTime() + r.days.length * 86400000); // DTEND date is exclusive
+      dtStart = `DTSTART;VALUE=DATE:${icsDate(r.date)}`;
+      dtEnd = `DTEND;VALUE=DATE:${icsDate(end)}`;
+    } else {
+      const endMin = mh * 60 + mm + 150; // ~2h30 block
+      dtStart = `DTSTART:${icsDate(r.date, mh, mm)}`;
+      dtEnd = `DTEND:${icsDate(r.date, Math.floor(endMin / 60), endMin % 60)}`;
+    }
+    const loc = r.start ? r.start + (r.location === "London" ? ", London" : "") : r.location;
+    const desc = [r.leg, distText(r.distance), multi ? null : `Meet ${MEET_TIME}`, CAL_URL].filter(Boolean).join("\n");
+    const lines = [
+      "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//TubeRun//Runs//EN", "CALSCALE:GREGORIAN",
+      "BEGIN:VEVENT",
+      `UID:${icsDate(r.date)}-${slug}@tuberun`,
+      `DTSTAMP:${icsStamp()}`,
+      dtStart, dtEnd,
+      `SUMMARY:${icsEsc("Tube Run · " + r.badge)}`,
+      loc ? `LOCATION:${icsEsc(loc)}` : "",
+      `DESCRIPTION:${icsEsc(desc)}`,
+      `URL:${CAL_URL}`,
+      "END:VEVENT", "END:VCALENDAR",
+    ].filter(Boolean);
+    return lines.map(icsFold).join("\r\n");
+  }
+  function downloadRunIcs(r) {
+    const blob = new Blob([runIcs(r)], { type: "text/calendar;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `tube-run-${(r.key || r.badge).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "")}.ics`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+  }
+
   function renderList() {
     const el = document.getElementById("runList");
     if (!el) return;
@@ -731,11 +795,19 @@
         <div class="r-title">${escapeHtml(r.badge)} ${loc}${r.suggested ? ` <span class="r-suggest" title="Tentative — the plan is only firmed up about a month ahead">Suggested</span>` : ""}
           <small>${escapeHtml(r.leg)}</small>
         </div>
-        <div class="r-dist">${escapeHtml(distText(r.distance))}${toggle}</div>
+        <div class="r-dist">${escapeHtml(distText(r.distance))}
+          <div class="r-actions">
+            <button class="r-cal" data-i="${i}" title="Add to your calendar" aria-label="Add the ${escapeHtml(r.badge)} run to your calendar">${CAL_ICON}Calendar</button>
+            ${toggle}
+          </div>
+        </div>
       </div>
       ${hasDetails(r) ? `<div class="run-details-wrap" id="det-${i}" hidden>${detailsHtml(r)}</div>` : ""}`;
     }).join("");
 
+    el.querySelectorAll(".r-cal").forEach((btn) => {
+      btn.addEventListener("click", () => downloadRunIcs(runs[+btn.dataset.i]));
+    });
     el.querySelectorAll(".r-toggle").forEach((btn) => {
       btn.addEventListener("click", () => {
         const wrap = document.getElementById(`det-${btn.dataset.i}`);
