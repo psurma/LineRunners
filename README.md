@@ -1,8 +1,20 @@
 # Tube Run
 
-Website for **London Tube Run** — a free, social running club that runs the course of London Underground lines above ground, once a month (sometimes more). Also does river/canal, landmark and out-of-town adventure routes.
+**▶ Live site: [psurma.github.io/TubeRun](https://psurma.github.io/TubeRun/)**
+
+Website for **London Tube Run** — a free, social running club that runs the course of London Underground (and Overground / Elizabeth line) routes above ground, once a month (sometimes more). Also does river/canal, landmark and out-of-town adventure routes.
 
 Plain HTML/CSS/JS. No build step.
+
+## Screenshots
+
+| Home | Journey &amp; loop planner |
+| --- | --- |
+| [![Tube Run home page](screenshots/hero.png)](https://psurma.github.io/TubeRun/) | [![Journey and loop route planner](screenshots/journey-planner.png)](https://psurma.github.io/TubeRun/#journey) |
+
+[![Route library traced on the map](screenshots/routes.png)](https://psurma.github.io/TubeRun/#routes)
+
+*Route library — tap a card to trace a route on the interactive map (Regent's Canal shown).*
 
 ## Run locally
 
@@ -47,8 +59,8 @@ The map viewer (`#network`) has several tabs:
 
 ### Data & attribution
 
-- `data/tube-network.json` — 11 lines / 272 stations with real coordinates, compiled from the [TfL Unified API](https://api.tfl.gov.uk) (open data). Drives station markers, interchange detection and running-time calculations.
-- `data/tube-lines.geojson` — real track geometry for all 11 lines (`MultiLineString` per line), drawn as the coloured line overlay on the Leaflet map.
+- `data/tube-network.json` — 18 lines / 425 stations with real coordinates, compiled from the [TfL Unified API](https://api.tfl.gov.uk) (open data). Drives station markers, interchange detection and running-time calculations.
+- `data/tube-lines.geojson` — real track geometry for all 18 lines (`MultiLineString` per line), drawn as the coloured line overlay on the Leaflet map.
 - `data/station-toilets.json` — stations with confirmed toilets, from TfL StopPoint facility data.
 - Basemap tiles © [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors, © [CARTO](https://carto.com/attributions); Leaflet is BSD-2-licensed.
 - `data/schematic.json` — Beck-style schematic coordinates (seeded from [`d3-tube-map`](https://github.com/johnwalley/d3-tube-map) by John Walley, **MIT licence**); retained for reference, not currently shown.

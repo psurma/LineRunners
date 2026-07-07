@@ -1628,3 +1628,8 @@ body.follow-lock { overflow: hidden; }
 .follow-you { background: none; border: none; }
 .fy-dot { display: block; width: 18px; height: 18px; border-radius: 50%; background: #1a73e8; border: 3px solid #fff; box-shadow: 0 0 0 0 rgba(26, 115, 232, 0.5); animation: fy-pulse 1.8s ease-out infinite; }
 @keyframes fy-pulse { 0% { box-shadow: 0 0 0 0 rgba(26, 115, 232, 0.5); } 70% { box-shadow: 0 0 0 16px rgba(26, 115, 232, 0); } 100% { box-shadow: 0 0 0 0 rgba(26, 115, 232, 0); } }
+
+/* Respect reduced-motion for the two pulsing status dots (the rest of the site's motion is already gated). */
+@media (prefers-reduced-motion: reduce) { .live-dot, .fy-dot { animation: none; } }
+/* Consistent keyboard focus ring on all custom buttons/chips (component :focus-visible rules still win via higher specificity). */
+:where(button, [role="button"], [tabindex]):focus-visible { outline: 2px solid var(--tfl-blue); outline-offset: 2px; }

@@ -1594,7 +1594,7 @@
     if (!el) return;
     const types = ["all", ...Array.from(new Set(ROUTES.map((r) => r.type)))];
     const chip = (group, val, label) =>
-      `<button type="button" class="rf-chip${routeFilter[group] === val ? " on" : ""}" data-group="${group}" data-val="${val}">${escapeHtml(label)}</button>`;
+      `<button type="button" class="rf-chip${routeFilter[group] === val ? " on" : ""}" aria-pressed="${routeFilter[group] === val}" data-group="${group}" data-val="${val}">${escapeHtml(label)}</button>`;
     const typeChips = types.map((t) => chip("type", t, TYPE_LABELS[t] || t)).join("");
     const distChips = [{ key: "all", label: "Any distance" }, ...DIST_BUCKETS].map((d) => chip("dist", d.key, d.label)).join("");
     el.innerHTML = `<div class="rf-row" role="group" aria-label="Filter routes by type">${typeChips}</div>
@@ -1761,7 +1761,13 @@
         result.innerHTML = `<p class="bus-error">No stops found for route ${escapeHtml(id)} — check the number and try again.</p>`;
         return;
       }
-      const fwd = stops.map((s) => [s.name, s.lat, s.lon]);
+      const fwd = stops
+        .filter((s) => Number.isFinite(s.lat) && Number.isFinite(s.lon))
+        .map((s) => [s.name, s.lat, s.lon]);
+      if (fwd.length < 2) {
+        result.innerHTML = `<p class="bus-error">No stops found for route ${escapeHtml(id)} — check the number and try again.</p>`;
+        return;
+      }
       busMapObj.currentId = id;
       // Render the traced route in the current direction. Reverse flips `reversed`
       // and re-renders — flipping the stops, the map's flow direction and the
@@ -2339,7 +2345,9 @@
   async function lineRouteMap(mapDiv, name, tr) {
     if (!mapDiv) return;
     if (typeof L === "undefined") { mapDiv.innerHTML = '<p class="diagram-empty">The map couldn\'t load.</p>'; return; }
-    const net = await loadNetwork();
+    let net;
+    try { net = await loadNetwork(); }
+    catch (_) { mapDiv.innerHTML = '<p class="diagram-empty">Couldn\'t load the map right now.</p>'; return; }
     const id = Object.keys(net).find((k) => net[k].name === name);
     if (!id) { mapDiv.innerHTML = '<p class="diagram-empty">No route mapped for this line yet.</p>'; return; }
     if (!mapDiv.isConnected) return; // collapsed again before the network finished loading
@@ -3319,7 +3327,7 @@
   // ROAD_FACTOR), matching every other estimate on the site.
   function buildStationGraph(net) {
     const norm = (s) => String(s).toLowerCase().replace(/&/g, "and").replace(/[^a-z0-9]/g, "");
-    const ekey = (a, b) => (a < b ? a + " " + b : b + " " + a);
+    const ekey = (a, b) => (a < b ? a + "" + b : b + "" + a);
     const nodes = {}, adj = {}, edgeLines = {}, lines = {};
     const node = (st) => {
       const k = norm(st.n);
@@ -3728,6 +3736,7 @@
 
     function ensureMap() {
       if (jMap) return jMap;
+      if (typeof L === "undefined") { mapUnavailable(mapEl); return null; }
       jMap = createSiteMap(mapEl);
       requestAnimationFrame(() => jMap.invalidateSize(false));
       return jMap;
@@ -3736,6 +3745,7 @@
       last = res;
       const segments = pathToLegs(graph, res.path, allowed);
       const map = ensureMap();
+      if (!map) { result.innerHTML = journeyResultHtml(res, segments, graph); return; } // Leaflet unavailable — show the route text, skip the map
       if (jLayer) { map.removeLayer(jLayer); jLayer = null; }
       // Accent the pane's left bar with the journey's main line (the leg with the most stops).
       const mainSeg = segments.reduce((a, b) => (b.nodes.length > a.nodes.length ? b : a), segments[0]);
@@ -4082,7 +4092,7 @@
   function setupUnitToggle() {
     const btns = [...document.querySelectorAll(".unit-toggle button[data-u]")];
     if (!btns.length) return;
-    const sync = () => btns.forEach((b) => b.classList.toggle("on", b.dataset.u === distUnit));
+    const sync = () => btns.forEach((b) => { const on = b.dataset.u === distUnit; b.classList.toggle("on", on); b.setAttribute("aria-pressed", String(on)); });
     sync();
     btns.forEach((b) => b.addEventListener("click", () => {
       if (b.dataset.u === distUnit) return;

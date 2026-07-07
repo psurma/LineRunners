@@ -65,7 +65,7 @@ self.addEventListener("fetch", (e) => {
   if (req.mode === "navigate") {
     e.respondWith(
       fetch(req)
-        .then((res) => { const copy = res.clone(); caches.open(SHELL).then((c) => c.put("index.html", copy)); return res; })
+        .then((res) => { if (res.ok) { const copy = res.clone(); caches.open(SHELL).then((c) => c.put("index.html", copy)); } return res; })
         .catch(() => caches.match("index.html"))
     );
     return;
@@ -75,7 +75,7 @@ self.addEventListener("fetch", (e) => {
   if (isTile(url.href)) {
     e.respondWith(
       caches.open(TILES).then((cache) => cache.match(req).then((hit) =>
-        hit || fetch(req).then((res) => { cache.put(req, res.clone()); trimCache(TILES, TILE_MAX); return res; }).catch(() => hit)
+        hit || fetch(req).then((res) => { if (res.ok || res.type === "opaque") { cache.put(req, res.clone()); trimCache(TILES, TILE_MAX); } return res; }).catch(() => hit)
       ))
     );
     return;
