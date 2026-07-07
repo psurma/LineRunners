@@ -1451,6 +1451,7 @@
   // animated "flow" overlay. Shared by the segment, run-route and journey drawers.
   function addFlowLine(grp, latlngs, colour, opts = {}) {
     const baseWeight = opts.baseWeight || 6, baseOpacity = opts.baseOpacity || 0.3, flowWeight = opts.flowWeight || 4;
+    L.polyline(latlngs, { color: "#fff", weight: baseWeight + 4, opacity: 0.85, lineJoin: "round", lineCap: "round" }).addTo(grp); // white casing: route stays legible on any basemap
     L.polyline(latlngs, { color: colour, weight: baseWeight, opacity: baseOpacity, lineJoin: "round", lineCap: "round" }).addTo(grp);
     L.polyline(latlngs, flowLineOptions(colour, { weight: flowWeight })).addTo(grp);
   }
@@ -3559,7 +3560,7 @@
     for (const seg of segments) {
       const col = (graph.lines[seg.line] || {}).colour || "#0019a8";
       const dense = await segmentPavement(seg.nodes, seg.line, graph.nodes);
-      addFlowLine(grp, dense, col, { baseOpacity: 0.28 });
+      addFlowLine(grp, dense, col, { baseOpacity: 0.85 });
       for (const p of dense) {
         if (prevPt) elevKm += haversineKm([0, prevPt[0], prevPt[1]], [0, p[0], p[1]]);
         if (p.length > 2 && isFinite(p[2])) elevPts.push([elevKm, p[2]]);
