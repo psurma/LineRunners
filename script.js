@@ -3716,6 +3716,7 @@
     const result = document.getElementById("abResult");
     if (!fromEl || !toEl || !mapEl || !result) return;
     let graph = null, jMap = null, jLayer = null, last = null, allowed = null; // allowed: null = any line, else a Set of line ids
+    const loadingHint = `<p class="journey-hint">Still loading the network map &mdash; give it a second, then try again.</p>`;
 
     loadNetwork().catch(() => null).then((net) => {
       if (!net) { result.innerHTML = `<p class="journey-hint">Couldn't load the network map — try refreshing.</p>`; return; }
@@ -3753,7 +3754,7 @@
       });
     }
     function plan() {
-      if (!graph) return;
+      if (!graph) { result.innerHTML = loadingHint; return; }
       result.style.borderLeftColor = ""; // reset to the default accent; render() re-colours it when a route is found
       const a = fromEl.value.trim(), b = toEl.value.trim();
       if (!a || !b) { result.innerHTML = `<p class="journey-hint">Pick a start and a finish station to trace a route.</p>`; return; }
@@ -3773,7 +3774,7 @@
     }
     // Surprise route: a random connected pair, preferring a proper 5–25 km run.
     function randomRoute() {
-      if (!graph) return;
+      if (!graph) { result.innerHTML = loadingHint; return; }
       const names = Object.values(graph.nodes).map((n) => n.name);
       if (names.length < 2) return;
       const pick = () => names[Math.floor(Math.random() * names.length)];
@@ -3849,7 +3850,7 @@
     if (loopRad) loopRad.addEventListener("input", syncLoopLabels);
     syncLoopLabels();
     function generateLoop() {
-      if (!graph) return;
+      if (!graph) { result.innerHTML = loadingHint; return; }
       result.style.borderLeftColor = "";
       const start = loopStart.value.trim();
       if (!start) { result.innerHTML = `<p class="journey-hint">Pick a start station (or use your location) and I&rsquo;ll trace a loop back to it.</p>`; return; }
