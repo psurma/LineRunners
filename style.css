@@ -366,7 +366,9 @@ section { max-width: var(--max); margin: 0 auto; padding: clamp(48px, 8vw, 88px)
   z-index: 0;
 }
 .stn:first-child .rail::before { display: none; }
-.stn.active .rail::before { background: var(--line-col); }
+/* The rail::before is the connector to a station's LEFT; only colour it when the
+   previous station is active too, else the start station's left leg lights up. */
+.stn.active + .stn.active .rail::before { background: var(--line-col); }
 .stn .dot {
   position: relative;
   z-index: 1;
