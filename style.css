@@ -1023,12 +1023,20 @@ tr.ls-open .ls-caret { transform: rotate(90deg); }
 .journey-controls .field { min-width: 170px; flex: 1 1 200px; }
 .ab-input { width: 100%; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; font: inherit; background: #fff; }
 .ab-input:focus { outline: none; border-color: var(--tfl-blue); box-shadow: 0 0 0 3px rgba(0, 25, 168, 0.12); }
-.ab-swap { align-self: flex-end; flex: 0 0 auto; width: 44px; height: 44px; border-radius: 10px; border: 1px solid var(--line); background: #fff; color: var(--tfl-blue); font-size: 20px; line-height: 1; cursor: pointer; transition: all 0.12s; }
+.ab-swap { align-self: flex-end; flex: 0 0 auto; width: 48px; height: 48px; border-radius: 10px; border: 1px solid var(--line); background: #fff; color: var(--tfl-blue); font-size: 20px; line-height: 1; cursor: pointer; transition: all 0.12s; }
 .ab-swap:hover { border-color: var(--tfl-blue); background: #eef1ff; }
+/* Uniform 48px control height so inputs, selects and buttons line up in every form row */
+.field input, .field select, .calc select, .ab-input,
+.busrun-controls #busPick, .busrun-controls #busPlace { height: 48px; }
+.journey-controls .btn, .busrun-controls .btn { height: 48px; display: inline-flex; align-items: center; justify-content: center; }
 #abGo { align-self: flex-end; flex: 0 0 auto; }
 .journey-layout { display: grid; grid-template-columns: 1fr; gap: 18px; }
 .journey-layout > * { min-width: 0; }
-@media (min-width: 820px) { .journey-layout { grid-template-columns: 1.7fr 1fr; align-items: start; } }
+@media (min-width: 820px) {
+  .journey-layout { grid-template-columns: 1.7fr 1fr; align-items: start; }
+  /* Let the map grow to the height of the (taller) result pane, but never below 440px. */
+  #abMap { align-self: stretch; height: auto; min-height: 440px; }
+}
 .journey-result { min-height: 40px; background: #fff; border: 1px solid var(--line); border-left: 4px solid var(--tfl-blue); border-radius: 12px; padding: 16px 18px; }
 .journey-hint { color: var(--muted); padding: 4px 2px; margin: 0; }
 .jr-head { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; font-size: 18px; margin: 0 0 8px; }

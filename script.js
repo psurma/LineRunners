@@ -3552,7 +3552,7 @@
     segments.forEach((seg, si) => {
       const info = graph.lines[seg.line] || { name: seg.line, colour: "#0019a8" };
       const col = info.colour, hops = seg.nodes.length - 1;
-      const stops = si === 0 ? seg.nodes : seg.nodes.slice(1); // the interchange is shown in the change divider above
+      const stops = seg.nodes; // show the interchange on both lines (it's the last stop of the leg above and where you board this one)
       html += `<div class="jrn-leg" style="--c:${col}">`;
       html += `<div class="jrn-badge" style="background:${col};color:${contrastText(col)}">${escapeHtml(info.name)} line <span class="jrn-badge-n">${hops} stop${hops === 1 ? "" : "s"}</span></div>`;
       html += `<ol class="jrn-stops">`;
@@ -3610,14 +3610,17 @@
       const segments = pathToLegs(graph, res.path);
       const map = ensureMap();
       if (jLayer) { map.removeLayer(jLayer); jLayer = null; }
-      drawJourney(map, segments, graph).then((drawn) => {
-        if (!drawn || !drawn.latlngs.length) return;
-        jLayer = drawn.group;
-        map.fitBounds(L.latLngBounds(drawn.latlngs), { padding: [28, 28] });
-        const box = result.querySelector(".jr-elev");
-        if (box) box.innerHTML = elevationHtml(drawn.elev);
+      result.innerHTML = journeyResultHtml(res, segments, graph); // set first so the map can stretch to the pane's height
+      requestAnimationFrame(() => {
+        map.invalidateSize(false); // the pane (and the map stretched to it) may have changed height
+        drawJourney(map, segments, graph).then((drawn) => {
+          if (!drawn || !drawn.latlngs.length) return;
+          jLayer = drawn.group;
+          map.fitBounds(L.latLngBounds(drawn.latlngs), { padding: [28, 28] });
+          const box = result.querySelector(".jr-elev");
+          if (box) box.innerHTML = elevationHtml(drawn.elev);
+        });
       });
-      result.innerHTML = journeyResultHtml(res, segments, graph);
     }
     function plan() {
       if (!graph) return;
