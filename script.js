@@ -2525,8 +2525,10 @@
   let curZoom = 1.4;
   let netData = null;         // data/tube-network.json, lazy-loaded
   let toiletSet = null;       // Set of station ids with confirmed toilets
+  let waterPts = null;        // [[lat,lon],...] drinking-water points (OSM)
   let geoTimeMode = "run";    // run | walk | off — badge mode on the highlighted line
   let geoShowToilets = true;  // toilet pins on the geographic map
+  let geoShowWater = false;   // drinking-water pins on the geographic map
   function geoDistStr(km) { return fmtKm(km, 1); } // follows the site-wide unit toggle
   // Compass bearing (deg, 0 = north) from waypoint a to b — for direction arrows.
   function bearingDeg(a, b) {
@@ -2555,7 +2557,7 @@
   function loadNetwork() {
     if (!netPromise) {
       netPromise = (async () => {
-        const [nRes, tRes] = await Promise.all([fetch("data/tube-network.json"), fetch("data/station-toilets.json")]);
+        const [nRes, tRes, wRes] = await Promise.all([fetch("data/tube-network.json"), fetch("data/station-toilets.json"), fetch("data/facilities-water.json")]);
         if (!nRes.ok) throw new Error("network data");
         netData = await nRes.json();
         // Zero-trust: line colours end up in inline styles and SVG attributes,
@@ -2564,6 +2566,7 @@
           if (!/^#[0-9a-fA-F]{6}$/.test(netData[id].colour)) netData[id].colour = "#0019a8";
         }
         toiletSet = new Set(tRes.ok ? await tRes.json() : []);
+        waterPts = wRes.ok ? await wRes.json() : [];
         return netData;
       })();
       netPromise.catch(() => { netPromise = null; }); // allow a retry after a transient failure
@@ -3132,9 +3135,10 @@
     const modes = hi ? `<span class="geo-modes">Times: ${["run", "walk", "off"].map((m) =>
       `<button type="button" class="geo-mode" data-mode="${m}"${geoTimeMode === m ? ' data-on="1"' : ""}>${m === "off" ? "Off" : m[0].toUpperCase() + m.slice(1)}</button>`).join("")}</span>` : "";
     const wcBtn = `<button type="button" class="geo-mode geo-wc-btn" data-wc="1"${geoShowToilets ? ' data-on="1"' : ""}>🚻 Toilets</button>`;
+    const waterBtn = `<button type="button" class="geo-mode geo-water-btn" data-water="1"${geoShowWater ? ' data-on="1"' : ""}>💧 Water</button>`;
     cap.innerHTML = (hi
-      ? `<strong style="color:${lineTextColour(net[hi].colour)}">${escapeHtml(net[hi].name)} line</strong> lit up for the next run — arrows show the direction of travel, with running time, distance and the group's expected arrival window (from a ${MEET_TIME} start) at each stop. `
-      : `Our own live map — real streets, parks and the Thames, with every tube line on top. `) + modes + " " + wcBtn;
+      ? `<strong style="color:${lineTextColour(net[hi].colour)}">${escapeHtml(net[hi].name)} line</strong> lit up for the next run — arrows show the direction of travel, with running time, distance and the group's expected arrival window (from a ${MEET_TIME} start) at each stop. Every stop is a bail-out — hop the train back — and the black-ringed interchanges get you onto other lines. `
+      : `Our own live map — real streets, parks and the Thames, with every tube line on top. `) + modes + " " + wcBtn + " " + waterBtn;
     cap.querySelectorAll(".geo-mode[data-on]").forEach((b) => b.classList.add("on"));
     cap.querySelectorAll(".geo-mode[data-mode]").forEach((b) => b.addEventListener("click", () => {
       geoTimeMode = b.dataset.mode;
@@ -3143,6 +3147,8 @@
     }));
     const wb = cap.querySelector(".geo-wc-btn");
     if (wb) wb.addEventListener("click", () => { geoShowToilets = !geoShowToilets; wb.classList.toggle("on", geoShowToilets); redraw(); });
+    const wtb = cap.querySelector(".geo-water-btn");
+    if (wtb) wtb.addEventListener("click", () => { geoShowWater = !geoShowWater; wtb.classList.toggle("on", geoShowWater); redraw(); });
   }
 
   // Real geographic map: Leaflet + CARTO Voyager basemap + our tube overlays.
@@ -3196,7 +3202,7 @@
       return arrivalWindow(Math.max(0, kmCum - seg.fromKm) * perKm, seg.start);
     }
 
-    let stationGrp = null, toiletGrp = null;
+    let stationGrp = null, toiletGrp = null, waterGrp = null;
     function draw() {
       if (stationGrp) map.removeLayer(stationGrp);
       if (toiletGrp) map.removeLayer(toiletGrp);
@@ -3226,6 +3232,12 @@
         L.marker([s.lat, s.lon], { icon: L.divIcon({ className: "tm-wc", html: "wc", iconSize: [15, 15], iconAnchor: [7, 7] }) })
           .bindTooltip(escapeHtml(s.n) + " — toilets").addTo(toiletGrp); });
       toiletGrp.addTo(map);
+      if (waterGrp) map.removeLayer(waterGrp);
+      waterGrp = L.layerGroup();
+      if (geoShowWater && waterPts) waterPts.forEach((p) => {
+        L.marker([p[0], p[1]], { icon: L.divIcon({ className: "tm-water", html: "💧", iconSize: [16, 16], iconAnchor: [8, 8] }) })
+          .bindTooltip("Drinking water").addTo(waterGrp); });
+      waterGrp.addTo(map);
     }
     draw();
     geoCaption(cap, net, hi, draw);

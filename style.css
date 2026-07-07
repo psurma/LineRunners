@@ -775,6 +775,7 @@ body.tm-map-active .tm-zoom, body.tm-map-active .tm-scrollhint { display: none; 
   width: 15px; height: 15px; display: flex; align-items: center; justify-content: center;
   font: 800 8px Inter, sans-serif; text-transform: uppercase; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.15);
 }
+.tm-water { font-size: 13px; line-height: 16px; text-align: center; filter: drop-shadow(0 0 1px #fff) drop-shadow(0 0 1px #fff); }
 /* Animated "flowing dashes" that travel from start to finish, showing the run direction. */
 .route-flow { animation: route-flow 1s linear infinite; }
 @keyframes route-flow { to { stroke-dashoffset: -26; } }
