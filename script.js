@@ -906,7 +906,13 @@
     // it survives the diagram's re-renders. setupPlanner runs once, so no dupes.
     const planGpx = gpxDownloadHtml(lineSlug(nextRun.key), nextRun.key, "plan-gpx");
     if (diagram && planGpx) diagram.insertAdjacentHTML("afterend", `<p class="plan-gpx-row">Take it with you: ${planGpx}</p>`);
-    // Enrich the strip with interchange tags once the network data loads.
+  }
+
+  // Once the network data loads, build the interchange map and re-render the strips,
+  // journey board and schedule so every station shows its Tube + rail interchanges.
+  // Runs unconditionally at boot — the planner's early returns (an adventure or
+  // unmapped next run) must NOT gate it, or those cases lose every Tube interchange.
+  function enrichInterchanges() {
     // Only the fetch failure is swallowed — errors in the render work below must surface.
     loadNetwork().catch(() => null).then((net) => {
       if (!net) return;
@@ -3421,7 +3427,7 @@
     ["renderNext", renderNext], ["renderHeroCard", renderHeroCard],
     ["renderJourneyBoard", renderJourneyBoard], ["renderList", renderList],
     ["renderRoutes", renderRoutes], ["setupPaceState", setupPaceState],
-    ["setupPlanner", setupPlanner], ["setupBusRunner", setupBusRunner],
+    ["setupPlanner", setupPlanner], ["enrichInterchanges", enrichInterchanges], ["setupBusRunner", setupBusRunner],
     ["setupJourneyPlanner", setupJourneyPlanner], ["renderLineCollector", renderLineCollector],
     ["renderGallery", renderGallery], ["wireSocials", wireSocials],
     ["loadWeather", loadWeather], ["setupScrollSpy", setupScrollSpy],
