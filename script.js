@@ -3578,6 +3578,12 @@
     try { fn(); } catch (e) { console.error("init " + name + " failed:", e); }
   });
 
+  // Register the service worker (offline app shell + installable PWA). Best-effort:
+  // a failure must never block the app, so the error is swallowed.
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => { navigator.serviceWorker.register("sw.js").catch(() => {}); });
+  }
+
   // Keep the time-sensitive views live. The "next run" and its phase are
   // otherwise a snapshot frozen when the page's JS first ran, so a left-open
   // tab never advances its countdown or rolls over to the following run.
