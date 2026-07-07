@@ -1220,6 +1220,9 @@ body {
   box-shadow: none;
 }
 .btn-ghost:hover { background: rgba(255, 255, 255, 0.16); }
+/* Random-route button — high contrast on the white journey section, pairs with the yellow primary. */
+.ab-random { border: 2px solid var(--tfl-blue); color: var(--tfl-blue); background: #fff; box-shadow: none; }
+.ab-random:hover { background: var(--tfl-blue); color: #fff; }
 
 /* ---------- Section titles: thin multi-line colour accent ---------- */
 .section-title {

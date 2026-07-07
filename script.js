@@ -3635,7 +3635,29 @@
       }
       render(res);
     }
+    // Surprise route: a random connected pair, preferring a proper 5–25 km run.
+    function randomRoute() {
+      if (!graph) return;
+      const names = Object.values(graph.nodes).map((n) => n.name);
+      if (names.length < 2) return;
+      const pick = () => names[Math.floor(Math.random() * names.length)];
+      let best = null;
+      for (let i = 0; i < 40; i++) {
+        const a = pick(), b = pick();
+        if (a === b) continue;
+        const res = shortestPath(graph, a, b);
+        if (!res || res.path.length < 2) continue;
+        best = { a, b, res };
+        if (res.km >= 5 && res.km <= 25) break; // a decent run; otherwise keep looking
+      }
+      if (!best) return;
+      fromEl.value = best.a; toEl.value = best.b;
+      render(best.res);
+      if (window.matchMedia("(max-width: 860px)").matches) mapEl.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
     if (goBtn) goBtn.addEventListener("click", plan);
+    const randomBtn = document.getElementById("abRandom");
+    if (randomBtn) randomBtn.addEventListener("click", randomRoute);
     [fromEl, toEl].forEach((el) => el.addEventListener("change", () => { if (fromEl.value.trim() && toEl.value.trim()) plan(); }));
     if (swapBtn) swapBtn.addEventListener("click", () => {
       const t = fromEl.value; fromEl.value = toEl.value; toEl.value = t;
