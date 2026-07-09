@@ -2231,21 +2231,37 @@
     }
     return ids.map((sid) => { const s = ln.stations[sid]; return s ? [s.n, s.lat, s.lon] : null; }).filter(Boolean);
   }
+  // Per-variant pavement geometry (from tools/generate-variants.mjs), loaded once
+  // so branch variants draw as real routes instead of straight station hops.
+  let variantRoutesCache = null, variantRoutesPromise = null;
+  function loadVariantRoutes() {
+    if (variantRoutesCache) return Promise.resolve(variantRoutesCache);
+    if (!variantRoutesPromise) {
+      variantRoutesPromise = fetch("data/variant-routes.json")
+        .then((r) => (r.ok ? r.json() : {}))
+        .then((j) => { variantRoutesCache = j || {}; return variantRoutesCache; })
+        .catch(() => { variantRoutesPromise = null; return {}; }); // allow a later retry
+    }
+    return variantRoutesPromise;
+  }
   // Build the dropdown options for a line with multiple paths: every curated
-  // variant, each in both directions. wp is the station waypoints (drawn as hops
-  // and used for the route's distance/stop figures).
-  function buildVariantOptions(net, id) {
+  // variant, each in both directions. `wp` is the station waypoints (markers +
+  // distance/stop figures); `route` is the pre-routed pavement geometry (geomArr
+  // aligned to LINE_VARIANTS[id]), drawn when present so the variant follows real
+  // streets rather than straight hops.
+  function buildVariantOptions(net, id, geomArr) {
     const variants = LINE_VARIANTS[id];
     if (!variants) return null;
     const options = [];
-    for (const v of variants) {
+    variants.forEach((v, vi) => {
       const wp = assembleVariant(net, id, v);
-      if (!wp || wp.length < 2) continue;
+      if (!wp || wp.length < 2) return;
       const a = wp[0][0], b = wp[wp.length - 1][0], via = v.via ? " · via " + v.via : "";
       const pair = `${a} ↔ ${b}`; // groups both directions (and any via-variants) of the same route
-      options.push({ label: `${a} → ${b}${via}`, wp, pair });
-      options.push({ label: `${b} → ${a}${via}`, wp: [...wp].reverse(), pair });
-    }
+      const route = geomArr && geomArr[vi] && geomArr[vi].length > 1 ? geomArr[vi] : null;
+      options.push({ label: `${a} → ${b}${via}`, wp, pair, route });
+      options.push({ label: `${b} → ${a}${via}`, wp: [...wp].reverse(), pair, route: route ? [...route].reverse() : null });
+    });
     return options.length ? options : null;
   }
   // Build <option>/<optgroup> markup, grouping consecutive entries by groupOf(e).
@@ -2353,7 +2369,8 @@
     if (!mapDiv.isConnected) return; // collapsed again before the network finished loading
     // Lines with multiple paths get a dropdown — the default route plus every
     // variant both ways; picking one redraws the map and updates the row's figures.
-    const options = buildVariantOptions(net, id);
+    const vroutes = await loadVariantRoutes();
+    const options = buildVariantOptions(net, id, vroutes[id]);
     const detailInner = mapDiv.parentNode;
     const reverseBtn = detailInner.querySelector(".ls-reverse");
     const gpxLink = detailInner.querySelector(".ls-gpx");
@@ -2404,6 +2421,7 @@
         endsEl.innerHTML = `<span class="ls-end">${escapeHtml(reversed ? to : from)}</span><span class="ls-arrow" aria-hidden="true">→</span><span class="sr-only">to</span><span class="ls-end">${escapeHtml(reversed ? from : to)}</span>`;
       }
       const dOpts = opt && !opt.gpx ? { waypoints: opt.wp } : {};
+      if (opt && opt.route) dOpts.routeLine = opt.route; // pre-routed pavement line for this variant
       if (reversed) dOpts.reverse = true;
       const r = await drawRunRoute(map, net, id, dOpts);
       if (my !== drawSeq || lsMap !== map) return; // a newer draw (variant change / reverse) superseded this one
@@ -2941,11 +2959,14 @@
     const wl = wp.map((s) => [s[1], s[2]]);
     // Explicit variant waypoints draw as station-to-station hops; the default
     // whole-line route prefers the real pavement GPX (track 0, the main route).
-    const gpxSegs = opts.waypoints ? null : await loadRouteGpx(id);
+    const gpxSegs = (opts.waypoints || opts.routeLine) ? null : await loadRouteGpx(id);
     if (opts.stale && opts.stale()) return null;
     const gpxLine = gpxSegs && gpxSegs[0];
-    let routeLine = gpxLine && gpxLine.length > 1 ? gpxLine : wl;
-    if (opts.reverse && routeLine === gpxLine) routeLine = [...gpxLine].reverse();
+    // A pre-routed variant line (routeLine) wins; else the line's pavement GPX; else straight station hops.
+    let routeLine;
+    if (opts.routeLine && opts.routeLine.length > 1) routeLine = opts.reverse ? [...opts.routeLine].reverse() : opts.routeLine;
+    else if (gpxLine && gpxLine.length > 1) routeLine = opts.reverse ? [...gpxLine].reverse() : gpxLine;
+    else routeLine = wl;
     const grp = L.layerGroup().addTo(map);
     addFlowLine(grp, routeLine, line.colour);
     L.circleMarker(wl[0], { radius: 6, color: "#fff", weight: 2, fillColor: line.colour, fillOpacity: 1 })
