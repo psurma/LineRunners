@@ -2312,7 +2312,7 @@
     const followWp = netData ? rtStations(netData, name) : null;
     const followBtn = followWp && followWp.length >= 2 ? `<button type="button" class="ls-follow" title="Follow this line live with GPS — next stop, progress and pace">▶ Follow live</button>` : "";
     const ctrlRow = gpx || followBtn ? `<div class="ls-gpx-row">${gpx}${reverseBtn}${followBtn}</div>` : "";
-    detail.innerHTML = `<td colspan="6"><div class="ls-detail-inner">${ctrlRow}<div class="ls-map"></div><div class="ls-elev jr-elev"></div></div></td>`;
+    detail.innerHTML = `<td colspan="6"><div class="ls-detail-inner"><p class="ls-ends" aria-live="polite"></p>${ctrlRow}<div class="ls-map"></div><div class="ls-elev jr-elev"></div></div></td>`;
     tr.after(detail);
     lineRouteMap(detail.querySelector(".ls-map"), name, tr);
     const fb = detail.querySelector(".ls-follow");
@@ -2357,6 +2357,7 @@
     const detailInner = mapDiv.parentNode;
     const reverseBtn = detailInner.querySelector(".ls-reverse");
     const gpxLink = detailInner.querySelector(".ls-gpx");
+    const endsEl = detailInner.querySelector(".ls-ends");
     let reversed = false, curIdx = 0, gpxText = null, revUrl = null, drawSeq = 0;
     if (options) {
       const sel = document.createElement("select");
@@ -2396,6 +2397,12 @@
       curIdx = idx;
       if (routeGrp) { routeGrp.remove(); routeGrp = null; }
       const opt = options ? options[idx] : null;
+      // Name the route's endpoints (source → destination) — matches the drawn variant + direction.
+      const seq = opt && opt.wp ? opt.wp : rtStations(net, name);
+      if (endsEl && seq && seq.length > 1) {
+        const from = seq[0][0], to = seq[seq.length - 1][0];
+        endsEl.innerHTML = `<span class="ls-end">${escapeHtml(reversed ? to : from)}</span><span class="ls-arrow" aria-hidden="true">→</span><span class="sr-only">to</span><span class="ls-end">${escapeHtml(reversed ? from : to)}</span>`;
+      }
       const dOpts = opt && !opt.gpx ? { waypoints: opt.wp } : {};
       if (reversed) dOpts.reverse = true;
       const r = await drawRunRoute(map, net, id, dOpts);
