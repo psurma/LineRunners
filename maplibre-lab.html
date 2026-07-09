@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+    <meta name="robots" content="noindex" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; base-uri 'self'; object-src 'none'; script-src 'self'; worker-src blob:; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https://tiles.openfreemap.org https://server.arcgisonline.com; connect-src 'self' https://tiles.openfreemap.org https://server.arcgisonline.com"
+    />
+    <title>TubeRun — MapLibre spike</title>
+    <link rel="stylesheet" href="vendor/maplibre/maplibre-gl.css" />
+    <style>
+      :root {
+        --tfl-blue: #0019a8;
+        --ink: #10151f;
+        --panel: rgba(255, 255, 255, 0.94);
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; height: 100%; }
+      body { font: 14px/1.45 -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color: var(--ink); }
+      #map { position: absolute; inset: 0; }
+
+      .panel {
+        position: absolute;
+        top: 12px;
+        left: 12px;
+        z-index: 5;
+        width: min(340px, calc(100vw - 24px));
+        background: var(--panel);
+        backdrop-filter: blur(8px);
+        border-radius: 14px;
+        box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18);
+        padding: 14px 16px 16px;
+      }
+      .panel h1 {
+        font-size: 15px;
+        margin: 0 0 2px;
+        letter-spacing: 0.2px;
+      }
+      .panel h1 .roundel {
+        display: inline-block;
+        width: 12px; height: 12px;
+        border-radius: 50%;
+        border: 3.5px solid var(--tfl-blue);
+        vertical-align: -1px;
+        margin-right: 6px;
+      }
+      .tag {
+        display: inline-block;
+        font-size: 10.5px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.6px;
+        color: #7a2b00;
+        background: #ffe7cf;
+        border-radius: 999px;
+        padding: 1px 8px;
+        margin-left: 4px;
+      }
+      .panel ul { margin: 10px 0 12px; padding-left: 18px; }
+      .panel li { margin: 3px 0; }
+      .panel li b { color: var(--tfl-blue); }
+
+      .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+      .btn {
+        appearance: none;
+        border: 1.5px solid var(--tfl-blue);
+        background: #fff;
+        color: var(--tfl-blue);
+        font: inherit;
+        font-weight: 650;
+        border-radius: 999px;
+        padding: 6px 14px;
+        cursor: pointer;
+      }
+      .btn[aria-pressed="true"] { background: var(--tfl-blue); color: #fff; }
+      .btn:focus-visible { outline: 3px solid #ffd200; outline-offset: 2px; }
+
+      .chip {
+        display: inline-block;
+        margin-top: 10px;
+        font-weight: 700;
+        color: #7a5c00;
+        background: #fff4c2;
+        border-radius: 8px;
+        padding: 3px 10px;
+      }
+      #status {
+        margin-top: 10px;
+        font-size: 12px;
+        color: #2c3646;
+      }
+      #status.bad { color: #b3261e; }
+      .foot {
+        margin-top: 12px;
+        font-size: 11px;
+        line-height: 1.4;
+        color: #55606f;
+        border-top: 1px solid #e4e8ef;
+        padding-top: 8px;
+      }
+      .foot a { color: var(--tfl-blue); }
+    </style>
+  </head>
+  <body>
+    <div id="map"></div>
+
+    <aside class="panel" aria-label="About this prototype">
+      <h1><span class="roundel" aria-hidden="true"></span>TubeRun · MapLibre<span class="tag">spike</span></h1>
+      <div style="font-size:12px;color:#55606f;margin-top:2px">Evaluation build — not linked from the app.</div>
+
+      <ul>
+        <li><b>Vector basemap</b> — crisp labels at every zoom, smooth pinch-zoom &amp; rotate</li>
+        <li><b>One data source</b> — whole rail network, coloured per line</li>
+        <li><b>Shaded relief + 3D buildings</b> — the hills a runner feels (right-drag to tilt; zoom in for buildings)</li>
+        <li><b>Animated flow line</b> — the signature "run" effect, in vector</li>
+      </ul>
+
+      <div class="row">
+        <button id="t3d" class="btn" type="button" aria-pressed="false">3D tilt</button>
+        <button id="trelief" class="btn" type="button" aria-pressed="true">Hillshade</button>
+      </div>
+
+      <span class="chip" id="runKm">loading run…</span>
+      <div id="status">Loading vector tiles…</div>
+
+      <div class="foot">
+        MapLibre GL JS 5.24 (self-hosted). Basemap <a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a>,
+        hillshade Esri — all keyless. Note: a true elevation <i>mesh</i> needs a CORS-enabled DEM
+        (OS Terrain / MapTiler / self-hosted); the free global DEM has no CORS.
+      </div>
+    </aside>
+
+    <script src="vendor/maplibre/maplibre-gl.js"></script>
+    <script src="maplibre-lab.js"></script>
+  </body>
+</html>
