@@ -115,6 +115,33 @@ function simplify(pts, tol) {
   const out = []; for (let i = 0; i < n; i++) if (keep[i]) out.push(pts[i]); return out;
 }
 
+const toR = Math.PI / 180;
+function distM(a, b) {
+  const dLa = (b[0] - a[0]) * toR, dLo = (b[1] - a[1]) * toR;
+  const s = Math.sin(dLa / 2) ** 2 + Math.cos(a[0] * toR) * Math.cos(b[0] * toR) * Math.sin(dLo / 2) ** 2;
+  return 12742000 * Math.asin(Math.sqrt(s));
+}
+// Off-road stations (platforms set back from the road) sit as hard via-points, so
+// BRouter spurs in to touch them and back out. Detect those out-and-back excursions
+// — the path leaves the road, goes >30 m out, and returns within ~12 m of where it
+// left — and drop the excursion so the route just runs *past* the station on the road.
+function deSpur(pts, eps = 12, minDev = 30, win = 300) {
+  const kept = [];
+  let i = 0;
+  while (i < pts.length) {
+    kept.push(pts[i]);
+    let jump = -1;
+    for (let j = Math.min(i + win, pts.length - 1); j > i + 2; j--) {
+      if (distM(pts[i], pts[j]) >= eps) continue;
+      let maxDev = 0;
+      for (let k = i + 1; k < j && maxDev <= minDev; k++) maxDev = Math.max(maxDev, distM(pts[i], pts[k]));
+      if (maxDev > minDev) { jump = j; break; } // a real excursion, not sensor noise
+    }
+    i = jump > -1 ? jump : i + 1;
+  }
+  return kept;
+}
+
 const out = {};
 const summary = [];
 console.log(`Routing variants for ${Object.keys(LINE_VARIANTS).length} lines via BRouter (${PROFILE})...\n`);
@@ -126,7 +153,8 @@ for (const [id, variants] of Object.entries(LINE_VARIANTS)) {
     const label = `${stations[0].name} -> ${stations[stations.length - 1].name}`;
     process.stdout.write(`${id.padEnd(14)} v${vi} ${label.padEnd(42)} … `);
     const r = await routeStations(stations);
-    const line = simplify(r.coords.map((c) => [r5(c[1]), r5(c[0])]), 0.00012); // [lon,lat,ele] -> [lat,lon], 5dp, ~13 m DP
+    const latlon = r.coords.map((c) => [r5(c[1]), r5(c[0])]); // [lon,lat,ele] -> [lat,lon], 5dp
+    const line = simplify(deSpur(latlon), 0.00012); // drop station spurs, then ~13 m Douglas-Peucker
     geoms.push(line);
     console.log(`${String(line.length).padStart(4)} pts [${r.mode}]`);
     summary.push({ line: id, v: vi, pts: line.length, mode: r.mode });
