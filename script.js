@@ -1377,7 +1377,7 @@
     { id: "thames-barrier", name: "Thames Barrier Path", type: "river", leg: "Greenwich → the Thames Barrier", start: "Cutty Sark (DLR)", distance: "4.0 mi (6.5 km)", highlights: "Downriver from Greenwich past the O2 to the silver hoods of the Thames Barrier.", suitability: "Flat, open and breezy — a straightforward point-to-point along the river.", loop: false, path: [[51.4830, -0.0090], [51.4880, 0.0080], [51.4930, 0.0230], [51.4975, 0.0360]] },
   ];
 
-  const routeMap = { map: null, layer: null, current: -1, reversed: false };
+  const routeMap = { map: null, layer: null, current: -1, reversed: false, mode: null, gl: null };
 
   // Per-visitor progress Sets in localStorage (collector, buses, route ideas).
   function loadSet(key) {
@@ -1494,7 +1494,9 @@
   }
 
   function drawRoute(i) {
-    const r = ROUTES[i], c = ROUTE_COLOURS[r.type] || "#0019A8", m = routeMap.map;
+    const r = ROUTES[i], c = ROUTE_COLOURS[r.type] || "#0019A8";
+    if (routeMap.mode === "gl") { drawRouteGL(r, c); return; }
+    const m = routeMap.map;
     if (!m) return;
     const geom = routesGeo && routesGeo[r.id];
     let segs; // array of segments, each an array of [lat,lon]
@@ -1511,6 +1513,162 @@
       start: { at: segs[0][0], label: routeMap.reversed ? "Start · from the far end (reversed)" : "Start · " + escapeHtml(r.start) },
       finish: r.loop ? null : { at: lastSeg[lastSeg.length - 1], label: routeMap.reversed ? "Finish · " + escapeHtml(r.start) : "Finish" },
     }, [34, 34]);
+  }
+
+  // --- Routes map: real MapLibre GL 3D surface (with a Leaflet fallback) ---
+  // Only the Routes route-detail map is a vector/3D MapLibre map; the app's other
+  // maps stay on Leaflet. MapLibre (~230 KB gz) is lazy-loaded the first time this
+  // surface opens, so it never weighs down visitors who don't view routes.
+  const OFM_STYLE = "https://tiles.openfreemap.org/styles/liberty"; // keyless vector basemap
+  const OFM_HILLSHADE = "https://server.arcgisonline.com/ArcGIS/rest/services/Elevation/World_Hillshade/MapServer/tile/{z}/{y}/{x}"; // Esri, keyless, CORS *
+  // Marching-dash sequence for the animated flow line (MapLibre's animate-a-line pattern).
+  const GL_FLOW_DASH = [[0, 4, 3], [0.5, 4, 2.5], [1, 4, 2], [1.5, 4, 1.5], [2, 4, 1], [2.5, 4, 0.5], [3, 4, 0], [0, 0.5, 3, 3.5], [0, 1, 3, 3], [0, 1.5, 3, 2.5], [0, 2, 3, 2], [0, 2.5, 3, 1.5], [0, 3, 3, 1], [0, 3.5, 3, 0.5]];
+
+  let maplibrePromise = null;
+  function loadMapLibre() {
+    if (maplibrePromise) return maplibrePromise;
+    maplibrePromise = new Promise((resolve, reject) => {
+      if (typeof maplibregl !== "undefined") { resolve(maplibregl); return; }
+      const css = document.createElement("link");
+      css.rel = "stylesheet"; css.href = "vendor/maplibre/maplibre-gl.css";
+      document.head.appendChild(css);
+      const s = document.createElement("script");
+      s.src = "vendor/maplibre/maplibre-gl.js"; s.async = true;
+      s.onload = () => (typeof maplibregl !== "undefined" ? resolve(maplibregl) : reject(new Error("maplibre unavailable")));
+      s.onerror = () => reject(new Error("maplibre failed to load"));
+      document.head.appendChild(s);
+    });
+    return maplibrePromise;
+  }
+
+  // Cheap WebGL capability probe — MapLibre needs a GL context; if there's none
+  // (old device, GL disabled) we fall back to the Leaflet raster route map.
+  function glSupported() {
+    try {
+      const c = document.createElement("canvas");
+      return !!(window.WebGLRenderingContext && (c.getContext("webgl") || c.getContext("experimental-webgl")));
+    } catch (_) { return false; }
+  }
+
+  // Build the MapLibre map in the Routes container: vector basemap + Esri hillshade
+  // relief + the style's native 3D buildings, plus empty route layers (casing, soft
+  // base, animated flow) that drawRouteGL fills per selection. Rejects (→ Leaflet
+  // fallback) if MapLibre can't load or the style never comes up.
+  async function routeGLInit(mapEl) {
+    const gl = await loadMapLibre();
+    const map = new gl.Map({
+      container: mapEl,
+      style: OFM_STYLE,
+      center: [-0.115, 51.509],
+      zoom: 11,
+      pitch: 40,
+      maxPitch: 75,
+      cooperativeGestures: true, // ⌘/Ctrl + scroll to zoom — matches the app's other maps, keeps page scroll
+      attributionControl: { compact: true },
+    });
+    routeMap.gl = { map, start: null, finish: null }; // store early so a failed init can be torn down
+    map.addControl(new gl.NavigationControl({ visualizePitch: true }), "top-right");
+    map.addControl(new gl.FullscreenControl(), "top-right");
+    map.addControl(new gl.ScaleControl({ unit: "metric" }), "bottom-left");
+    map.on("error", (e) => console.error("[routeMap gl]", e && e.error ? e.error.message : e));
+
+    await new Promise((resolve, reject) => {
+      const to = setTimeout(() => reject(new Error("style load timeout")), 8000);
+      map.on("load", () => { clearTimeout(to); resolve(); });
+    });
+
+    let before; // insert our layers below the basemap's labels so place names stay on top
+    for (const l of map.getStyle().layers || []) if (l.type === "symbol") { before = l.id; break; }
+    map.addSource("route-hillshade", { type: "raster", tiles: [OFM_HILLSHADE], tileSize: 256, maxzoom: 16, attribution: "Hillshade &copy; Esri" });
+    map.addLayer({ id: "route-hillshade", type: "raster", source: "route-hillshade", paint: { "raster-opacity": 0.28 } }, before);
+    map.setSky({ "sky-color": "#8fb2e6", "horizon-color": "#e4edf8", "fog-color": "#eef3fa", "sky-horizon-blend": 0.7, "horizon-fog-blend": 0.5 });
+
+    const empty = { type: "FeatureCollection", features: [] };
+    map.addSource("route", { type: "geojson", data: empty });
+    map.addLayer({ id: "route-casing", type: "line", source: "route", layout: { "line-join": "round", "line-cap": "round" }, paint: { "line-color": "#fff", "line-width": 8, "line-opacity": 0.9 } }, before);
+    map.addLayer({ id: "route-base", type: "line", source: "route", layout: { "line-join": "round", "line-cap": "round" }, paint: { "line-color": "#0019a8", "line-width": 5, "line-opacity": 0.35 } }, before);
+    map.addLayer({ id: "route-flow", type: "line", source: "route", layout: { "line-join": "round", "line-cap": "round" }, paint: { "line-color": "#0019a8", "line-width": 4, "line-dasharray": [0, 4, 3] } }, before);
+
+    const reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (!reduce) {
+      let step = 0;
+      const animate = (t) => {
+        if (!routeMap.gl) return; // map torn down
+        const s = Math.floor((t / 55) % GL_FLOW_DASH.length);
+        if (s !== step) { map.setPaintProperty("route-flow", "line-dasharray", GL_FLOW_DASH[s]); step = s; }
+        requestAnimationFrame(animate);
+      };
+      requestAnimationFrame(animate);
+    }
+    return map;
+  }
+
+  // Draw the selected route on the MapLibre surface: feed its [lon,lat] geometry to
+  // the route source, colour the flow line, place start/finish markers, and fit the
+  // camera to the run with a gentle 3D tilt. Mirrors drawRoute's Leaflet behaviour.
+  function drawRouteGL(r, colour) {
+    const g = routeMap.gl;
+    if (!g || !g.map) return;
+    const map = g.map;
+    const geom = routesGeo && routesGeo[r.id];
+    let segs; // array of [lon,lat] rings
+    if (geom) {
+      segs = geom.type === "MultiLineString" ? geom.coordinates.map((s) => s.slice()) : [geom.coordinates.slice()];
+    } else if (r.path && r.path.length) {
+      const ll = r.path.map((p) => [p[1], p[0]]); // sketch fallback is [lat,lon] -> [lon,lat]
+      segs = [r.loop && ll.length > 2 ? ll.concat([ll[0]]) : ll];
+    } else return;
+    if (routeMap.reversed) segs = segs.slice().reverse().map((s) => s.slice().reverse());
+
+    map.getSource("route").setData({ type: "FeatureCollection", features: segs.map((coords) => ({ type: "Feature", geometry: { type: "LineString", coordinates: coords } })) });
+    map.setPaintProperty("route-base", "line-color", colour);
+    map.setPaintProperty("route-flow", "line-color", colour);
+
+    const startAt = segs[0][0], lastSeg = segs[segs.length - 1], finishAt = lastSeg[lastSeg.length - 1];
+    const startLabel = routeMap.reversed ? "Start · from the far end (reversed)" : "Start · " + r.start;
+    // NB set lngLat BEFORE addTo — a Marker added without a position throws on _update().
+    if (!g.start) g.start = new maplibregl.Marker({ color: "#00843d" }).setLngLat(startAt).addTo(map);
+    else g.start.setLngLat(startAt);
+    g.start.setPopup(new maplibregl.Popup({ offset: 22 }).setText(startLabel));
+    if (r.loop) { if (g.finish) { g.finish.remove(); g.finish = null; } }
+    else {
+      if (!g.finish) g.finish = new maplibregl.Marker({ color: "#dc241f" }).setLngLat(finishAt).addTo(map);
+      else g.finish.setLngLat(finishAt);
+      g.finish.setPopup(new maplibregl.Popup({ offset: 22 }).setText(routeMap.reversed ? "Finish · " + r.start : "Finish"));
+    }
+
+    // fitBounds would reset pitch to 0; compute the fit camera, then ease with a tilt.
+    const b = new maplibregl.LngLatBounds();
+    let n = 0;
+    segs.forEach((s) => s.forEach((c) => { b.extend(c); n++; }));
+    if (n) {
+      const cam = map.cameraForBounds(b, { padding: 48, maxZoom: 15.5 });
+      if (cam) map.easeTo({ center: cam.center, zoom: cam.zoom, pitch: 40, bearing: 0, duration: 700 });
+    }
+  }
+
+  // Bring up the Routes map: prefer the MapLibre 3D surface, fall back to the
+  // Leaflet raster map if WebGL/MapLibre is unavailable, then draw the first route.
+  async function initRoutesMap(mapEl, first) {
+    await loadRoutes();
+    const pick = () => selectRoute(routeMap.current >= 0 ? routeMap.current : (first >= 0 ? first : 0));
+    if (glSupported()) {
+      try {
+        await routeGLInit(mapEl);
+        routeMap.mode = "gl";
+        pick();
+        return;
+      } catch (e) {
+        console.error("[routeMap] MapLibre init failed, using Leaflet:", e);
+        if (routeMap.gl && routeMap.gl.map) { try { routeMap.gl.map.remove(); } catch (_) { /* ignore */ } }
+        routeMap.gl = null;
+        mapEl.innerHTML = ""; // clear any half-built GL canvas before Leaflet claims the element
+      }
+    }
+    if (typeof L === "undefined") { mapUnavailable(mapEl); return; }
+    routeMap.mode = "leaflet";
+    routeMap.map = createSiteMap(mapEl);
+    requestAnimationFrame(() => { routeMap.map.invalidateSize(false); pick(); });
   }
 
   // --- Route filters (type + distance) ----------------------------------
@@ -1617,7 +1775,7 @@
       if (rev) rev.classList.remove("on");
     });
     drawRoute(i);
-    if (window.matchMedia("(max-width: 860px)").matches && routeMap.map)
+    if (window.matchMedia("(max-width: 860px)").matches && (routeMap.map || routeMap.gl))
       document.getElementById("routeMap").scrollIntoView({ behavior: "smooth", block: "center" });
   }
 
@@ -1636,10 +1794,16 @@
     renderRouteProgress();
 
     const mapEl = document.getElementById("routeMap");
-    if (mapEl) {
-      if (typeof L === "undefined") { mapUnavailable(mapEl); return; }
-      routeMap.map = createSiteMap(mapEl);
-      requestAnimationFrame(async () => { routeMap.map.invalidateSize(false); await loadRoutes(); selectRoute(first >= 0 ? first : 0); });
+    if (!mapEl) return;
+    // Lazy: build the (MapLibre) map only when it first nears the viewport, so the
+    // ~230 KB GL library isn't fetched for visitors who never scroll to the routes.
+    if ("IntersectionObserver" in window) {
+      const io = new IntersectionObserver((entries, obs) => {
+        if (entries.some((e) => e.isIntersecting)) { obs.disconnect(); initRoutesMap(mapEl, first); }
+      }, { rootMargin: "250px" });
+      io.observe(mapEl);
+    } else {
+      initRoutesMap(mapEl, first);
     }
   }
 

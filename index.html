@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: https://*.basemaps.cartocdn.com https://api.os.uk; connect-src 'self' https://api.open-meteo.com https://api.tfl.gov.uk; object-src 'none'; base-uri 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https://*.basemaps.cartocdn.com https://api.os.uk https://tiles.openfreemap.org https://server.arcgisonline.com; connect-src 'self' https://api.open-meteo.com https://api.tfl.gov.uk https://tiles.openfreemap.org https://server.arcgisonline.com; object-src 'none'; base-uri 'self'" />
   <title>Tube Run &middot; Running London's Underground, above ground</title>
   <meta name="description" content="Tube Run is a London running group that runs above ground, tracing the Underground line by line, on the first Sunday of every month." />
   <link rel="canonical" href="https://psurma.github.io/TubeRun/" />
@@ -28,10 +28,10 @@
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-title" content="Tube Run" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-  <link rel="stylesheet" href="vendor/fonts/fonts.css?v=225" />
+  <link rel="stylesheet" href="vendor/fonts/fonts.css?v=227" />
   <link rel="stylesheet" href="vendor/leaflet/leaflet.css" />
   <script src="vendor/leaflet/leaflet.js" defer></script>
-  <link rel="stylesheet" href="style.css?v=225" />
+  <link rel="stylesheet" href="style.css?v=227" />
 </head>
 <body>
   <header class="site-header">
@@ -415,6 +415,6 @@
     <p class="fine">Not affiliated with Transport for London. Roundel-inspired branding used with affection, not endorsement.</p>
   </footer>
 
-  <script src="script.js?v=225" defer></script>
+  <script src="script.js?v=227" defer></script>
 </body>
 </html>
