@@ -1314,7 +1314,7 @@
     const slug = GPX_LINES.has(slugOrName) ? slugOrName : lineSlug(slugOrName);
     if (!GPX_LINES.has(slug)) return "";
     const label = lineName || slug;
-    return `<a class="gpx-dl${extraClass ? " " + extraClass : ""}" href="routes/${slug}.gpx" download="TubeRun-${slug}.gpx" title="Download the ${escapeHtml(label)} line's pavement route as a GPX file for your watch">↓ GPX</a>`;
+    return `<a class="gpx-dl${extraClass ? " " + extraClass : ""}" href="routes/${slug}.gpx" download="TubeRun-${slug}.gpx" title="Download the ${escapeHtml(label)} line's pavement route as a GPX file for your watch">↓ GPX</a><a class="gpx-dl tcx-dl${extraClass ? " " + extraClass : ""}" href="#" data-slug="${slug}" title="Download as a Garmin TCX course — Virtual Partner pacing at your site pace">⌚ TCX</a>`;
   }
   // Flip a GPX file's direction: reverse each track segment's trackpoint order
   // (so a watch follows it the other way). Waypoint POIs are order-independent,
@@ -1325,6 +1325,64 @@
       return "<trkseg>\n" + pts.reverse().map((p) => "      " + p).join("\n") + "\n    </trkseg>";
     });
   }
+
+  // Convert a route's points ([lat, lon, ele?] — the same geometry the site
+  // draws) to a Garmin TCX Course. Garmin's course format wants a Time on
+  // every point, so times are synthesised at the visitor's rtPace — load it
+  // onto the watch and the Virtual Partner runs at your pace.
+  function tcxFromPoints(points, courseName, reverse) {
+    let pts = points.filter((p) => Number.isFinite(p[0]) && Number.isFinite(p[1]));
+    if (pts.length < 2) return null;
+    if (reverse) pts = pts.slice().reverse();
+    let cumKm = 0;
+    const base = Date.now();
+    const rows = pts.map((p, i) => {
+      if (i) cumKm += haversineKm([0, pts[i - 1][0], pts[i - 1][1]], [0, p[0], p[1]]); // waypoint-shaped [name, lat, lon]
+      const t = new Date(base + cumKm * rtPace * 60000).toISOString();
+      const ele = Number.isFinite(p[2]) ? `<AltitudeMeters>${p[2].toFixed(1)}</AltitudeMeters>` : "";
+      return `<Trackpoint><Time>${t}</Time><Position><LatitudeDegrees>${p[0]}</LatitudeDegrees><LongitudeDegrees>${p[1]}</LongitudeDegrees></Position>${ele}<DistanceMeters>${Math.round(cumKm * 1000)}</DistanceMeters></Trackpoint>`;
+    });
+    const a = pts[0], b = pts[pts.length - 1];
+    return `<?xml version="1.0" encoding="UTF-8"?>
+<TrainingCenterDatabase xmlns="http://www.garmin.com/xmlschemas/TrainingCenterDatabase/v2">
+ <Courses><Course>
+  <Name>${escapeHtml(courseName.slice(0, 15))}</Name>
+  <Lap><TotalTimeSeconds>${Math.round(cumKm * rtPace * 60)}</TotalTimeSeconds><DistanceMeters>${Math.round(cumKm * 1000)}</DistanceMeters>
+   <BeginPosition><LatitudeDegrees>${a[0]}</LatitudeDegrees><LongitudeDegrees>${a[1]}</LongitudeDegrees></BeginPosition>
+   <EndPosition><LatitudeDegrees>${b[0]}</LatitudeDegrees><LongitudeDegrees>${b[1]}</LongitudeDegrees></EndPosition>
+   <Intensity>Active</Intensity></Lap>
+  <Track>${rows.join("")}</Track>
+ </Course></Courses>
+</TrainingCenterDatabase>`;
+  }
+
+  // One delegated handler covers every "⌚ TCX" link the templates emit
+  // (journey board, plan, line-by-line, geo map picker).
+  document.addEventListener("click", async (e) => {
+    const a = e.target && e.target.closest && e.target.closest(".tcx-dl");
+    if (!a || !a.dataset.slug) return;
+    e.preventDefault();
+    const slug = a.dataset.slug, reverse = a.dataset.rev === "1";
+    try {
+      // Same geometry the site draws: the primary variant for branching lines,
+      // else the GPX's main track segment.
+      const vroutes = await loadVariantRoutes();
+      let pts = vroutes[slug] && vroutes[slug][0] && vroutes[slug][0].length > 1 ? vroutes[slug][0] : null;
+      if (!pts) { const segs = await loadRouteGpx(slug); pts = segs && segs[0]; }
+      if (!pts || pts.length < 2) throw new Error("no track");
+      const tcx = tcxFromPoints(pts, `TubeRun ${slug}`, reverse);
+      if (!tcx) throw new Error("no track");
+      const url = URL.createObjectURL(new Blob([tcx], { type: "application/vnd.garmin.tcx+xml" }));
+      const dl = document.createElement("a");
+      dl.href = url; dl.download = `TubeRun-${slug}${reverse ? "-reverse" : ""}.tcx`;
+      document.body.appendChild(dl); dl.click(); dl.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 4000);
+    } catch (_) {
+      const was = a.textContent;
+      a.textContent = "TCX unavailable";
+      setTimeout(() => { a.textContent = was; }, 1800);
+    }
+  });
 
   // --- Render: Live now banner ------------------------------------------
   function renderLive() {
@@ -1526,6 +1584,16 @@
   // Marching-dash sequence for the animated flow line (MapLibre's animate-a-line pattern).
   const GL_FLOW_DASH = [[0, 4, 3], [0.5, 4, 2.5], [1, 4, 2], [1.5, 4, 1.5], [2, 4, 1], [2.5, 4, 0.5], [3, 4, 0], [0, 0.5, 3, 3.5], [0, 1, 3, 3], [0, 1.5, 3, 2.5], [0, 2, 3, 2], [0, 2.5, 3, 1.5], [0, 3, 3, 1], [0, 3.5, 3, 0.5]];
 
+  // Finish-line pints: well-rated pubs near each route's ends (FSA open data,
+  // built by tools/generate-pubs.mjs). Missing file just means no pub layer.
+  let routePubsPromise = null;
+  function loadRoutePubs() {
+    if (!routePubsPromise) {
+      routePubsPromise = fetch("data/route-pubs.json").then((r) => (r.ok ? r.json() : {})).catch(() => ({}));
+    }
+    return routePubsPromise;
+  }
+
   let maplibrePromise = null;
   function loadMapLibre() {
     if (maplibrePromise) return maplibrePromise;
@@ -1591,6 +1659,43 @@
     map.addLayer({ id: "route-base", type: "line", source: "route", layout: { "line-join": "round", "line-cap": "round" }, paint: { "line-color": "#0019a8", "line-width": 5, "line-opacity": 0.35 } }, before);
     map.addLayer({ id: "route-flow", type: "line", source: "route", layout: { "line-join": "round", "line-cap": "round" }, paint: { "line-color": "#0019a8", "line-width": 4, "line-dasharray": [0, 4, 3] } }, before);
 
+    // Finish-line pints: amber dots near the route's ends; tap one for the name
+    // and its FSA hygiene score. The 🍺 control toggles the layer.
+    map.addSource("route-pubs", { type: "geojson", data: empty });
+    map.addLayer({ id: "route-pubs", type: "circle", source: "route-pubs", paint: {
+      "circle-radius": ["interpolate", ["linear"], ["zoom"], 11, 3.5, 15, 6.5],
+      "circle-color": "#e39b25", "circle-stroke-color": "#fff", "circle-stroke-width": 1.6, "circle-opacity": 0.95,
+    } }, before);
+    map.on("click", "route-pubs", (e) => {
+      const f = e.features && e.features[0];
+      if (!f) return;
+      new maplibregl.Popup({ offset: 10 }).setLngLat(f.geometry.coordinates)
+        .setText(`${f.properties.n} — food hygiene ${f.properties.r}/5 · near the ${f.properties.end}`).addTo(map);
+    });
+    map.on("mouseenter", "route-pubs", () => { map.getCanvas().style.cursor = "pointer"; });
+    map.on("mouseleave", "route-pubs", () => { map.getCanvas().style.cursor = ""; });
+    map.addControl({
+      onAdd() {
+        const div = document.createElement("div");
+        div.className = "maplibregl-ctrl maplibregl-ctrl-group";
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.textContent = "🍺";
+        btn.title = "Finish-line pints — well-rated pubs near the start and finish";
+        btn.setAttribute("aria-label", btn.title);
+        btn.setAttribute("aria-pressed", "true");
+        btn.addEventListener("click", () => {
+          const off = map.getLayoutProperty("route-pubs", "visibility") === "none";
+          map.setLayoutProperty("route-pubs", "visibility", off ? "visible" : "none");
+          btn.setAttribute("aria-pressed", String(off));
+          btn.style.opacity = off ? "" : "0.45";
+        });
+        div.appendChild(btn);
+        return div;
+      },
+      onRemove() { /* map teardown removes the DOM */ },
+    }, "top-right");
+
     const reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (!reduce) {
       let step = 0;
@@ -1625,6 +1730,11 @@
     map.getSource("route").setData({ type: "FeatureCollection", features: segs.map((coords) => ({ type: "Feature", geometry: { type: "LineString", coordinates: coords } })) });
     map.setPaintProperty("route-base", "line-color", colour);
     map.setPaintProperty("route-flow", "line-color", colour);
+    loadRoutePubs().then((pubs) => {
+      if (routeMap.current < 0 || ROUTES[routeMap.current].id !== r.id) return; // selection moved on while loading
+      const src = map.getSource("route-pubs");
+      if (src) src.setData({ type: "FeatureCollection", features: (pubs[r.id] || []).map((p) => ({ type: "Feature", geometry: { type: "Point", coordinates: [p.lon, p.lat] }, properties: { n: p.n, r: p.r, end: p.end } })) });
+    });
 
     const startAt = segs[0][0], lastSeg = segs[segs.length - 1], finishAt = lastSeg[lastSeg.length - 1];
     const startLabel = routeMap.reversed ? "Start · from the far end (reversed)" : "Start · " + r.start;
@@ -1745,8 +1855,11 @@
         mark.addEventListener("click", (e) => {
           e.stopPropagation();
           const n = mark.dataset.name;
-          if (routeRun.has(n)) routeRun.delete(n); else routeRun.add(n);
+          const adding = !routeRun.has(n);
+          if (adding) routeRun.add(n); else routeRun.delete(n);
+          stampRun(n, adding);
           saveRoutesRun(routeRun); syncRouteMark(mark); renderRouteProgress();
+          renderLineCollector(); // its stats row + borough bagger count routes too
         });
       }
     });
@@ -2593,6 +2706,9 @@
     async function syncGpxDir() {
       if (!gpxLink) return;
       const slug = lineSlug(name);
+      // The TCX link converts on click, so it only needs to know the direction.
+      const tcxLink = gpxLink.parentElement && gpxLink.parentElement.querySelector(".tcx-dl");
+      if (tcxLink) tcxLink.dataset.rev = reversed ? "1" : "";
       if (!reversed) {
         if (revUrl) { URL.revokeObjectURL(revUrl); revUrl = null; }
         gpxLink.href = `routes/${slug}.gpx`;
@@ -2645,6 +2761,16 @@
   const LC_KEY = "tuberun_collector";
   function loadCollector() { return loadSet(LC_KEY); }
   function saveCollector(set) { saveSet(LC_KEY, set); }
+
+  // When a line direction or route is ticked off, remember the date — it feeds
+  // the "days active" stats. Older ticks pre-date this and simply have no date.
+  const RUN_DATES_KEY = "tuberun_run_dates";
+  let runDates = (() => { try { const m = JSON.parse(localStorage.getItem(RUN_DATES_KEY)); return m && typeof m === "object" && !Array.isArray(m) ? m : {}; } catch (_) { return {}; } })();
+  function stampRun(key, on) {
+    if (on) runDates[key] = new Date().toISOString().slice(0, 10);
+    else delete runDates[key];
+    try { localStorage.setItem(RUN_DATES_KEY, JSON.stringify(runDates)); } catch (_) { /* private mode */ }
+  }
   let collectorDone = loadCollector();
   // Line length (km) for collector distance totals.
   const LINE_KM = {};
@@ -2682,15 +2808,16 @@
     const total = TUBE_LINES.length * 2;
     let n = 0, collectedKm = 0, linesAny = 0, linesBoth = 0;
 
+    const nextUp = []; // suggester candidates: lines still missing a direction
     const rows = TUBE_LINES.map((name) => {
       const c = LINE_COLOURS[name] || "#0019A8";
       const dirs = LINE_DIRS[name] || ["→ one way", "→ the other"];
       const lineKm = LINE_KM[name] || 0;
-      let doneHere = 0;
+      let doneHere = 0, undoneLabel = "";
       const chips = dirs.map((label, i) => {
         const keyId = `${name}|${i}`;
         const isDone = collectorDone.has(keyId);
-        if (isDone) { n++; doneHere++; collectedKm += lineKm; }
+        if (isDone) { n++; doneHere++; collectedKm += lineKm; } else if (!undoneLabel) undoneLabel = label;
         const style = isDone
           ? `background:${c};color:${contrastText(c)};border-color:${c}`
           : `color:#2b3140;border-color:${lineTextColour(c)}`;
@@ -2698,11 +2825,28 @@
       }).join("");
       if (doneHere >= 1) linesAny++;
       if (doneHere >= 2) linesBoth++;
+      if (doneHere < 2) nextUp.push({ name, km: lineKm, doneHere, undoneLabel, colour: c });
       return `<div class="lc-row">
         <span class="lc-name" style="border-color:${c}"><i style="background:${c}"></i>${escapeHtml(name)}<span class="lc-km">${fmtKm(lineKm, 1)} each way</span></span>
         <span class="lc-dirs">${chips}</span>
       </div>`;
     }).join("");
+
+    // "What next?" — nudge toward untouched lines first, longest new ground first.
+    nextUp.sort((a, b) => a.doneHere - b.doneHere || b.km - a.km);
+    const next = nextUp[0];
+    const nextHtml = next && n > 0 ? `<p class="lc-next">🎯 Next tick: <b style="color:${lineTextColour(next.colour)}">${escapeHtml(next.name)}</b> ${escapeHtml(next.undoneLabel)} — ${next.doneHere ? "run it the other way to collect the pair" : `${fmtKm(next.km, 1)} of new ground`}</p>` : "";
+
+    // Stats from the run-date log (dates only accrue as you tick things off).
+    const routeKmDone = ROUTES.reduce((s, r) => s + (routeRun.has(r.name) ? routeKm(r) : 0), 0);
+    const dates = Object.values(runDates);
+    const daysActive = new Set(dates).size;
+    const lastRun = dates.length ? dates.slice().sort().pop() : null;
+    const statsHtml = `<div class="lc-stats">
+      <span class="lc-stat"><b>${fmtKm(collectedKm + routeKmDone, 1)}</b> lines + routes collected</span>
+      ${daysActive ? `<span class="lc-stat"><b>${daysActive}</b> day${daysActive === 1 ? "" : "s"} active</span>` : ""}
+      ${lastRun ? `<span class="lc-stat"><b>${escapeHtml(lastRun)}</b> last tick</span>` : ""}
+    </div>`;
 
     const ctx = {
       count: n, km: collectedKm, linesAny, linesBoth,
@@ -2719,6 +2863,8 @@
       </div>
       <p class="lc-hint"><strong>Tap a direction to tick off a line you've run</strong> — each counts twice, one each way. Your tally is saved in this browser. ${TUBE_LINES.length} lines, ${total} runs to collect them all.</p>
       <div class="lc-dist"><span class="lc-dist-big">${fmtKm(collectedKm, 1)}</span> collected so far <small>across ${n} direction${n === 1 ? "" : "s"}</small></div>
+      ${statsHtml}
+      ${nextHtml}
       <div class="lc-rows">${rows}</div>
       ${badgesHeadHtml("Badges", `${gotBadges} / ${BADGES.length} earned`)}
       <p class="lc-hint">Collect lines to unlock badges — from your first direction to the whole network, both ways.</p>
@@ -2726,12 +2872,46 @@
 
     el.querySelectorAll(".lc-dir").forEach((b) => b.addEventListener("click", () => {
       const k = b.dataset.key;
-      if (collectorDone.has(k)) collectorDone.delete(k); else collectorDone.add(k);
+      const adding = !collectorDone.has(k);
+      if (adding) collectorDone.add(k); else collectorDone.delete(k);
+      stampRun(k, adding);
       saveCollector(collectorDone);
       renderLineCollector();
     }));
     const reset = document.getElementById("lcReset");
-    if (reset) reset.addEventListener("click", () => { collectorDone = new Set(); saveCollector(collectorDone); renderLineCollector(); });
+    if (reset) reset.addEventListener("click", () => {
+      collectorDone = new Set();
+      saveCollector(collectorDone);
+      for (const k in runDates) if (k.includes("|")) stampRun(k, false); // route dates survive a line reset
+      renderLineCollector();
+    });
+    renderBoroughBagger();
+  }
+
+  // --- Borough bagger: which of the 33 boroughs your runs have touched -----
+  // Derived entirely from the line collector + marked routes (no storage of
+  // its own) against build-time tagging in data/boroughs.json.
+  let boroughsPromise = null;
+  function loadBoroughs() {
+    if (!boroughsPromise) boroughsPromise = fetch("data/boroughs.json").then((r) => (r.ok ? r.json() : null)).catch(() => null);
+    return boroughsPromise;
+  }
+  async function renderBoroughBagger() {
+    const el = document.getElementById("boroughBagger");
+    if (!el) return;
+    const data = await loadBoroughs();
+    if (!data || !data.names) { el.hidden = true; return; }
+    const covered = new Set();
+    TUBE_LINES.forEach((name) => {
+      if (collectorDone.has(`${name}|0`) || collectorDone.has(`${name}|1`)) (data.lines[lineSlug(name)] || []).forEach((b) => covered.add(b));
+    });
+    ROUTES.forEach((r) => { if (routeRun.has(r.name)) (data.routes[r.id] || []).forEach((b) => covered.add(b)); });
+    const chips = data.names.map((nm, i) => `<span class="bb-chip${covered.has(i) ? " got" : ""}">${covered.has(i) ? "✓ " : ""}${escapeHtml(nm)}</span>`).join("");
+    el.hidden = false;
+    el.innerHTML = `
+      ${badgesHeadHtml("Borough bagger", `${covered.size} / ${data.names.length} boroughs`)}
+      <p class="lc-hint">Every borough your ticked-off lines and marked routes pass through. Bag all ${data.names.length} — from Barking and Dagenham to Westminster.</p>
+      <div class="bb-grid">${chips}</div>`;
   }
 
   // --- Render: Gallery ---------------------------------------------------
@@ -2803,6 +2983,38 @@
   let geoTimeMode = "run";    // run | walk | off — badge mode on the highlighted line
   let geoShowToilets = true;  // toilet pins on the geographic map
   let geoShowWater = false;   // drinking-water pins on the geographic map
+  let tmYear = 9999;          // time-machine year on the geo map — 9999 = today
+
+  // Year each line's corridor first carried passengers. For the Overground and
+  // National Rail these are the Victorian railways the modern names run over
+  // (the Mildmay is the 1850 North London Railway, Southeastern descends from
+  // London's first railway of 1836) — approximate corridor heritage, not brands.
+  const HERITAGE_YEAR = {
+    metropolitan: 1863, "hammersmith-city": 1864, district: 1868, circle: 1884,
+    northern: 1890, "waterloo-city": 1898, central: 1900, bakerloo: 1906,
+    piccadilly: 1906, victoria: 1968, jubilee: 1979, elizabeth: 2022,
+    lioness: 1912, mildmay: 1850, windrush: 1869, weaver: 1840, suffragette: 1894, liberty: 1893,
+    southeastern: 1836, "south-western-railway": 1838, "great-western-railway": 1838,
+    "greater-anglia": 1839, southern: 1841, "great-northern": 1850, c2c: 1854,
+    thameslink: 1866, "chiltern-railways": 1899, "heathrow-express": 1998,
+  };
+  const lineYear = (id) => HERITAGE_YEAR[id] || 0; // unlisted lines always exist
+  const TM_MILESTONES = [
+    [1836, "London's first railway opens — London Bridge to Deptford."],
+    [1838, "Brunel's Great Western steams out of Paddington."],
+    [1863, "The Metropolitan Railway opens — the world's first underground."],
+    [1868, "The District line begins at Westminster."],
+    [1884, "The Circle is finally completed."],
+    [1890, "City & South London Railway — the first deep-level electric Tube."],
+    [1900, "The Central London Railway opens — the Twopenny Tube."],
+    [1906, "Bakerloo and Piccadilly tubes open within months of each other."],
+    [1968, "The Victoria line arrives, with automatic trains."],
+    [1979, "The Jubilee line opens, silver for the Silver Jubilee."],
+    [1988, "Thameslink reopens the Snow Hill tunnel through the City."],
+    [1998, "Heathrow Express speeds airport runs from Paddington."],
+    [2022, "The Elizabeth line opens at last."],
+    [2024, "The Overground's six lines get their own names."],
+  ];
   function geoDistStr(km) { return fmtKm(km, 1); } // follows the site-wide unit toggle
   // Compass bearing (deg, 0 = north) from waypoint a to b — for direction arrows.
   function bearingDeg(a, b) {
@@ -3356,15 +3568,19 @@
       const sel = L.DomUtil.create("select", "", row);
       sel.setAttribute("aria-label", "Choose which route to show on the map");
       sel.innerHTML = groupedOptionsHtml(entries, (e) => e.group, selectedIdx);
-      // GPX download for the selected line, kept in sync as the choice changes.
+      // GPX + TCX downloads for the selected line, kept in sync as the choice changes.
       const gpx = L.DomUtil.create("a", "gpx-dl geo-gpx", row);
       gpx.textContent = "↓ GPX";
+      const tcx = L.DomUtil.create("a", "gpx-dl tcx-dl geo-gpx", row);
+      tcx.textContent = "⌚ TCX";
+      tcx.href = "#";
+      tcx.title = "Download as a Garmin TCX course — Virtual Partner pacing at your site pace";
       // Distance / stops / running time of the selected route, under the picker.
       const stats = L.DomUtil.create("div", "geo-stats", div);
       const syncGpx = (i) => {
         const id = entries[i] && entries[i].id;
-        if (id && GPX_LINES.has(id)) { gpx.href = `routes/${id}.gpx`; gpx.download = `TubeRun-${id}.gpx`; gpx.title = "Download this line's pavement route as a GPX file for your watch"; gpx.style.display = ""; }
-        else { gpx.removeAttribute("href"); gpx.style.display = "none"; }
+        if (id && GPX_LINES.has(id)) { gpx.href = `routes/${id}.gpx`; gpx.download = `TubeRun-${id}.gpx`; gpx.title = "Download this line's pavement route as a GPX file for your watch"; gpx.style.display = ""; tcx.dataset.slug = id; tcx.style.display = ""; }
+        else { gpx.removeAttribute("href"); gpx.style.display = "none"; delete tcx.dataset.slug; tcx.style.display = "none"; }
       };
       const syncStats = (i) => {
         const wp = entries[i] && entries[i].wp;
@@ -3420,15 +3636,18 @@
     return out;
   }
 
-  function geoCaption(cap, net, hi, redraw) {
+  function geoCaption(cap, net, hi, redraw, applyYear) {
     if (!cap) return;
     const modes = hi ? `<span class="geo-modes">Times: ${["run", "walk", "off"].map((m) =>
       `<button type="button" class="geo-mode" data-mode="${m}"${geoTimeMode === m ? ' data-on="1"' : ""}>${m === "off" ? "Off" : m[0].toUpperCase() + m.slice(1)}</button>`).join("")}</span>` : "";
     const wcBtn = `<button type="button" class="geo-mode geo-wc-btn" data-wc="1"${geoShowToilets ? ' data-on="1"' : ""}>🚻 Toilets</button>`;
     const waterBtn = `<button type="button" class="geo-mode geo-water-btn" data-water="1"${geoShowWater ? ' data-on="1"' : ""}>💧 Water</button>`;
+    const tmOn = tmYear < 9999;
+    const tmBtn = `<button type="button" class="geo-mode geo-tm-btn"${tmOn ? ' data-on="1"' : ""}>🕰 Time machine</button>`;
+    const tmRowHtml = `<span class="tm-year-row"${tmOn ? "" : " hidden"}><input type="range" class="tm-year" min="1830" max="2026" step="1" value="${tmOn ? tmYear : 2026}" aria-label="Show the network as it was in this year" /><b class="tm-year-lbl"></b><span class="tm-year-note"></span></span>`;
     cap.innerHTML = (hi
       ? `<strong style="color:${lineTextColour(net[hi].colour)}">${escapeHtml(net[hi].name)} line</strong> lit up for the next run — arrows show the direction of travel, with running time, distance and the group's expected arrival window (from a ${MEET_TIME} start) at each stop. Every stop is a bail-out — hop the train back — and the black-ringed interchanges get you onto other lines. `
-      : `Our own live map — real streets, parks and the Thames, with every tube line on top. `) + modes + " " + wcBtn + " " + waterBtn;
+      : `Our own live map — real streets, parks and the Thames, with every tube line on top. `) + modes + " " + wcBtn + " " + waterBtn + " " + tmBtn + tmRowHtml;
     cap.querySelectorAll(".geo-mode[data-on]").forEach((b) => b.classList.add("on"));
     cap.querySelectorAll(".geo-mode[data-mode]").forEach((b) => b.addEventListener("click", () => {
       geoTimeMode = b.dataset.mode;
@@ -3439,6 +3658,28 @@
     if (wb) wb.addEventListener("click", () => { geoShowToilets = !geoShowToilets; wb.classList.toggle("on", geoShowToilets); redraw(); });
     const wtb = cap.querySelector(".geo-water-btn");
     if (wtb) wtb.addEventListener("click", () => { geoShowWater = !geoShowWater; wtb.classList.toggle("on", geoShowWater); redraw(); });
+    // Time machine: scrub the year and the map ghosts every line that hadn't
+    // opened yet, with a milestone caption for the era you've landed in.
+    const tmb = cap.querySelector(".geo-tm-btn"), tmRow = cap.querySelector(".tm-year-row"),
+      tmSlider = cap.querySelector(".tm-year"), tmLbl = cap.querySelector(".tm-year-lbl"), tmNote = cap.querySelector(".tm-year-note");
+    const syncTm = () => {
+      const y = +tmSlider.value;
+      tmLbl.textContent = String(y);
+      let note = "London before the railways.";
+      for (const [my, txt] of TM_MILESTONES) if (my <= y) note = `${my} — ${txt}`;
+      tmNote.textContent = note;
+    };
+    if (tmb && applyYear) {
+      tmb.addEventListener("click", () => {
+        const on = tmRow.hidden;
+        tmRow.hidden = !on;
+        tmb.classList.toggle("on", on);
+        applyYear(on ? +tmSlider.value : 9999);
+        syncTm();
+      });
+      tmSlider.addEventListener("input", () => { applyYear(+tmSlider.value); syncTm(); });
+      syncTm();
+    }
   }
 
   // Real geographic map: Leaflet + CARTO Voyager basemap + our tube overlays.
@@ -3455,9 +3696,14 @@
 
     // Tube lines (real track geometry). Highlighted line bold & on top, others
     // dimmed. National Rail rides underneath — thinner and dashed, the classic
-    // NR cartography — so the TfL network stays the hero of the map.
-    const lineLayer = L.geoJSON(geo, { style: (f) => { const on = hi && f.properties.line === hi, nr = f.properties.nr;
-      return { color: f.properties.colour, weight: on ? 5 : (nr ? 2 : 3), opacity: on ? 1 : (hi ? 0.3 : (nr ? 0.6 : 0.9)), dashArray: nr ? "6 5" : null, lineJoin: "round", lineCap: "round" }; } }).addTo(map);
+    // NR cartography — so the TfL network stays the hero of the map. Lines the
+    // time machine says don't exist yet linger as faint ghosts.
+    const lineStyle = (f) => {
+      const on = hi && f.properties.line === hi, nr = f.properties.nr;
+      if (lineYear(f.properties.line) > tmYear) return { color: f.properties.colour, weight: 1, opacity: 0.07, dashArray: "2 6", lineJoin: "round", lineCap: "round" };
+      return { color: f.properties.colour, weight: on ? 5 : (nr ? 2 : 3), opacity: on ? 1 : (hi ? 0.3 : (nr ? 0.6 : 0.9)), dashArray: nr ? "6 5" : null, lineJoin: "round", lineCap: "round" };
+    };
+    const lineLayer = L.geoJSON(geo, { style: lineStyle }).addTo(map);
     lineLayer.eachLayer((l) => { if (hi && l.feature.properties.line === hi) l.bringToFront(); });
 
     // Route overlay + picker (top-left). The picker always lists this month's run
@@ -3481,13 +3727,14 @@
     // National Rail platforms carry different Naptan ids (910G…) from the tube
     // station they share a building with (940G…), so also drop any NR station
     // sitting on a same-named TfL one — otherwise interchanges draw two markers.
-    const count = {}, coordById = {}, colourById = {}, tflByName = {};
-    for (const id in net) { if (net[id].nr) continue; const st = net[id].stations; for (const sid in st) { count[sid] = (count[sid] || 0) + 1;
+    const count = {}, coordById = {}, colourById = {}, tflByName = {}, sidYear = {};
+    const markYear = (sid, id) => { const y = lineYear(id); if (sidYear[sid] === undefined || y < sidYear[sid]) sidYear[sid] = y; };
+    for (const id in net) { if (net[id].nr) continue; const st = net[id].stations; for (const sid in st) { count[sid] = (count[sid] || 0) + 1; markYear(sid, id);
       if (!coordById[sid]) { coordById[sid] = st[sid]; colourById[sid] = net[id].colour; tflByName[norm(st[sid].n)] = st[sid]; } } }
     for (const id in net) { if (!net[id].nr) continue; const st = net[id].stations; for (const sid in st) {
       const twin = tflByName[norm(st[sid].n)];
       if (twin && Math.abs(twin.lat - st[sid].lat) < 0.004 && Math.abs(twin.lon - st[sid].lon) < 0.006) continue;
-      count[sid] = (count[sid] || 0) + 1;
+      count[sid] = (count[sid] || 0) + 1; markYear(sid, id);
       if (!coordById[sid]) { coordById[sid] = st[sid]; colourById[sid] = net[id].colour; } } }
     const km = tmComputeKm(net, hi);
     // Per-day ETA table so multi-day runs count each day's windows from that day's
@@ -3510,6 +3757,7 @@
       const dense = map.getZoom() < 12; // thin the permanent labels when zoomed out to avoid overlap
       stationGrp = L.layerGroup();
       for (const sid in coordById) { const s = coordById[sid], inter = count[sid] > 1, onHi = km[sid] !== undefined, dim = hi && !onHi;
+        if ((sidYear[sid] || 0) > tmYear) continue; // station's every line post-dates the time machine year
         const m = L.circleMarker([s.lat, s.lon], {
           radius: inter ? (onHi ? 6 : 4.5) : 3, weight: inter ? 1.5 : 1,
           color: inter ? "#111" : (dim ? "#9aa3ad" : colourById[sid]),
@@ -3540,7 +3788,8 @@
       waterGrp.addTo(map);
     }
     draw();
-    geoCaption(cap, net, hi, draw);
+    const applyYear = (y) => { tmYear = y; lineLayer.setStyle(lineStyle); draw(); };
+    geoCaption(cap, net, hi, draw, applyYear);
     geoRefresh = () => { if (tmMap.map === map) draw(); };
     let wasDense = map.getZoom() < 12;
     map.on("zoomend", () => { const d = map.getZoom() < 12; if (d !== wasDense) { wasDense = d; draw(); } });
