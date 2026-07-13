@@ -1090,16 +1090,22 @@
     const tag = tappable ? "button" : "span";
     const label = escapeHtml(opts.bannerLabel || `${lineName} line`);
     const banner = `<div class="strip-line" style="background:${colour};color:${contrastText(colour)}">${label}</div>`;
+    // Sign-style leg distances: each segment labels the gap from the previous
+    // stop (on-street estimate, or true along-path km when the caller has it).
+    const legKm = (i) => (opts.legKms ? opts.legKms[i] : haversineKm(wp[i - 1], wp[i]) * ROAD_FACTOR);
+    const legLbl = (km) => (distUnit === "km" && km < 0.95 ? `${Math.round(km * 200) * 5} m` : fmtKm(km, 1));
     const track = wp.map((p, i) => {
       const active = i >= a && i <= b;
       const endpoint = i === from || i === to;
       return `<${tag} class="stn${active ? " active" : ""}${endpoint ? " endpoint" : ""}"${tappable ? ` data-i="${i}"` : ""} title="${escapeHtml(p[0])}" aria-label="${escapeHtml(p[0])}">
                 <span class="stn-name">${escapeHtml(p[0])}</span>
-                <span class="rail"><span class="dot"></span></span>
+                <span class="rail"><span class="dot"></span>${i ? `<span class="stn-leg">${legLbl(legKm(i))}</span>` : ""}</span>
                 ${opts.geoInterchange ? geoInterchangeTags(p[1], p[2]) : interchangeTags(p[0], lineName)}
               </${tag}>`;
     }).join("");
-    return banner + `<div class="line-track">${track}</div>`;
+    const totalKm = opts.totalKm !== undefined ? opts.totalKm : waypointsKm(wp) * ROAD_FACTOR;
+    const total = wp.length > 1 ? `<div class="strip-total">${fmtKm(totalKm, 1)} end to end</div>` : "";
+    return banner + `<div class="line-track">${track}</div>` + total;
   }
 
   function renderDiagram() {
@@ -1435,7 +1441,8 @@
     { id: "crystal-palace-park", name: "Crystal Palace Park", type: "park", leg: "Dinosaurs & terraces loop", start: "Crystal Palace (rail)", distance: "1.6 mi (2.6 km)", highlights: "Victorian dinosaurs, the old palace terraces, a maze and the National Sports Centre.", suitability: "Quirky and fun — gentle undulations, lots to look at.", loop: true, path: [[51.4240, -0.0730], [51.4240, -0.0670], [51.4180, -0.0670], [51.4180, -0.0730], [51.4240, -0.0730]] },
     { id: "alexandra-park", name: "Alexandra Park", type: "park", leg: "Ally Pally panorama loop", start: "Alexandra Palace (rail)", distance: "2.5 mi (4 km)", highlights: "'The People's Palace' with a sweeping panorama across the whole city; a proper hill up to the terrace.", suitability: "One big climb, then a view to earn it — a spirited group loop.", loop: true, path: [[51.5960, -0.1350], [51.5960, -0.1230], [51.5910, -0.1230], [51.5910, -0.1350], [51.5960, -0.1350]] },
     { id: "finsbury-park", name: "Finsbury Park", type: "park", leg: "Perimeter loop", start: "Finsbury Park (Victoria/Piccadilly)", distance: "1.6 mi (2.6 km)", highlights: "Busy north London park with a boating lake, an athletics track and the New River on its edge.", suitability: "Flat, central and sociable — links straight onto the Parkland Walk.", loop: true, path: [[51.5740, -0.1020], [51.5740, -0.0940], [51.5690, -0.0940], [51.5690, -0.1020], [51.5740, -0.1020]] },
-    { id: "parkland-walk", name: "Parkland Walk", type: "disused", leg: "Finsbury Park → Alexandra Palace (the old GNR branch)", start: "Finsbury Park (Victoria/Piccadilly)", distance: "4.5 mi (7.3 km)", highlights: "London's longest nature reserve along the Edgware, Highgate & Alexandra Palace railway (closed 1954) — old platforms at Crouch End, the Highgate tunnel portals, then over St James Lane viaduct to Ally Pally.", suitability: "Leafy, car-free and gently graded, with one road link over Highgate Hill; train home from Alexandra Palace.", loop: false, path: [[51.5645, -0.1065], [51.5717, -0.1218], [51.5777, -0.1458], [51.5872, -0.1440], [51.5983, -0.1202]] },
+    { id: "parkland-walk", name: "Parkland Walk", type: "disused", leg: "Finsbury Park → Alexandra Palace (the old GNR branch)", start: "Finsbury Park (Victoria/Piccadilly)", distance: "4.5 mi (7.3 km)", highlights: "London's longest nature reserve along the Edgware, Highgate & Alexandra Palace railway (closed 1954) — old platforms at Crouch End, the Highgate tunnel portals, then over St James Lane viaduct to Ally Pally.", suitability: "Leafy, car-free and gently graded, with one road link over Highgate Hill; train home from Alexandra Palace.", loop: false, path: [[51.5645, -0.1065], [51.5717, -0.1218], [51.5777, -0.1458], [51.5872, -0.1440], [51.5983, -0.1202]],
+      stops: [["Finsbury Park", 51.5645, -0.1065], ["Oxford Road", 51.5661, -0.1085], ["Stapleton Hall Road", 51.5691, -0.1152], ["Crouch Hill", 51.5709, -0.118], ["Crouch End Hill (old platforms)", 51.5717, -0.1218], ["Stanhope Road", 51.5737, -0.1307], ["Holmesdale Road", 51.5758, -0.1412], ["Highgate", 51.5777, -0.1458], ["Cranley Gardens", 51.5872, -0.144], ["Muswell Hill viaduct", 51.5901, -0.1398], ["Alexandra Palace", 51.5983, -0.1202]] },
     { id: "crystal-palace-high-level", name: "Crystal Palace High Level", type: "disused", leg: "Forest Hill → Crystal Palace over the lost High Level branch", start: "Forest Hill (Windrush)", distance: "3.4 mi (5.5 km)", highlights: "Cox's Walk into Sydenham Hill Wood, where the trackbed and tunnel portal of the Crystal Palace High Level railway (closed 1954) hide in the trees; finish beside the Palace terraces.", suitability: "Short but properly lumpy — woodland paths and real hills; muddy after rain.", loop: false, path: [[51.4394, -0.0531], [51.4408, -0.0800], [51.4325, -0.0803], [51.4181, -0.0729]] },
     { id: "northern-heights", name: "Northern Heights", type: "disused", leg: "Mill Hill East → Mill Hill Broadway (the tube that never was)", start: "Mill Hill East (Northern)", distance: "2.3 mi (3.7 km)", highlights: "The Mill Hill Old Railway nature reserve follows the Edgware branch the Northern line was electrifying when war killed the Northern Heights plan — passenger trains never came back.", suitability: "Short and gentle on a single-track path — run single file, or pair it with a Dollis Valley extension.", loop: false, path: [[51.6082, -0.2103], [51.6165, -0.2295], [51.6127, -0.2489]] },
     { id: "ebury-way", name: "Ebury Way", type: "disused", leg: "Rickmansworth → Watford High Street rail trail", start: "Rickmansworth (Metropolitan)", distance: "4.7 mi (7.5 km)", highlights: "The 1862 Watford & Rickmansworth Railway, now a flat gravel greenway across the Colne and Gade — aquadrome lakes, watercress country and canal crossings all the way to Watford.", suitability: "Pancake-flat, traffic-free and easy to follow — an ideal winter longer run; Lioness line home.", loop: false, path: [[51.6404, -0.4736], [51.6355, -0.4630], [51.6480, -0.4230], [51.6524, -0.3917]] },
@@ -1563,8 +1570,28 @@
     if (all.length) map.fitBounds(L.latLngBounds(all), { padding });
   }
 
+  // Sign-style access-point strip under the routes map, for routes that carry a
+  // curated `stops` list (e.g. the Parkland Walk's noticeboard diagram). Leg
+  // distances are true along-path km, from projecting each stop onto the route.
+  function renderRouteStrip(r) {
+    const el = document.getElementById("routeStrip");
+    if (!el) return;
+    const geom = r && r.stops && routesGeo && routesGeo[r.id];
+    if (!geom) { el.hidden = true; el.innerHTML = ""; return; }
+    const path = (geom.type === "MultiLineString" ? geom.coordinates.flat() : geom.coordinates).map((p) => [p[1], p[0]]);
+    const cum = pathCumKm(path);
+    const along = r.stops.map((s) => projectOnPath(s[1], s[2], path, cum).alongKm);
+    const legKms = along.map((k, i) => (i ? Math.max(0, k - along[i - 1]) : 0));
+    const c = ROUTE_COLOURS[r.type] || "#0019A8";
+    el.hidden = false;
+    el.classList.add("strip");
+    el.style.setProperty("--line-col", c);
+    el.innerHTML = stripMapHtml(null, c, r.name, { wp: r.stops, bannerLabel: `${r.name} — access points`, legKms, totalKm: cum[path.length - 1] });
+  }
+
   function drawRoute(i) {
     const r = ROUTES[i], c = ROUTE_COLOURS[r.type] || "#0019A8";
+    renderRouteStrip(r);
     if (routeMap.mode === "gl") { drawRouteGL(r, c); return; }
     const m = routeMap.map;
     if (!m) return;
@@ -4986,6 +5013,7 @@
       renderJourneyBoard();
       renderList();
       renderRouteCards(); // cards only — renderRoutes() would re-init its Leaflet map
+      if (routeMap.current >= 0) renderRouteStrip(ROUTES[routeMap.current]); // its leg distances follow the unit
       if (typeof busMapObj.retrace === "function") busMapObj.retrace(); // bus result panel
       renderLineStats();
       renderLineCollector();

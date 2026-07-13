@@ -401,6 +401,23 @@ section { max-width: var(--max); margin: 0 auto; padding: clamp(48px, 8vw, 88px)
 }
 .stn.active .stn-name { font-weight: 700; }
 .stn:hover .dot { transform: scale(1.35); }
+/* sign-style leg distance, centred on the connector to the previous stop */
+.stn .rail .stn-leg {
+  position: absolute;
+  top: calc(100% - 2px);
+  left: -50%;
+  width: 100%;
+  text-align: center;
+  font-size: 9.5px;
+  font-weight: 700;
+  color: var(--muted);
+  pointer-events: none;
+  white-space: nowrap;
+}
+.strip-total { margin-top: 12px; font-size: 12.5px; font-weight: 700; color: var(--muted); }
+/* access-point strip under the routes map, styled like the trailside sign */
+.route-strip { margin-top: 14px; overflow-x: auto; background: var(--card); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow); padding: 12px 14px; }
+.route-strip[hidden] { display: none; }
 /* carriage-style interchange pills under each stop */
 .stn-tags { display: flex; flex-direction: column; align-items: center; gap: 3px; margin-top: 8px; width: 100%; }
 .stn-tag {
@@ -845,7 +862,8 @@ body.tm-map-active .tm-zoom, body.tm-map-active .tm-scrollhint { display: none; 
 @media (min-width: 861px) {
   .route-layout { grid-template-columns: minmax(0, 1fr) minmax(340px, 460px); align-items: start; }
   #routeList { grid-column: 1; grid-row: 1; }
-  #routeMap { grid-column: 2; grid-row: 1; position: sticky; top: 80px; height: min(78vh, 640px); }
+  .route-side { grid-column: 2; grid-row: 1; position: sticky; top: 80px; }
+  #routeMap { height: min(64vh, 560px); }
 }
 .route-card {
   background: var(--card);

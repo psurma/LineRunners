@@ -28,10 +28,10 @@
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-title" content="Tube Run" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-  <link rel="stylesheet" href="vendor/fonts/fonts.css?v=239" />
+  <link rel="stylesheet" href="vendor/fonts/fonts.css?v=240" />
   <link rel="stylesheet" href="vendor/leaflet/leaflet.css" />
   <script src="vendor/leaflet/leaflet.js" defer></script>
-  <link rel="stylesheet" href="style.css?v=239" />
+  <link rel="stylesheet" href="style.css?v=240" />
 </head>
 <body>
   <header class="site-header">
@@ -293,7 +293,10 @@
       <p class="section-sub">A library of group-friendly London routes &mdash; parks, rivers, canals and landmark tours &mdash; to adapt into upcoming runs. <strong>Tap a route to trace it on the map</strong> (&#8984;/Ctrl + scroll to zoom), or filter by type and distance.</p>
       <div id="routeFilters" class="route-filters"></div>
       <div class="route-layout">
-        <div id="routeMap" class="route-map"></div>
+        <div class="route-side">
+          <div id="routeMap" class="route-map"></div>
+          <div id="routeStrip" class="route-strip" hidden></div>
+        </div>
         <div id="routeList" class="route-grid"></div>
       </div>
       <div id="routeProgress" class="route-progress"></div>
@@ -432,6 +435,6 @@
     <p class="fine">Not affiliated with Transport for London. Roundel-inspired branding used with affection, not endorsement.</p>
   </footer>
 
-  <script src="script.js?v=239" defer></script>
+  <script src="script.js?v=240" defer></script>
 </body>
 </html>
