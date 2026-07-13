@@ -28,10 +28,10 @@
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-title" content="Tube Run" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-  <link rel="stylesheet" href="vendor/fonts/fonts.css?v=235" />
+  <link rel="stylesheet" href="vendor/fonts/fonts.css?v=236" />
   <link rel="stylesheet" href="vendor/leaflet/leaflet.css" />
   <script src="vendor/leaflet/leaflet.js" defer></script>
-  <link rel="stylesheet" href="style.css?v=235" />
+  <link rel="stylesheet" href="style.css?v=236" />
 </head>
 <body>
   <header class="site-header">
@@ -44,6 +44,7 @@
       <a href="#plan">Plan</a>
       <a href="#schedule">Schedule</a>
       <a href="#network">Map</a>
+      <a href="#timemachine">Time machine</a>
       <a href="#journey">Journey</a>
       <a href="#stats">Lines</a>
       <a href="#newhere">New here?</a>
@@ -183,6 +184,21 @@
       <h2 class="section-title">The whole network</h2>
       <p class="section-sub">A real map of London &mdash; streets, parks and the Thames &mdash; with the next run's line lit up over the top, running times at every stop and toilet stops marked. &#8984;/Ctrl + scroll to zoom, drag to pan, tap or hover a station. Plus walking-time, official-map and rail reference views.</p>
       <div id="tubeMap" class="tube-map"></div>
+    </section>
+
+    <!-- TIME MACHINE -->
+    <section id="timemachine" class="timemachine">
+      <h2 class="section-title">The time machine</h2>
+      <p class="section-sub">Scrub through 190 years of London's railways &mdash; watch lines appear, creep outward and fill in, era by era. Hover a station for its opening year; the panel keeps the nerdy score.</p>
+      <div class="tm2-controls">
+        <input type="range" id="tm2Year" min="1830" max="2026" step="1" value="1900" aria-label="Show the network as it was in this year" />
+        <b id="tm2YearLbl">1900</b>
+      </div>
+      <p id="tm2Note" class="tm2-note"></p>
+      <div class="tm2-layout">
+        <div id="tm2Map" class="tm2-map"></div>
+        <aside id="tm2Panel" class="tm2-panel" aria-live="polite"></aside>
+      </div>
     </section>
 
     <!-- JOURNEY PLANNER (A -> B) -->
@@ -416,6 +432,6 @@
     <p class="fine">Not affiliated with Transport for London. Roundel-inspired branding used with affection, not endorsement.</p>
   </footer>
 
-  <script src="script.js?v=235" defer></script>
+  <script src="script.js?v=236" defer></script>
 </body>
 </html>

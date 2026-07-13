@@ -1601,6 +1601,14 @@
     return routePubsPromise;
   }
 
+  // Transport "secrets" — deep-level shelters, ghost stations, depots and
+  // oddities worth a detour (data/secrets.json, hand-curated).
+  let secretsPromise = null;
+  function loadSecrets() {
+    if (!secretsPromise) secretsPromise = fetch("data/secrets.json").then((r) => (r.ok ? r.json() : [])).catch(() => []);
+    return secretsPromise;
+  }
+
   let maplibrePromise = null;
   function loadMapLibre() {
     if (maplibrePromise) return maplibrePromise;
@@ -1681,6 +1689,22 @@
     });
     map.on("mouseenter", "route-pubs", () => { map.getCanvas().style.cursor = "pointer"; });
     map.on("mouseleave", "route-pubs", () => { map.getCanvas().style.cursor = ""; });
+
+    // Secrets along the route: shelters, ghost stations, depots and oddities
+    // within ~400 m of the line — violet dots, tap for the story.
+    map.addSource("route-secrets", { type: "geojson", data: empty });
+    map.addLayer({ id: "route-secrets", type: "circle", source: "route-secrets", paint: {
+      "circle-radius": ["interpolate", ["linear"], ["zoom"], 11, 4, 15, 7],
+      "circle-color": "#5F259F", "circle-stroke-color": "#fff", "circle-stroke-width": 1.6, "circle-opacity": 0.95,
+    } }, before);
+    map.on("click", "route-secrets", (e) => {
+      const f = e.features && e.features[0];
+      if (!f) return;
+      new maplibregl.Popup({ offset: 10, maxWidth: "280px" }).setLngLat(f.geometry.coordinates)
+        .setText(`${f.properties.n} — ${f.properties.d}`).addTo(map);
+    });
+    map.on("mouseenter", "route-secrets", () => { map.getCanvas().style.cursor = "pointer"; });
+    map.on("mouseleave", "route-secrets", () => { map.getCanvas().style.cursor = ""; });
     map.addControl({
       onAdd() {
         const div = document.createElement("div");
@@ -1698,6 +1722,19 @@
           btn.style.opacity = off ? "" : "0.45";
         });
         div.appendChild(btn);
+        const sBtn = document.createElement("button");
+        sBtn.type = "button";
+        sBtn.textContent = "👁";
+        sBtn.title = "Secrets along the route — shelters, ghost stations, depots and oddities";
+        sBtn.setAttribute("aria-label", sBtn.title);
+        sBtn.setAttribute("aria-pressed", "true");
+        sBtn.addEventListener("click", () => {
+          const off = map.getLayoutProperty("route-secrets", "visibility") === "none";
+          map.setLayoutProperty("route-secrets", "visibility", off ? "visible" : "none");
+          sBtn.setAttribute("aria-pressed", String(off));
+          sBtn.style.opacity = off ? "" : "0.45";
+        });
+        div.appendChild(sBtn);
         return div;
       },
       onRemove() { /* map teardown removes the DOM */ },
@@ -1741,6 +1778,15 @@
       if (routeMap.current < 0 || ROUTES[routeMap.current].id !== r.id) return; // selection moved on while loading
       const src = map.getSource("route-pubs");
       if (src) src.setData({ type: "FeatureCollection", features: (pubs[r.id] || []).map((p) => ({ type: "Feature", geometry: { type: "Point", coordinates: [p.lon, p.lat] }, properties: { n: p.n, r: p.r, end: p.end } })) });
+    });
+    loadSecrets().then((all) => {
+      if (routeMap.current < 0 || ROUTES[routeMap.current].id !== r.id) return;
+      const src = map.getSource("route-secrets");
+      if (!src) return;
+      // near = within ~400 m of any route vertex (vertices are ~13 m apart)
+      const near = all.filter((p) => segs.some((seg) => seg.some((c) =>
+        Math.abs(c[1] - p.lat) < 0.005 && Math.abs(c[0] - p.lon) < 0.008 && haversineKm([0, c[1], c[0]], [0, p.lat, p.lon]) < 0.4)));
+      src.setData({ type: "FeatureCollection", features: near.map((p) => ({ type: "Feature", geometry: { type: "Point", coordinates: [p.lon, p.lat] }, properties: { n: p.n, d: p.d } })) });
     });
 
     const startAt = segs[0][0], lastSeg = segs[segs.length - 1], finishAt = lastSeg[lastSeg.length - 1];
@@ -3123,19 +3169,49 @@
     const top = segs ? Math.max(...Object.keys(segs).map(Number)) : 0;
     return Math.max(lineYear(id), top);
   }
+  // Era geometry for lines partially built at a given year: each branch drawn
+  // only through the stations that had opened — later infills skip cleanly,
+  // unbuilt extensions truncate. Shared by the geo map and the time machine.
+  function eraLayerFor(net, year) {
+    const grp = L.layerGroup();
+    for (const id in net) {
+      if (lineYear(id) > year || lineMaxYear(id) <= year) continue;
+      const ln = net[id];
+      for (const b of ln.branches || []) {
+        const pts = b.map((sid) => ln.stations[sid]).filter((s) => s && stationYear(id, s.n) <= year).map((s) => [s.lat, s.lon]);
+        if (pts.length > 1) L.polyline(pts, { color: ln.colour, weight: ln.nr ? 2 : 3, opacity: ln.nr ? 0.6 : 0.9, dashArray: ln.nr ? "6 5" : null, lineJoin: "round", lineCap: "round" }).addTo(grp);
+      }
+    }
+    return grp;
+  }
   const TM_MILESTONES = [
     [1836, "London's first railway opens — London Bridge to Deptford."],
     [1838, "Brunel's Great Western steams out of Paddington."],
     [1863, "The Metropolitan Railway opens — the world's first underground."],
     [1868, "The District line begins at Westminster."],
+    [1869, "Brunel's Thames Tunnel carries its first trains — today's Windrush line."],
     [1884, "The Circle is finally completed."],
     [1890, "City & South London Railway — the first deep-level electric Tube."],
     [1900, "The Central London Railway opens — the Twopenny Tube."],
     [1906, "Bakerloo and Piccadilly tubes open within months of each other."],
+    [1908, "The bar-and-circle roundel first appears on platforms."],
+    [1911, "London's first escalator spirals into Earls Court."],
+    [1916, "Edward Johnston's lettering starts spreading across the network."],
+    [1926, "The Morden extension completes the Northern line's southern end."],
+    [1933, "Harry Beck's diagram map debuts as London Transport is formed."],
+    [1940, "Platforms shelter thousands each night through the Blitz."],
+    [1952, "London's last tram runs — for now."],
+    [1961, "Steam finally ends on the Metropolitan."],
     [1968, "The Victoria line arrives, with automatic trains."],
+    [1977, "Heathrow becomes the world's first airport on a metro."],
     [1979, "The Jubilee line opens, silver for the Silver Jubilee."],
     [1988, "Thameslink reopens the Snow Hill tunnel through the City."],
+    [1994, "Aldwych closes, and the Epping–Ongar shuttle makes its last run."],
     [1998, "Heathrow Express speeds airport runs from Paddington."],
+    [2000, "Trams return, in Croydon."],
+    [2003, "The Oyster card arrives."],
+    [2007, "TfL takes over the North London lines — the Overground is born."],
+    [2016, "The Night Tube begins."],
     [2022, "The Elizabeth line opens at last."],
     [2024, "The Overground's six lines get their own names."],
   ];
@@ -3725,6 +3801,121 @@
     return ctl; // so the time machine can swap the picker for another era's
   }
 
+  // --- The time machine section: the network era by era, plus the nerd panel ---
+  // A dedicated year scrubber and map (the Map tab keeps its own inline version),
+  // with the running tally of what's open, each line's era extent, and the story.
+  function tm2PanelHtml(net, year) {
+    if (year < 1836) return `<h3 class="tm2-h">No railways yet</h3><p class="lc-hint">London in ${year} moves by horse, boat and boot. The first railway arrives in 1836 — London Bridge to Deptford.</p>`;
+    const open = [], soon = [], openSids = new Set();
+    for (const id in net) {
+      const ln = net[id], y0 = lineYear(id);
+      if (y0 > year) { soon.push({ n: ln.name, y: y0 }); continue; }
+      let stns = 0, total = 0;
+      for (const sid in ln.stations) { total++; if (stationYear(id, ln.stations[sid].n) <= year) { stns++; openSids.add(sid); } }
+      const br = ln.route || (ln.branches || []).reduce((a, b) => (b.length > a.length ? b : a), (ln.branches || [])[0] || []);
+      const ob = br.map((sid) => ln.stations[sid]).filter((s) => s && stationYear(id, s.n) <= year);
+      open.push({ n: ln.name, c: ln.colour, y: y0, stns, total, from: ob[0] && ob[0].n, to: ob.length > 1 ? ob[ob.length - 1].n : null, building: lineMaxYear(id) > year });
+    }
+    open.sort((a, b) => a.y - b.y || a.n.localeCompare(b.n));
+    soon.sort((a, b) => a.y - b.y);
+    const events = TM_MILESTONES.filter(([y]) => y <= year).slice(-7).reverse();
+    return `
+      <h3 class="tm2-h">${year} · ${open.length} line${open.length === 1 ? "" : "s"} · ${openSids.size} stations open</h3>
+      <div class="tm2-lines">${open.map((l) => `
+        <div class="tm2-line"><i style="background:${l.c}"></i><div>
+          <b>${escapeHtml(l.n)}</b> <span class="tm2-yr">opened ${l.y}${l.building ? " · still growing" : ""}</span>
+          ${l.from && l.to ? `<span class="tm2-ext">${escapeHtml(l.from)} → ${escapeHtml(l.to)} · ${l.stns}/${l.total} of today's stations</span>` : ""}
+        </div></div>`).join("")}</div>
+      ${soon.length ? `<p class="tm2-soon"><b>Not yet built:</b> ${soon.map((s) => `${escapeHtml(s.n)} (${s.y})`).join(" · ")}</p>` : ""}
+      <h3 class="tm2-h">The story so far</h3>
+      <ul class="tm2-events">${events.map(([y, t]) => `<li><b>${y}</b> ${escapeHtml(t)}</li>`).join("")}</ul>`;
+  }
+
+  function renderTimeMachine() {
+    const mapEl = document.getElementById("tm2Map");
+    if (!mapEl) return;
+    const init = async () => {
+      if (typeof L === "undefined") { mapUnavailable(mapEl); return; }
+      const [net, geo] = await Promise.all([loadNetwork(), loadLines()]);
+      const slider = document.getElementById("tm2Year"), lbl = document.getElementById("tm2YearLbl"),
+        note = document.getElementById("tm2Note"), panel = document.getElementById("tm2Panel");
+      let year = +slider.value;
+      const map = createSiteMap(mapEl);
+      const style = (f) => {
+        const id = f.properties.line, nr = f.properties.nr;
+        if (lineYear(id) > year) return { color: f.properties.colour, weight: 1, opacity: 0.06, dashArray: "2 6" };
+        if (lineMaxYear(id) > year) return { color: f.properties.colour, weight: 0, opacity: 0 };
+        return { color: f.properties.colour, weight: nr ? 2 : 3, opacity: nr ? 0.6 : 0.9, dashArray: nr ? "6 5" : null, lineJoin: "round", lineCap: "round" };
+      };
+      const lineLayer = L.geoJSON(geo, { style }).addTo(map);
+      const b = L.latLngBounds([]);
+      lineLayer.eachLayer((l) => { if (!l.feature.properties.nr) b.extend(l.getBounds()); });
+      if (b.isValid()) map.fitBounds(b, { padding: [14, 14] });
+
+      // The secrets layer: shelters, ghost stations, depots and oddities —
+      // violet dots, hover for the name, tap for the story.
+      loadSecrets().then((all) => {
+        const grp = L.layerGroup();
+        for (const p of all) {
+          L.circleMarker([p.lat, p.lon], { radius: 3.4, weight: 1.2, color: "#fff", fillColor: "#5F259F", fillOpacity: 1 })
+            .bindTooltip(escapeHtml(p.n), { direction: "top" })
+            .bindPopup(`<b>${escapeHtml(p.n)}</b><br>${escapeHtml(p.d)}`, { maxWidth: 260 })
+            .addTo(grp);
+        }
+        grp.addTo(map);
+      });
+
+      // Open-station dots (tooltip names the opening year); NR platforms on a
+      // same-named TfL station are skipped like the geo map's markers.
+      let eraGrp = null, stnGrp = null;
+      const redraw = () => {
+        lineLayer.setStyle(style);
+        if (eraGrp) map.removeLayer(eraGrp);
+        eraGrp = eraLayerFor(net, year).addTo(map);
+        if (stnGrp) map.removeLayer(stnGrp);
+        stnGrp = L.layerGroup();
+        const tflByName = {}, chosen = {};
+        for (const id in net) { if (net[id].nr) continue; const st = net[id].stations; for (const sid in st) {
+          const y = stationYear(id, st[sid].n);
+          if (y > year) continue;
+          tflByName[norm(st[sid].n)] = st[sid];
+          if (!chosen[sid] || y < chosen[sid].y) chosen[sid] = { s: st[sid], y, c: net[id].colour };
+        } }
+        for (const id in net) { if (!net[id].nr) continue; const st = net[id].stations; for (const sid in st) {
+          const y = stationYear(id, st[sid].n);
+          if (y > year) continue;
+          const twin = tflByName[norm(st[sid].n)];
+          if (twin && Math.abs(twin.lat - st[sid].lat) < 0.004 && Math.abs(twin.lon - st[sid].lon) < 0.006) continue;
+          if (!chosen[sid] || y < chosen[sid].y) chosen[sid] = { s: st[sid], y, c: net[id].colour };
+        } }
+        for (const sid in chosen) {
+          const { s, y, c } = chosen[sid];
+          L.circleMarker([s.lat, s.lon], { radius: 2.8, weight: 1, color: "#fff", fillColor: c, fillOpacity: 1 })
+            .bindTooltip(`${escapeHtml(s.n)} · opened ${y}`, { direction: "top" }).addTo(stnGrp);
+        }
+        stnGrp.addTo(map);
+        let story = "London before the railways.";
+        for (const [my, txt] of TM_MILESTONES) if (my <= year) story = `${my} — ${txt}`;
+        note.textContent = story;
+        panel.innerHTML = tm2PanelHtml(net, year);
+      };
+      let deb = null;
+      slider.addEventListener("input", () => {
+        year = +slider.value;
+        lbl.textContent = String(year);
+        clearTimeout(deb);
+        deb = setTimeout(redraw, 120);
+      });
+      redraw();
+    };
+    if ("IntersectionObserver" in window) {
+      const io = new IntersectionObserver((entries, obs) => {
+        if (entries.some((e) => e.isIntersecting)) { obs.disconnect(); init(); }
+      }, { rootMargin: "250px" });
+      io.observe(mapEl);
+    } else init();
+  }
+
   // Friendly message in a map container when Leaflet itself failed to load.
   function mapUnavailable(el) {
     el.innerHTML = `<p class="diagram-empty">The map library couldn't load — check your connection.</p>`;
@@ -3841,16 +4032,7 @@
     function drawEra() {
       if (eraGrp) { map.removeLayer(eraGrp); eraGrp = null; }
       if (tmYear >= 9999) return;
-      eraGrp = L.layerGroup();
-      for (const id in net) {
-        if (lineYear(id) > tmYear || lineMaxYear(id) <= tmYear) continue;
-        const ln = net[id];
-        for (const b of ln.branches || []) {
-          const pts = b.map((sid) => ln.stations[sid]).filter((s) => s && stationYear(id, s.n) <= tmYear).map((s) => [s.lat, s.lon]);
-          if (pts.length > 1) L.polyline(pts, { color: ln.colour, weight: ln.nr ? 2 : 3, opacity: ln.nr ? 0.6 : 0.9, dashArray: ln.nr ? "6 5" : null, lineJoin: "round", lineCap: "round" }).addTo(eraGrp);
-        }
-      }
-      eraGrp.addTo(map);
+      eraGrp = eraLayerFor(net, tmYear).addTo(map);
     }
     if (tmYear < 9999) drawEra(); // a persisted time-machine year applies on re-render
     lineLayer.eachLayer((l) => { if (hi && l.feature.properties.line === hi) l.bringToFront(); });
@@ -4728,6 +4910,7 @@
     ["setupPlanner", setupPlanner], ["enrichInterchanges", enrichInterchanges], ["setupBusRunner", setupBusRunner],
     ["setupFollowAlong", setupFollowAlong],
     ["setupJourneyPlanner", setupJourneyPlanner], ["renderLineCollector", renderLineCollector],
+    ["renderTimeMachine", renderTimeMachine],
     ["renderGallery", renderGallery], ["wireSocials", wireSocials],
     ["loadWeather", loadWeather], ["setupScrollSpy", setupScrollSpy],
     ["setupUnitToggle", setupUnitToggle], ["setupLiveClock", setupLiveClock],

@@ -792,6 +792,25 @@ body.tm-map-active .tm-zoom, body.tm-map-active .tm-scrollhint { display: none; 
 .geo-modes { display: inline-flex; align-items: center; gap: 4px; margin-left: 8px; }
 .geo-mode { font: 600 12px Inter, sans-serif; border: 1px solid var(--line); background: #fff; color: var(--muted); padding: 2px 9px; border-radius: 20px; cursor: pointer; }
 .geo-mode.on { background: var(--tfl-blue); border-color: var(--tfl-blue); color: #fff; }
+/* ---------- Time machine section ---------- */
+.tm2-controls { display: flex; align-items: center; gap: 14px; margin-bottom: 6px; }
+.tm2-controls input { flex: 1; max-width: 520px; accent-color: var(--tfl-blue); }
+#tm2YearLbl { font-size: 26px; font-weight: 800; color: var(--tfl-blue); font-variant-numeric: tabular-nums; }
+.tm2-note { color: var(--muted); font-size: 14px; margin: 0 0 14px; min-height: 20px; }
+.tm2-layout { display: grid; gap: 18px; }
+@media (min-width: 900px) { .tm2-layout { grid-template-columns: minmax(0, 1fr) 340px; align-items: start; } }
+.tm2-map { height: 520px; border-radius: 16px; overflow: hidden; border: 1px solid var(--line); box-shadow: var(--shadow); background: #eef1f4; isolation: isolate; }
+.tm2-panel { background: var(--card); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow); padding: 16px 18px; max-height: 520px; overflow-y: auto; }
+.tm2-h { font-size: 15px; font-weight: 800; margin: 0 0 10px; }
+.tm2-lines { display: grid; gap: 8px; margin-bottom: 12px; }
+.tm2-line { display: flex; gap: 8px; font-size: 13.5px; line-height: 1.35; }
+.tm2-line i { flex: none; width: 10px; height: 10px; border-radius: 3px; margin-top: 3px; }
+.tm2-yr { color: var(--muted); margin-left: 4px; font-size: 12.5px; }
+.tm2-ext { display: block; color: var(--muted); font-size: 12px; }
+.tm2-soon { font-size: 12.5px; color: var(--muted); margin: 0 0 14px; }
+.tm2-events { list-style: none; padding: 0; margin: 0; display: grid; gap: 7px; font-size: 12.5px; color: #2b3140; }
+.tm2-events b { color: var(--tfl-blue); margin-right: 4px; }
+
 /* time machine: year scrubber under the map caption */
 .tm-year-row { display: flex; align-items: center; gap: 10px; margin-top: 10px; width: 100%; }
 .tm-year-row[hidden] { display: none; }
