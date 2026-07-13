@@ -882,7 +882,7 @@
       for (const sid in ln.stations) {
         const k = norm(ln.stations[sid].n);
         if (!m[k]) m[k] = [];
-        if (!m[k].some((x) => x.name === ln.name)) m[k].push({ name: ln.name, colour: ln.colour });
+        if (!m[k].some((x) => x.name === ln.name)) m[k].push({ name: ln.name, colour: ln.colour, nr: !!ln.nr });
       }
     }
     return m;
@@ -937,9 +937,11 @@
     const key = norm(name);
     const tube = interchangeMap ? (interchangeMap[key] || []).filter((x) => norm(x.name) !== norm(line)) : [];
     // Drop a hardcoded "<name> line" (e.g. "Elizabeth line") when the network already
-    // supplies that line as a Tube interchange, so it isn't listed twice.
+    // supplies that line as a Tube interchange, so it isn't listed twice — and drop
+    // the generic "National Rail" tag once the network names the actual NR line(s).
     const tubeNames = new Set(tube.map((x) => norm(x.name)));
-    const other = (nonTubeByNorm[key] || []).filter((n) => !tubeNames.has(norm(n.replace(/ line$/i, ""))));
+    const hasNamedNr = (interchangeMap ? (interchangeMap[key] || []) : []).some((x) => x.nr);
+    const other = (nonTubeByNorm[key] || []).filter((n) => !tubeNames.has(norm(n.replace(/ line$/i, ""))) && !(n === "National Rail" && hasNamedNr));
     if (!tube.length && !other.length) return "";
     const pills = tube.map((x) => `<span class="stn-tag" style="background:${x.colour};color:${contrastText(x.colour)}">${escapeHtml(x.name)}</span>`)
       .concat(other.map((n) => {
@@ -1693,9 +1695,11 @@
         <p class="rc-meta"><strong>Start</strong> ${escapeHtml(r.start)}</p>
         <p class="rc-hi">${escapeHtml(r.highlights)}</p>
         ${r.suitability ? `<p class="rc-suit">${escapeHtml(r.suitability)}</p>` : ""}
+        ${routeKm(r) ? timesRowHtml(routeKm(r)) : ""}
         <div class="rc-actions">
           <button type="button" class="rc-mark" data-name="${escapeHtml(r.name)}">＋ Mark as run</button>
           <button type="button" class="rc-reverse" data-i="${i}">⇄ Reverse direction</button>
+          <button type="button" class="rc-share" data-i="${i}">🔗 Share</button>
         </div>
       </div>`;
   }
@@ -1718,10 +1722,23 @@
     el.innerHTML = visible.map((x) => routeCardHtml(x.r, x.i)).join("");
     el.querySelectorAll(".route-card").forEach((card) => {
       const i = parseInt(card.dataset.i, 10);
-      card.addEventListener("click", () => selectRoute(i));
-      card.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); selectRoute(i); } });
+      card.addEventListener("click", () => selectRoute(i, true));
+      card.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); selectRoute(i, true); } });
       const rev = card.querySelector(".rc-reverse");
       if (rev) rev.addEventListener("click", (e) => { e.stopPropagation(); reverseRoute(i, rev); });
+      const share = card.querySelector(".rc-share");
+      if (share) share.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        const url = routeShareUrl(ROUTES[i]);
+        // Native share sheet where it exists (mobile); otherwise copy the link.
+        if (navigator.share) { try { await navigator.share({ title: ROUTES[i].name, url }); } catch (_) { /* user dismissed */ } return; }
+        try {
+          await navigator.clipboard.writeText(url);
+          const was = share.textContent;
+          share.textContent = "✓ Link copied";
+          setTimeout(() => { share.textContent = was; }, 1600);
+        } catch (_) { window.prompt("Copy this route link:", url); }
+      });
       const mark = card.querySelector(".rc-mark");
       if (mark) {
         syncRouteMark(mark);
@@ -1765,9 +1782,22 @@
     }));
   }
 
-  function selectRoute(i) {
+  // A route's shareable URL, e.g. https://…/#routes/regents-canal.
+  function routeShareUrl(r) { return location.href.split("#")[0] + "#routes/" + r.id; }
+  // Index of the route named by a #routes/<id> deep link, or -1.
+  function routeIndexFromHash() {
+    const m = /^#routes\/(.+)$/.exec(location.hash);
+    if (!m) return -1;
+    const id = decodeURIComponent(m[1]);
+    return ROUTES.findIndex((r) => r.id === id);
+  }
+
+  function selectRoute(i, updateHash) {
     routeMap.current = i;
     routeMap.reversed = false; // a freshly-picked route starts in its forward direction
+    // Only user-initiated picks rewrite the URL — the boot-time auto-select
+    // must not stamp a deep link onto every visit.
+    if (updateHash) { try { history.replaceState(null, "", "#routes/" + ROUTES[i].id); } catch (_) { /* ignore */ } }
     document.querySelectorAll("#routeList .route-card").forEach((el) => {
       const on = +el.dataset.i === i;
       el.classList.toggle("on", on); el.setAttribute("aria-pressed", on ? "true" : "false");
@@ -1780,7 +1810,7 @@
   }
 
   function reverseRoute(i, btn) {
-    if (routeMap.current !== i) { selectRoute(i); return; }
+    if (routeMap.current !== i) { selectRoute(i, true); return; }
     routeMap.reversed = !routeMap.reversed;
     if (btn) btn.classList.toggle("on", routeMap.reversed);
     drawRoute(i);
@@ -1790,6 +1820,10 @@
     const el = document.getElementById("routeList");
     if (!el) return;
     renderFilters();
+    // Honour a #routes/<id> deep link: pre-select that route (initRoutesMap's
+    // first draw uses routeMap.current) before the cards render their state.
+    const linked = routeIndexFromHash();
+    if (linked >= 0) routeMap.current = linked;
     const first = renderRouteCards();
     renderRouteProgress();
 
@@ -1805,6 +1839,9 @@
     } else {
       initRoutesMap(mapEl, first);
     }
+    // A shared link should land the visitor on the route, not the hero:
+    // scrolling the map into view also triggers its lazy init above.
+    if (linked >= 0) requestAnimationFrame(() => mapEl.scrollIntoView({ block: "center" }));
   }
 
   // --- Run a bus route (live from the TfL API) --------------------------
@@ -2794,9 +2831,16 @@
   function loadNetwork() {
     if (!netPromise) {
       netPromise = (async () => {
-        const [nRes, tRes, wRes] = await Promise.all([fetch("data/tube-network.json"), fetch("data/station-toilets.json"), fetch("data/facilities-water.json")]);
+        const [nRes, rRes, tRes, wRes] = await Promise.all([fetch("data/tube-network.json"), fetch("data/nr-network.json"), fetch("data/station-toilets.json"), fetch("data/facilities-water.json")]);
         if (!nRes.ok) throw new Error("network data");
         netData = await nRes.json();
+        // National Rail commuter lines join the same network model (marked
+        // `nr` so map bounds/styling can treat them as the outer layer);
+        // the site still works without the file.
+        if (rRes.ok) {
+          const nr = await rRes.json();
+          for (const id in nr) { nr[id].nr = true; netData[id] = nr[id]; }
+        }
         // Zero-trust: line colours end up in inline styles and SVG attributes,
         // and lineTextColour assumes 6-digit hex, so only that form passes.
         for (const id in netData) {
@@ -3082,9 +3126,15 @@
   let linesGeo = null;
   async function loadLines() {
     if (linesGeo) return linesGeo;
-    const res = await fetch("data/tube-lines.geojson");
+    const [res, nrRes] = await Promise.all([fetch("data/tube-lines.geojson"), fetch("data/nr-lines.geojson")]);
     if (!res.ok) throw new Error("lines geojson");
     linesGeo = await res.json();
+    // National Rail geometry rides along, marked `nr` so the map can style it
+    // as the outer layer and keep its default view fitted to the TfL network.
+    if (nrRes.ok) {
+      const nr = await nrRes.json();
+      (nr.features || []).forEach((f) => { f.properties.nr = true; linesGeo.features.push(f); });
+    }
     return linesGeo;
   }
   // Real pavement run route for a line, from the generated routes/<slug>.gpx
@@ -3403,9 +3453,11 @@
     const map = createSiteMap("tmMap", { zoomHint: true });
     tmMap.map = map;
 
-    // Tube lines (real track geometry). Highlighted line bold & on top, others dimmed.
-    const lineLayer = L.geoJSON(geo, { style: (f) => { const on = hi && f.properties.line === hi;
-      return { color: f.properties.colour, weight: on ? 5 : 3, opacity: on ? 1 : (hi ? 0.3 : 0.9), lineJoin: "round", lineCap: "round" }; } }).addTo(map);
+    // Tube lines (real track geometry). Highlighted line bold & on top, others
+    // dimmed. National Rail rides underneath — thinner and dashed, the classic
+    // NR cartography — so the TfL network stays the hero of the map.
+    const lineLayer = L.geoJSON(geo, { style: (f) => { const on = hi && f.properties.line === hi, nr = f.properties.nr;
+      return { color: f.properties.colour, weight: on ? 5 : (nr ? 2 : 3), opacity: on ? 1 : (hi ? 0.3 : (nr ? 0.6 : 0.9)), dashArray: nr ? "6 5" : null, lineJoin: "round", lineCap: "round" }; } }).addTo(map);
     lineLayer.eachLayer((l) => { if (hi && l.feature.properties.line === hi) l.bringToFront(); });
 
     // Route overlay + picker (top-left). The picker always lists this month's run
@@ -3426,8 +3478,16 @@
     if (routeEntries.length) addMapVariantControl(map, routeEntries, 0, (i) => drawMapRoute(routeEntries[i]));
 
     // Station lookup: dedup by id, count lines per station (interchange), colour.
-    const count = {}, coordById = {}, colourById = {};
-    for (const id in net) { const st = net[id].stations; for (const sid in st) { count[sid] = (count[sid] || 0) + 1;
+    // National Rail platforms carry different Naptan ids (910G…) from the tube
+    // station they share a building with (940G…), so also drop any NR station
+    // sitting on a same-named TfL one — otherwise interchanges draw two markers.
+    const count = {}, coordById = {}, colourById = {}, tflByName = {};
+    for (const id in net) { if (net[id].nr) continue; const st = net[id].stations; for (const sid in st) { count[sid] = (count[sid] || 0) + 1;
+      if (!coordById[sid]) { coordById[sid] = st[sid]; colourById[sid] = net[id].colour; tflByName[norm(st[sid].n)] = st[sid]; } } }
+    for (const id in net) { if (!net[id].nr) continue; const st = net[id].stations; for (const sid in st) {
+      const twin = tflByName[norm(st[sid].n)];
+      if (twin && Math.abs(twin.lat - st[sid].lat) < 0.004 && Math.abs(twin.lon - st[sid].lon) < 0.006) continue;
+      count[sid] = (count[sid] || 0) + 1;
       if (!coordById[sid]) { coordById[sid] = st[sid]; colourById[sid] = net[id].colour; } } }
     const km = tmComputeKm(net, hi);
     // Per-day ETA table so multi-day runs count each day's windows from that day's
@@ -3488,7 +3548,11 @@
     requestAnimationFrame(() => { map.invalidateSize(false);
       if (hi) { const b = L.latLngBounds([]); lineLayer.eachLayer((l) => { if (l.feature.properties.line === hi) b.extend(l.getBounds()); });
         if (b.isValid()) map.fitBounds(b, { padding: [28, 28] }); }
-      else map.fitBounds(lineLayer.getBounds(), { padding: [16, 16] }); });
+      else { // default view: fit the TfL network only — NR geometry reaches Reading and would zoom London out
+        const b = L.latLngBounds([]);
+        lineLayer.eachLayer((l) => { if (!l.feature.properties.nr) b.extend(l.getBounds()); });
+        map.fitBounds(b.isValid() ? b : lineLayer.getBounds(), { padding: [16, 16] });
+      } });
   }
 
   // Per-station running times — any line, at an adjustable pace.
@@ -4106,6 +4170,7 @@
     rtPace = Math.min(9, Math.max(4, parseFloat(v) || 6.5));
     try { localStorage.setItem("tuberun_rtpace", String(rtPace)); } catch (_) { /* private mode */ }
     syncPaceSelect();
+    renderRouteCards(); // cards only — their run-time estimates use rtPace
     return rtPaceLabel();
   }
   // Snap the planner's coarse pace select to the option nearest rtPace.
