@@ -3643,6 +3643,7 @@
       return div;
     };
     ctl.addTo(map);
+    return ctl; // so the time machine can swap the picker for another era's
   }
 
   // Friendly message in a map container when Leaflet itself failed to load.
@@ -3757,17 +3758,27 @@
     // so any route can be explored on the map. drawMapRoute swaps the highlight:
     // a soft base + animated flow line with start/finish markers and arrows, and
     // brings the chosen line's track to the front.
-    let hiRouteGrp = null;
+    let hiRouteGrp = null, curEntry = null;
     async function drawMapRoute(entry) {
       if (hiRouteGrp) { hiRouteGrp.remove(); hiRouteGrp = null; }
+      curEntry = entry;
       const r = await drawRunRoute(map, net, entry.id, entry.gpx ? { stale } : { waypoints: entry.wp, stale });
       hiRouteGrp = r && r.group;
       lineLayer.eachLayer((l) => { if (l.feature.properties.line === entry.id) l.bringToFront(); });
     }
-    const routeEntries = mapRouteEntries(net, hi);
+    // The picker honours the time machine: only lines whose corridor existed
+    // in the chosen year are offered (before 1836 there's nothing to run).
+    const allRouteEntries = mapRouteEntries(net, hi);
+    const entriesForYear = () => (tmYear >= 9999 ? allRouteEntries : allRouteEntries.filter((e) => lineYear(e.id) <= tmYear));
+    let variantCtl = null;
+    function buildPicker(entries, selectedIdx) {
+      if (variantCtl) { variantCtl.remove(); variantCtl = null; }
+      if (entries.length) variantCtl = addMapVariantControl(map, entries, selectedIdx, (i) => drawMapRoute(entries[i]));
+    }
+    const routeEntries = entriesForYear();
     if (routeEntries.length) await drawMapRoute(routeEntries[0]);
     if (stale && stale()) return;
-    if (routeEntries.length) addMapVariantControl(map, routeEntries, 0, (i) => drawMapRoute(routeEntries[i]));
+    buildPicker(routeEntries, 0);
 
     // Station lookup: dedup by id, count lines per station (interchange), colour.
     // National Rail platforms carry different Naptan ids (910G…) from the tube
@@ -3834,7 +3845,27 @@
       waterGrp.addTo(map);
     }
     draw();
-    const applyYear = (y) => { tmYear = y; lineLayer.setStyle(lineStyle); draw(); };
+    // Year change: restyle lines and stations live, then (debounced, so slider
+    // drags stay smooth) refresh the route picker to the lines of that era —
+    // swapping the drawn route out if its line hasn't been built yet.
+    let tmRebuild = null;
+    const applyYear = (y) => {
+      tmYear = y;
+      lineLayer.setStyle(lineStyle);
+      draw();
+      clearTimeout(tmRebuild);
+      tmRebuild = setTimeout(() => {
+        const list = entriesForYear();
+        const keep = curEntry ? list.indexOf(curEntry) : -1;
+        if (keep >= 0) { buildPicker(list, keep); return; }
+        if (list.length) { drawMapRoute(list[0]); buildPicker(list, 0); }
+        else { // pre-railway London: nothing to run yet
+          if (hiRouteGrp) { hiRouteGrp.remove(); hiRouteGrp = null; }
+          curEntry = null;
+          buildPicker(list, 0);
+        }
+      }, 250);
+    };
     geoCaption(cap, net, hi, draw, applyYear);
     geoRefresh = () => { if (tmMap.map === map) draw(); };
     let wasDense = map.getZoom() < 12;
