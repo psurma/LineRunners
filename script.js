@@ -2404,16 +2404,44 @@
   const lsSortVal = [(s) => s[0].toLowerCase(), (s) => s[1], (s) => s[2], (s) => s[1], (s) => s[1], (s) => s[1]];
   let lsSortCol = 1, lsSortDir = -1; // default: longest first
 
+  // National Rail rows for the line-by-line table, computed from the network
+  // data once it loads (length = the longest branch's station-to-station
+  // distance, so a slight under-read of true track length; stops = unique
+  // stations inside our commuter-belt clip).
+  let NR_STATS = null, nrStatsKicked = false;
+  function computeNrStats(net) {
+    return Object.keys(net).filter((id) => net[id].nr).map((id) => {
+      const ln = net[id];
+      let best = 0;
+      for (const b of ln.branches || []) {
+        let km = 0;
+        for (let i = 1; i < b.length; i++) {
+          const a = ln.stations[b[i - 1]], c = ln.stations[b[i]];
+          if (a && c) km += haversineKm([0, a.lat, a.lon], [0, c.lat, c.lon]);
+        }
+        if (km > best) best = km;
+      }
+      LINE_COLOURS[ln.name] = ln.colour; // row dot + detail map colour lookups
+      return [ln.name, Math.round(best * 10) / 10, Object.keys(ln.stations).length];
+    }).filter((r) => r[1] > 0).sort((a, b) => a[0].localeCompare(b[0]));
+  }
+
   function renderLineStats() {
     const el = document.getElementById("lineStats");
     if (!el) return;
-    const kms = LINE_STATS.map((s) => s[1]);
-    const stns = LINE_STATS.map((s) => s[2]);
+    if (!nrStatsKicked) {
+      nrStatsKicked = true;
+      loadNetwork().then((net) => { NR_STATS = computeNrStats(net); renderLineStats(); })
+        .catch(() => { /* the table simply stays TfL-only */ });
+    }
+    const allStats = NR_STATS ? LINE_STATS.concat(NR_STATS) : LINE_STATS;
+    const kms = allStats.map((s) => s[1]);
+    const stns = allStats.map((s) => s[2]);
     const maxKm = Math.max(...kms), minKm = Math.min(...kms);
     const maxSt = Math.max(...stns), minSt = Math.min(...stns);
     const active = nextRun ? nextRun.key : null;
     const sortVal = lsSortVal[lsSortCol];
-    const rows = [...LINE_STATS].sort((a, b) => {
+    const rows = [...allStats].sort((a, b) => {
       const va = sortVal(a), vb = sortVal(b);
       return va < vb ? -lsSortDir : va > vb ? lsSortDir : 0;
     }).map(([name, km, stations]) => {
@@ -2613,6 +2641,20 @@
       const opts = buildVariantOptions(net, id);
       if (!opts) continue;
       for (const o of opts) entries.push({ id, wp: o.wp, group: net[id].name, label: o.label });
+    }
+    // Every remaining line gets its single end-to-end route too — linear Tube
+    // and Overground lines (with their pavement GPX) and the National Rail
+    // lines (drawn as station hops) — so the picker covers the whole network.
+    const covered = new Set(Object.keys(LINE_VARIANTS));
+    if (hiId) covered.add(hiId);
+    // Grouping is by consecutive entries, so keep the TfL lines together first
+    // and the National Rail block after them.
+    const rest = Object.keys(net).filter((id) => !covered.has(id))
+      .sort((a, b) => (net[a].nr ? 1 : 0) - (net[b].nr ? 1 : 0) || net[a].name.localeCompare(net[b].name));
+    for (const id of rest) {
+      const wp = rtStations(net, net[id].name);
+      if (!wp || wp.length < 2) continue;
+      entries.push({ id, gpx: GPX_LINES.has(id), wp, group: net[id].nr ? "National Rail" : "More lines", label: `${net[id].name} · ${wp[0][0]} → ${wp[wp.length - 1][0]}` });
     }
     return entries;
   }
@@ -3356,6 +3398,7 @@
   const routeGpxCache = {};
   async function loadRouteGpx(slug) {
     if (!slug) return null;
+    if (!GPX_LINES.has(slug)) return null; // no file for this line — skip the 404 round-trip
     if (routeGpxCache[slug] !== undefined) return routeGpxCache[slug];
     try {
       const res = await fetch(`routes/${slug}.gpx`);
