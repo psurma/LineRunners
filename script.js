@@ -34,13 +34,16 @@
 
   // --- LINE COLLECTOR ----------------------------------------------------
   // Direction matters: running a line one way is a different run from running
-  // it back, so every line has TWO collectible directions (36 in total).
+  // it back, so every line has TWO collectible directions.
   // LINE_DIRS gives each line's two direction labels [dir0, dir1].
   const TUBE_LINES = [
     "Bakerloo", "Central", "Circle", "District", "Hammersmith & City",
     "Jubilee", "Metropolitan", "Northern", "Piccadilly", "Victoria", "Waterloo & City",
     "Lioness", "Mildmay", "Windrush", "Weaver", "Suffragette", "Liberty", "Elizabeth",
   ];
+  // The collectable list: the TfL lines above, plus the National Rail
+  // operators once the network data loads (computeNrStats appends them).
+  const COLLECT_LINES = TUBE_LINES.slice();
   const LINE_DIRS = {
     Bakerloo: ["→ Harrow & Wealdstone", "→ Elephant & Castle"],
     Central: ["→ Epping", "→ Ealing Broadway"],
@@ -2475,6 +2478,13 @@
         if (km > best) best = km;
       }
       LINE_COLOURS[ln.name] = ln.colour; // row dot + detail map colour lookups
+      // Register for the line collector too: distance, direction labels from
+      // the main branch's real ends, and a row in the collectable list.
+      LINE_KM[ln.name] = Math.round(best * 10) / 10;
+      const br = ln.route || (ln.branches || []).reduce((a, b) => (b.length > a.length ? b : a), (ln.branches || [])[0] || []);
+      const endA = ln.stations[br[0]], endB = ln.stations[br[br.length - 1]];
+      if (endA && endB && !LINE_DIRS[ln.name]) LINE_DIRS[ln.name] = ["→ " + endB.n, "→ " + endA.n];
+      if (!COLLECT_LINES.includes(ln.name)) COLLECT_LINES.push(ln.name);
       return [ln.name, Math.round(best * 10) / 10, Object.keys(ln.stations).length];
     }).filter((r) => r[1] > 0).sort((a, b) => a[0].localeCompare(b[0]));
   }
@@ -2484,8 +2494,8 @@
     if (!el) return;
     if (!nrStatsKicked) {
       nrStatsKicked = true;
-      loadNetwork().then((net) => { NR_STATS = computeNrStats(net); renderLineStats(); })
-        .catch(() => { /* the table simply stays TfL-only */ });
+      loadNetwork().then((net) => { NR_STATS = computeNrStats(net); renderLineStats(); renderLineCollector(); })
+        .catch(() => { /* the table and collector simply stay TfL-only */ });
     }
     const allStats = NR_STATS ? LINE_STATS.concat(NR_STATS) : LINE_STATS;
     const kms = allStats.map((s) => s[1]);
@@ -2879,7 +2889,7 @@
     { icon: "🖐", name: "High Five", desc: "Five directions collected", test: (c) => c.count >= 5 },
     { icon: "🔄", name: "There & Back", desc: "Any line, both ways", test: (c) => c.linesBoth >= 1 },
     { icon: "🌗", name: "Round-Trip Regular", desc: "Five lines both ways", test: (c) => c.linesBoth >= 5 },
-    { icon: "🏃", name: "Halfway There", desc: "Eighteen directions — half the network", test: (c) => c.count >= 18 },
+    { icon: "🏃", name: "Halfway There", desc: "Half the network's directions", test: (c) => c.count >= c.total / 2 },
     { icon: "🏅", name: "Marathon Distance", desc: "Collect 42.2 km", test: (c) => c.km >= 42.195 },
     { icon: "💯", name: "Century Club", desc: "Collect 100 km", test: (c) => c.km >= 100 },
     { icon: "🗺", name: "Double Century", desc: "Collect 250 km", test: (c) => c.km >= 250 },
@@ -2894,17 +2904,17 @@
     { icon: "⚫", name: "Northern Soul", desc: "The Northern line, both ways", test: (c) => c.both("Northern") },
     { icon: "🔵", name: "Piccadilly Pro", desc: "The Piccadilly line, both ways", test: (c) => c.both("Piccadilly") },
     { icon: "💙", name: "Victoria Victor", desc: "The Victoria line, both ways", test: (c) => c.both("Victoria") },
-    { icon: "👑", name: "Tube Run Royalty", desc: "Every line, both ways", test: (c) => c.linesBoth >= 18 },
+    { icon: "👑", name: "Tube Run Royalty", desc: "Every line, both ways", test: (c) => c.linesBoth >= c.total / 2 },
   ];
 
   function renderLineCollector() {
     const el = document.getElementById("lineCollector");
     if (!el) return;
-    const total = TUBE_LINES.length * 2;
+    const total = COLLECT_LINES.length * 2;
     let n = 0, collectedKm = 0, linesAny = 0, linesBoth = 0;
 
     const nextUp = []; // suggester candidates: lines still missing a direction
-    const rows = TUBE_LINES.map((name) => {
+    const rows = COLLECT_LINES.map((name) => {
       const c = LINE_COLOURS[name] || "#0019A8";
       const dirs = LINE_DIRS[name] || ["→ one way", "→ the other"];
       const lineKm = LINE_KM[name] || 0;
@@ -2944,7 +2954,7 @@
     </div>`;
 
     const ctx = {
-      count: n, km: collectedKm, linesAny, linesBoth,
+      count: n, km: collectedKm, linesAny, linesBoth, total,
       both: (nm) => collectorDone.has(`${nm}|0`) && collectorDone.has(`${nm}|1`),
     };
     const gotBadges = BADGES.filter((b) => b.test(ctx)).length;
@@ -2956,7 +2966,7 @@
         <div class="lc-bar"><div class="lc-fill" style="width:${pct}%"></div></div>
         ${n ? `<button type="button" class="lc-reset" id="lcReset">Reset</button>` : ""}
       </div>
-      <p class="lc-hint"><strong>Tap a direction to tick off a line you've run</strong> — each counts twice, one each way. Your tally is saved in this browser. ${TUBE_LINES.length} lines, ${total} runs to collect them all.</p>
+      <p class="lc-hint"><strong>Tap a direction to tick off a line you've run</strong> — each counts twice, one each way. Your tally is saved in this browser. ${COLLECT_LINES.length} lines, ${total} runs to collect them all.</p>
       <div class="lc-dist"><span class="lc-dist-big">${fmtKm(collectedKm, 1)}</span> collected so far <small>across ${n} direction${n === 1 ? "" : "s"}</small></div>
       ${statsHtml}
       ${nextHtml}
@@ -2997,7 +3007,7 @@
     const data = await loadBoroughs();
     if (!data || !data.names) { el.hidden = true; return; }
     const covered = new Set();
-    TUBE_LINES.forEach((name) => {
+    COLLECT_LINES.forEach((name) => {
       if (collectorDone.has(`${name}|0`) || collectorDone.has(`${name}|1`)) (data.lines[lineSlug(name)] || []).forEach((b) => covered.add(b));
     });
     ROUTES.forEach((r) => { if (routeRun.has(r.name)) (data.routes[r.id] || []).forEach((b) => covered.add(b)); });
