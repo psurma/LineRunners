@@ -3048,6 +3048,81 @@
     thameslink: 1866, "chiltern-railways": 1899, "heathrow-express": 1998,
   };
   const lineYear = (id) => HERITAGE_YEAR[id] || 0; // unlisted lines always exist
+
+  // Station-level opening years where they differ from the line's first year —
+  // extensions came decades later (Battersea 2021, Morden 1926, Heathrow 1977)
+  // and some corridors pre-date their tube service (the Epping branch was a
+  // steam railway from 1856). Unlisted stations inherit the line year, so the
+  // remaining error is Victorian-era infill detail, never a modern segment
+  // shown early. Names must match the network data's station names.
+  const HERITAGE_STATIONS = {
+    northern: {
+      1907: ["Leicester Square", "Goodge Street", "Warren Street", "Mornington Crescent", "Camden Town", "Chalk Farm", "Belsize Park", "Hampstead", "Golders Green", "Tufnell Park", "Archway"],
+      1923: ["Brent Cross", "Hendon Central"],
+      1924: ["Colindale", "Burnt Oak", "Edgware"],
+      1926: ["Clapham South", "Tooting Bec", "Tooting Broadway", "Colliers Wood", "South Wimbledon", "Morden"],
+      1940: ["East Finchley", "Highgate", "Finchley Central", "West Finchley", "Woodside Park", "Totteridge & Whetstone", "High Barnet", "Mill Hill East"],
+      2021: ["Nine Elms", "Battersea Power Station"],
+    },
+    piccadilly: {
+      1932: ["Manor House", "Turnpike Lane", "Wood Green", "Bounds Green", "Arnos Grove"],
+      1933: ["Southgate", "Oakwood", "Cockfosters"],
+      1975: ["Hatton Cross"],
+      1977: ["Heathrow Terminals 2 & 3"],
+      1986: ["Heathrow Terminal 4"],
+      2008: ["Heathrow Terminal 5"],
+    },
+    central: {
+      1856: ["Leyton", "Leytonstone", "Snaresbrook", "South Woodford", "Woodford", "Buckhurst Hill", "Loughton"],
+      1865: ["Debden", "Theydon Bois", "Epping"],
+      1903: ["Newbury Park", "Barkingside", "Fairlop", "Hainault", "Grange Hill", "Chigwell"],
+      1908: ["White City"],
+      1920: ["East Acton"],
+      1923: ["North Acton", "West Acton"],
+      1936: ["Roding Valley"],
+      1946: ["Bethnal Green"],
+      1947: ["Hanger Lane", "Perivale", "Greenford", "Wanstead", "Redbridge", "Gants Hill"],
+      1948: ["Northolt", "Ruislip Gardens", "South Ruislip", "West Ruislip"],
+    },
+    bakerloo: { 1915: ["Kilburn Park", "Maida Vale", "Warwick Avenue"] },
+    jubilee: {
+      1932: ["Stanmore", "Canons Park", "Kingsbury"],
+      1934: ["Queensbury"],
+      1939: ["St John's Wood", "Swiss Cottage"],
+      1999: ["Southwark", "Bermondsey", "Canary Wharf", "North Greenwich", "Canning Town"],
+    },
+    victoria: { 1971: ["Brixton"], 1972: ["Pimlico"] },
+    metropolitan: {
+      1879: ["Finchley Road"], 1880: ["Harrow-on-the-Hill"], 1885: ["Pinner"],
+      1887: ["Northwood", "Rickmansworth"], 1889: ["Chorleywood", "Chalfont & Latimer", "Chesham"],
+      1892: ["Amersham"], 1894: ["Wembley Park"], 1904: ["Uxbridge", "Ruislip"], 1905: ["Ickenham"],
+      1906: ["Rayners Lane", "Eastcote"], 1908: ["Preston Road"], 1910: ["Moor Park"], 1912: ["Ruislip Manor"],
+      1915: ["North Harrow"], 1923: ["Northwick Park", "Hillingdon"], 1925: ["Croxley", "Watford"], 1933: ["Northwood Hills"],
+    },
+    district: { 1932: ["Upney", "Becontree", "Dagenham Heathway"], 1935: ["Elm Park"] },
+    windrush: { 1999: ["Canada Water"], 2010: ["Shoreditch High Street", "Hoxton", "Haggerston", "Dalston Junction"] },
+    weaver: { 1873: ["St James Street", "Wood Street", "Highams Park", "Chingford"], 1891: ["Southbury", "Turkey Street", "Theobalds Grove"] },
+    mildmay: { 1869: ["South Acton", "Acton Central", "Kew Gardens", "Gunnersbury", "Richmond"] },
+  };
+  // A station's opening year on a given line (falls back to the line year).
+  let stnYearNorm = null; // lineId -> { normName: year }, built lazily
+  function stationYear(id, name) {
+    if (!stnYearNorm) {
+      stnYearNorm = {};
+      for (const lid in HERITAGE_STATIONS) {
+        stnYearNorm[lid] = {};
+        for (const y in HERITAGE_STATIONS[lid]) for (const n of HERITAGE_STATIONS[lid][y]) stnYearNorm[lid][norm(n)] = +y;
+      }
+    }
+    const m = stnYearNorm[id];
+    return (m && m[norm(name)]) || lineYear(id);
+  }
+  // Latest opening year anywhere on a line — past it, the full modern geometry is honest.
+  function lineMaxYear(id) {
+    const segs = HERITAGE_STATIONS[id];
+    const top = segs ? Math.max(...Object.keys(segs).map(Number)) : 0;
+    return Math.max(lineYear(id), top);
+  }
   const TM_MILESTONES = [
     [1836, "London's first railway opens — London Bridge to Deptford."],
     [1838, "Brunel's Great Western steams out of Paddington."],
@@ -3752,9 +3827,32 @@
     const lineStyle = (f) => {
       const on = hi && f.properties.line === hi, nr = f.properties.nr;
       if (lineYear(f.properties.line) > tmYear) return { color: f.properties.colour, weight: 1, opacity: 0.07, dashArray: "2 6", lineJoin: "round", lineCap: "round" };
+      // Partially built in this year: hide the modern geometry — the era layer
+      // below draws only the extent that had actually opened.
+      if (tmYear < 9999 && lineMaxYear(f.properties.line) > tmYear) return { color: f.properties.colour, weight: 0, opacity: 0 };
       return { color: f.properties.colour, weight: on ? 5 : (nr ? 2 : 3), opacity: on ? 1 : (hi ? 0.3 : (nr ? 0.6 : 0.9)), dashArray: nr ? "6 5" : null, lineJoin: "round", lineCap: "round" };
     };
     const lineLayer = L.geoJSON(geo, { style: lineStyle }).addTo(map);
+
+    // Era geometry for partially built lines: each branch drawn only through
+    // the stations that had opened by the time-machine year (skipping later
+    // infills without breaking, truncating unbuilt extensions naturally).
+    let eraGrp = null;
+    function drawEra() {
+      if (eraGrp) { map.removeLayer(eraGrp); eraGrp = null; }
+      if (tmYear >= 9999) return;
+      eraGrp = L.layerGroup();
+      for (const id in net) {
+        if (lineYear(id) > tmYear || lineMaxYear(id) <= tmYear) continue;
+        const ln = net[id];
+        for (const b of ln.branches || []) {
+          const pts = b.map((sid) => ln.stations[sid]).filter((s) => s && stationYear(id, s.n) <= tmYear).map((s) => [s.lat, s.lon]);
+          if (pts.length > 1) L.polyline(pts, { color: ln.colour, weight: ln.nr ? 2 : 3, opacity: ln.nr ? 0.6 : 0.9, dashArray: ln.nr ? "6 5" : null, lineJoin: "round", lineCap: "round" }).addTo(eraGrp);
+        }
+      }
+      eraGrp.addTo(map);
+    }
+    if (tmYear < 9999) drawEra(); // a persisted time-machine year applies on re-render
     lineLayer.eachLayer((l) => { if (hi && l.feature.properties.line === hi) l.bringToFront(); });
 
     // Route overlay + picker (top-left). The picker always lists this month's run
@@ -3789,13 +3887,13 @@
     // station they share a building with (940G…), so also drop any NR station
     // sitting on a same-named TfL one — otherwise interchanges draw two markers.
     const count = {}, coordById = {}, colourById = {}, tflByName = {}, sidYear = {};
-    const markYear = (sid, id) => { const y = lineYear(id); if (sidYear[sid] === undefined || y < sidYear[sid]) sidYear[sid] = y; };
-    for (const id in net) { if (net[id].nr) continue; const st = net[id].stations; for (const sid in st) { count[sid] = (count[sid] || 0) + 1; markYear(sid, id);
+    const markYear = (sid, id, name) => { const y = stationYear(id, name); if (sidYear[sid] === undefined || y < sidYear[sid]) sidYear[sid] = y; };
+    for (const id in net) { if (net[id].nr) continue; const st = net[id].stations; for (const sid in st) { count[sid] = (count[sid] || 0) + 1; markYear(sid, id, st[sid].n);
       if (!coordById[sid]) { coordById[sid] = st[sid]; colourById[sid] = net[id].colour; tflByName[norm(st[sid].n)] = st[sid]; } } }
     for (const id in net) { if (!net[id].nr) continue; const st = net[id].stations; for (const sid in st) {
       const twin = tflByName[norm(st[sid].n)];
       if (twin && Math.abs(twin.lat - st[sid].lat) < 0.004 && Math.abs(twin.lon - st[sid].lon) < 0.006) continue;
-      count[sid] = (count[sid] || 0) + 1; markYear(sid, id);
+      count[sid] = (count[sid] || 0) + 1; markYear(sid, id, st[sid].n);
       if (!coordById[sid]) { coordById[sid] = st[sid]; colourById[sid] = net[id].colour; } } }
     const km = tmComputeKm(net, hi);
     // Per-day ETA table so multi-day runs count each day's windows from that day's
@@ -3856,6 +3954,7 @@
     const applyYear = (y) => {
       tmYear = y;
       lineLayer.setStyle(lineStyle);
+      drawEra();
       draw();
       clearTimeout(tmRebuild);
       tmRebuild = setTimeout(() => {
