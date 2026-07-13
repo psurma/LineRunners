@@ -1308,7 +1308,10 @@
   // Downloadable pavement GPX per Tube line (generated into routes/<slug>.gpx and
   // also used to draw the maps). Accepts a line slug (network id) or a line name.
   const GPX_LINES = new Set(["bakerloo", "central", "circle", "district", "hammersmith-city", "jubilee", "metropolitan", "northern", "piccadilly", "victoria", "waterloo-city",
-    "lioness", "mildmay", "windrush", "weaver", "suffragette", "liberty", "elizabeth"]);
+    "lioness", "mildmay", "windrush", "weaver", "suffragette", "liberty", "elizabeth",
+    // National Rail (tools/generate-nr-routes.mjs — main branch, pavement-routed)
+    "chiltern-railways", "thameslink", "c2c", "great-northern", "greater-anglia",
+    "great-western-railway", "heathrow-express", "southeastern", "southern", "south-western-railway"]);
   function lineSlug(name) { return String(name || "").toLowerCase().replace(/\s*&\s*/g, "-").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""); }
   function gpxDownloadHtml(slugOrName, lineName, extraClass) {
     const slug = GPX_LINES.has(slugOrName) ? slugOrName : lineSlug(slugOrName);
