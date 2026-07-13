@@ -882,7 +882,7 @@
       for (const sid in ln.stations) {
         const k = norm(ln.stations[sid].n);
         if (!m[k]) m[k] = [];
-        if (!m[k].some((x) => x.name === ln.name)) m[k].push({ name: ln.name, colour: ln.colour });
+        if (!m[k].some((x) => x.name === ln.name)) m[k].push({ name: ln.name, colour: ln.colour, nr: !!ln.nr });
       }
     }
     return m;
@@ -937,9 +937,11 @@
     const key = norm(name);
     const tube = interchangeMap ? (interchangeMap[key] || []).filter((x) => norm(x.name) !== norm(line)) : [];
     // Drop a hardcoded "<name> line" (e.g. "Elizabeth line") when the network already
-    // supplies that line as a Tube interchange, so it isn't listed twice.
+    // supplies that line as a Tube interchange, so it isn't listed twice — and drop
+    // the generic "National Rail" tag once the network names the actual NR line(s).
     const tubeNames = new Set(tube.map((x) => norm(x.name)));
-    const other = (nonTubeByNorm[key] || []).filter((n) => !tubeNames.has(norm(n.replace(/ line$/i, ""))));
+    const hasNamedNr = (interchangeMap ? (interchangeMap[key] || []) : []).some((x) => x.nr);
+    const other = (nonTubeByNorm[key] || []).filter((n) => !tubeNames.has(norm(n.replace(/ line$/i, ""))) && !(n === "National Rail" && hasNamedNr));
     if (!tube.length && !other.length) return "";
     const pills = tube.map((x) => `<span class="stn-tag" style="background:${x.colour};color:${contrastText(x.colour)}">${escapeHtml(x.name)}</span>`)
       .concat(other.map((n) => {
@@ -1306,13 +1308,16 @@
   // Downloadable pavement GPX per Tube line (generated into routes/<slug>.gpx and
   // also used to draw the maps). Accepts a line slug (network id) or a line name.
   const GPX_LINES = new Set(["bakerloo", "central", "circle", "district", "hammersmith-city", "jubilee", "metropolitan", "northern", "piccadilly", "victoria", "waterloo-city",
-    "lioness", "mildmay", "windrush", "weaver", "suffragette", "liberty", "elizabeth"]);
+    "lioness", "mildmay", "windrush", "weaver", "suffragette", "liberty", "elizabeth",
+    // National Rail (tools/generate-nr-routes.mjs — main branch, pavement-routed)
+    "chiltern-railways", "thameslink", "c2c", "great-northern", "greater-anglia",
+    "great-western-railway", "heathrow-express", "southeastern", "southern", "south-western-railway"]);
   function lineSlug(name) { return String(name || "").toLowerCase().replace(/\s*&\s*/g, "-").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""); }
   function gpxDownloadHtml(slugOrName, lineName, extraClass) {
     const slug = GPX_LINES.has(slugOrName) ? slugOrName : lineSlug(slugOrName);
     if (!GPX_LINES.has(slug)) return "";
     const label = lineName || slug;
-    return `<a class="gpx-dl${extraClass ? " " + extraClass : ""}" href="routes/${slug}.gpx" download="TubeRun-${slug}.gpx" title="Download the ${escapeHtml(label)} line's pavement route as a GPX file for your watch">↓ GPX</a>`;
+    return `<a class="gpx-dl${extraClass ? " " + extraClass : ""}" href="routes/${slug}.gpx" download="TubeRun-${slug}.gpx" title="Download the ${escapeHtml(label)} line's pavement route as a GPX file for your watch">↓ GPX</a><a class="gpx-dl tcx-dl${extraClass ? " " + extraClass : ""}" href="#" data-slug="${slug}" title="Download as a Garmin TCX course — Virtual Partner pacing at your site pace">⌚ TCX</a>`;
   }
   // Flip a GPX file's direction: reverse each track segment's trackpoint order
   // (so a watch follows it the other way). Waypoint POIs are order-independent,
@@ -1323,6 +1328,64 @@
       return "<trkseg>\n" + pts.reverse().map((p) => "      " + p).join("\n") + "\n    </trkseg>";
     });
   }
+
+  // Convert a route's points ([lat, lon, ele?] — the same geometry the site
+  // draws) to a Garmin TCX Course. Garmin's course format wants a Time on
+  // every point, so times are synthesised at the visitor's rtPace — load it
+  // onto the watch and the Virtual Partner runs at your pace.
+  function tcxFromPoints(points, courseName, reverse) {
+    let pts = points.filter((p) => Number.isFinite(p[0]) && Number.isFinite(p[1]));
+    if (pts.length < 2) return null;
+    if (reverse) pts = pts.slice().reverse();
+    let cumKm = 0;
+    const base = Date.now();
+    const rows = pts.map((p, i) => {
+      if (i) cumKm += haversineKm([0, pts[i - 1][0], pts[i - 1][1]], [0, p[0], p[1]]); // waypoint-shaped [name, lat, lon]
+      const t = new Date(base + cumKm * rtPace * 60000).toISOString();
+      const ele = Number.isFinite(p[2]) ? `<AltitudeMeters>${p[2].toFixed(1)}</AltitudeMeters>` : "";
+      return `<Trackpoint><Time>${t}</Time><Position><LatitudeDegrees>${p[0]}</LatitudeDegrees><LongitudeDegrees>${p[1]}</LongitudeDegrees></Position>${ele}<DistanceMeters>${Math.round(cumKm * 1000)}</DistanceMeters></Trackpoint>`;
+    });
+    const a = pts[0], b = pts[pts.length - 1];
+    return `<?xml version="1.0" encoding="UTF-8"?>
+<TrainingCenterDatabase xmlns="http://www.garmin.com/xmlschemas/TrainingCenterDatabase/v2">
+ <Courses><Course>
+  <Name>${escapeHtml(courseName.slice(0, 15))}</Name>
+  <Lap><TotalTimeSeconds>${Math.round(cumKm * rtPace * 60)}</TotalTimeSeconds><DistanceMeters>${Math.round(cumKm * 1000)}</DistanceMeters>
+   <BeginPosition><LatitudeDegrees>${a[0]}</LatitudeDegrees><LongitudeDegrees>${a[1]}</LongitudeDegrees></BeginPosition>
+   <EndPosition><LatitudeDegrees>${b[0]}</LatitudeDegrees><LongitudeDegrees>${b[1]}</LongitudeDegrees></EndPosition>
+   <Intensity>Active</Intensity></Lap>
+  <Track>${rows.join("")}</Track>
+ </Course></Courses>
+</TrainingCenterDatabase>`;
+  }
+
+  // One delegated handler covers every "⌚ TCX" link the templates emit
+  // (journey board, plan, line-by-line, geo map picker).
+  document.addEventListener("click", async (e) => {
+    const a = e.target && e.target.closest && e.target.closest(".tcx-dl");
+    if (!a || !a.dataset.slug) return;
+    e.preventDefault();
+    const slug = a.dataset.slug, reverse = a.dataset.rev === "1";
+    try {
+      // Same geometry the site draws: the primary variant for branching lines,
+      // else the GPX's main track segment.
+      const vroutes = await loadVariantRoutes();
+      let pts = vroutes[slug] && vroutes[slug][0] && vroutes[slug][0].length > 1 ? vroutes[slug][0] : null;
+      if (!pts) { const segs = await loadRouteGpx(slug); pts = segs && segs[0]; }
+      if (!pts || pts.length < 2) throw new Error("no track");
+      const tcx = tcxFromPoints(pts, `TubeRun ${slug}`, reverse);
+      if (!tcx) throw new Error("no track");
+      const url = URL.createObjectURL(new Blob([tcx], { type: "application/vnd.garmin.tcx+xml" }));
+      const dl = document.createElement("a");
+      dl.href = url; dl.download = `TubeRun-${slug}${reverse ? "-reverse" : ""}.tcx`;
+      document.body.appendChild(dl); dl.click(); dl.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 4000);
+    } catch (_) {
+      const was = a.textContent;
+      a.textContent = "TCX unavailable";
+      setTimeout(() => { a.textContent = was; }, 1800);
+    }
+  });
 
   // --- Render: Live now banner ------------------------------------------
   function renderLive() {
@@ -1343,7 +1406,7 @@
   }
 
   // --- Route ideas library (adapted from a runners' guide to London) -----
-  const ROUTE_COLOURS = { river: "#0E7C90", canal: "#237A49", park: "#2C7D45", landmark: "#9B0056", trail: "#4E6E22" };
+  const ROUTE_COLOURS = { river: "#0E7C90", canal: "#237A49", park: "#2C7D45", landmark: "#9B0056", trail: "#4E6E22", disused: "#7A5230" };
   // Each route carries an indicative `path` of [lat,lon] waypoints tracing the described
   // course (an overview line, not a turn-by-turn GPX); `loop` closes the trace visually.
   const ROUTES = [
@@ -1369,7 +1432,11 @@
     { id: "crystal-palace-park", name: "Crystal Palace Park", type: "park", leg: "Dinosaurs & terraces loop", start: "Crystal Palace (rail)", distance: "1.6 mi (2.6 km)", highlights: "Victorian dinosaurs, the old palace terraces, a maze and the National Sports Centre.", suitability: "Quirky and fun — gentle undulations, lots to look at.", loop: true, path: [[51.4240, -0.0730], [51.4240, -0.0670], [51.4180, -0.0670], [51.4180, -0.0730], [51.4240, -0.0730]] },
     { id: "alexandra-park", name: "Alexandra Park", type: "park", leg: "Ally Pally panorama loop", start: "Alexandra Palace (rail)", distance: "2.5 mi (4 km)", highlights: "'The People's Palace' with a sweeping panorama across the whole city; a proper hill up to the terrace.", suitability: "One big climb, then a view to earn it — a spirited group loop.", loop: true, path: [[51.5960, -0.1350], [51.5960, -0.1230], [51.5910, -0.1230], [51.5910, -0.1350], [51.5960, -0.1350]] },
     { id: "finsbury-park", name: "Finsbury Park", type: "park", leg: "Perimeter loop", start: "Finsbury Park (Victoria/Piccadilly)", distance: "1.6 mi (2.6 km)", highlights: "Busy north London park with a boating lake, an athletics track and the New River on its edge.", suitability: "Flat, central and sociable — links straight onto the Parkland Walk.", loop: true, path: [[51.5740, -0.1020], [51.5740, -0.0940], [51.5690, -0.0940], [51.5690, -0.1020], [51.5740, -0.1020]] },
-    { id: "parkland-walk", name: "Parkland Walk", type: "trail", leg: "Finsbury Park → Highgate (disused railway)", start: "Finsbury Park (Victoria/Piccadilly)", distance: "3.0 mi (5 km)", highlights: "London's longest nature reserve along an old railway line — leafy, car-free and gently graded.", suitability: "Traffic-free and easy to follow — a lovely point-to-point; return for double.", loop: false, path: [[51.5710, -0.0980], [51.5730, -0.1150], [51.5760, -0.1300], [51.5780, -0.1430]] },
+    { id: "parkland-walk", name: "Parkland Walk", type: "disused", leg: "Finsbury Park → Alexandra Palace (the old GNR branch)", start: "Finsbury Park (Victoria/Piccadilly)", distance: "4.5 mi (7.3 km)", highlights: "London's longest nature reserve along the Edgware, Highgate & Alexandra Palace railway (closed 1954) — old platforms at Crouch End, the Highgate tunnel portals, then over St James Lane viaduct to Ally Pally.", suitability: "Leafy, car-free and gently graded, with one road link over Highgate Hill; train home from Alexandra Palace.", loop: false, path: [[51.5645, -0.1065], [51.5717, -0.1218], [51.5777, -0.1458], [51.5872, -0.1440], [51.5983, -0.1202]] },
+    { id: "crystal-palace-high-level", name: "Crystal Palace High Level", type: "disused", leg: "Forest Hill → Crystal Palace over the lost High Level branch", start: "Forest Hill (Windrush)", distance: "3.4 mi (5.5 km)", highlights: "Cox's Walk into Sydenham Hill Wood, where the trackbed and tunnel portal of the Crystal Palace High Level railway (closed 1954) hide in the trees; finish beside the Palace terraces.", suitability: "Short but properly lumpy — woodland paths and real hills; muddy after rain.", loop: false, path: [[51.4394, -0.0531], [51.4408, -0.0800], [51.4325, -0.0803], [51.4181, -0.0729]] },
+    { id: "northern-heights", name: "Northern Heights", type: "disused", leg: "Mill Hill East → Mill Hill Broadway (the tube that never was)", start: "Mill Hill East (Northern)", distance: "2.3 mi (3.7 km)", highlights: "The Mill Hill Old Railway nature reserve follows the Edgware branch the Northern line was electrifying when war killed the Northern Heights plan — passenger trains never came back.", suitability: "Short and gentle on a single-track path — run single file, or pair it with a Dollis Valley extension.", loop: false, path: [[51.6082, -0.2103], [51.6165, -0.2295], [51.6127, -0.2489]] },
+    { id: "ebury-way", name: "Ebury Way", type: "disused", leg: "Rickmansworth → Watford High Street rail trail", start: "Rickmansworth (Metropolitan)", distance: "4.7 mi (7.5 km)", highlights: "The 1862 Watford & Rickmansworth Railway, now a flat gravel greenway across the Colne and Gade — aquadrome lakes, watercress country and canal crossings all the way to Watford.", suitability: "Pancake-flat, traffic-free and easy to follow — an ideal winter longer run; Lioness line home.", loop: false, path: [[51.6404, -0.4736], [51.6355, -0.4630], [51.6480, -0.4230], [51.6524, -0.3917]] },
+    { id: "surrey-iron-railway", name: "Surrey Iron Railway", type: "disused", leg: "Wandsworth → West Croydon down the Wandle", start: "Wandsworth Town (rail)", distance: "8.5 mi (13.6 km)", highlights: "Trace the world's first public railway — 1803, horse-drawn — along the Wandle Trail: mills, wetlands and Morden Hall Park on the way to Croydon.", suitability: "A proper point-to-point long run — flat, mostly riverside path, splittable at Colliers Wood or Mitcham.", loop: false, path: [[51.4610, -0.1881], [51.4424, -0.1875], [51.4180, -0.1778], [51.3898, -0.1578], [51.3784, -0.0999]] },
     { id: "grand-union-paddington", name: "Grand Union Canal (Paddington Arm)", type: "canal", leg: "Little Venice → Alperton", start: "Warwick Avenue (Bakerloo)", distance: "5.0 mi (8 km)", highlights: "Flat, quiet towpath out of Little Venice past Kensal Green and Wembley's edge — narrowboats all the way.", suitability: "Flat and easy underfoot — a calm long run away from the traffic.", loop: false, path: [[51.5225, -0.1830], [51.5270, -0.2200], [51.5330, -0.2550], [51.5400, -0.2990]] },
     { id: "lea-navigation", name: "Lea Navigation", type: "canal", leg: "Limehouse → Hackney Marshes", start: "Limehouse (DLR)", distance: "5.0 mi (8 km)", highlights: "Towpath from the Thames up past the Olympic Park and out to the wide-open Hackney Marshes.", suitability: "Flat, traffic-free and splittable — a favourite east London long run.", loop: false, path: [[51.5122, -0.0395], [51.5250, -0.0380], [51.5400, -0.0360], [51.5560, -0.0300]] },
     { id: "olympic-park", name: "Queen Elizabeth Olympic Park", type: "landmark", leg: "Stadium, Orbit & waterways loop", start: "Stratford / Hackney Wick", distance: "3.0 mi (5 km)", highlights: "The 2012 Stadium, the ArcelorMittal Orbit, the Aquatics Centre and waterside paths through the park.", suitability: "Wide, flat, way-marked paths — modern and sociable for all paces.", loop: true, path: [[51.5480, -0.0200], [51.5480, -0.0110], [51.5380, -0.0110], [51.5380, -0.0200], [51.5480, -0.0200]] },
@@ -1524,6 +1591,24 @@
   // Marching-dash sequence for the animated flow line (MapLibre's animate-a-line pattern).
   const GL_FLOW_DASH = [[0, 4, 3], [0.5, 4, 2.5], [1, 4, 2], [1.5, 4, 1.5], [2, 4, 1], [2.5, 4, 0.5], [3, 4, 0], [0, 0.5, 3, 3.5], [0, 1, 3, 3], [0, 1.5, 3, 2.5], [0, 2, 3, 2], [0, 2.5, 3, 1.5], [0, 3, 3, 1], [0, 3.5, 3, 0.5]];
 
+  // Finish-line pints: well-rated pubs near each route's ends (FSA open data,
+  // built by tools/generate-pubs.mjs). Missing file just means no pub layer.
+  let routePubsPromise = null;
+  function loadRoutePubs() {
+    if (!routePubsPromise) {
+      routePubsPromise = fetch("data/route-pubs.json").then((r) => (r.ok ? r.json() : {})).catch(() => ({}));
+    }
+    return routePubsPromise;
+  }
+
+  // Transport "secrets" — deep-level shelters, ghost stations, depots and
+  // oddities worth a detour (data/secrets.json, hand-curated).
+  let secretsPromise = null;
+  function loadSecrets() {
+    if (!secretsPromise) secretsPromise = fetch("data/secrets.json").then((r) => (r.ok ? r.json() : [])).catch(() => []);
+    return secretsPromise;
+  }
+
   let maplibrePromise = null;
   function loadMapLibre() {
     if (maplibrePromise) return maplibrePromise;
@@ -1589,6 +1674,72 @@
     map.addLayer({ id: "route-base", type: "line", source: "route", layout: { "line-join": "round", "line-cap": "round" }, paint: { "line-color": "#0019a8", "line-width": 5, "line-opacity": 0.35 } }, before);
     map.addLayer({ id: "route-flow", type: "line", source: "route", layout: { "line-join": "round", "line-cap": "round" }, paint: { "line-color": "#0019a8", "line-width": 4, "line-dasharray": [0, 4, 3] } }, before);
 
+    // Finish-line pints: amber dots near the route's ends; tap one for the name
+    // and its FSA hygiene score. The 🍺 control toggles the layer.
+    map.addSource("route-pubs", { type: "geojson", data: empty });
+    map.addLayer({ id: "route-pubs", type: "circle", source: "route-pubs", paint: {
+      "circle-radius": ["interpolate", ["linear"], ["zoom"], 11, 3.5, 15, 6.5],
+      "circle-color": "#e39b25", "circle-stroke-color": "#fff", "circle-stroke-width": 1.6, "circle-opacity": 0.95,
+    } }, before);
+    map.on("click", "route-pubs", (e) => {
+      const f = e.features && e.features[0];
+      if (!f) return;
+      new maplibregl.Popup({ offset: 10 }).setLngLat(f.geometry.coordinates)
+        .setText(`${f.properties.n} — food hygiene ${f.properties.r}/5 · near the ${f.properties.end}`).addTo(map);
+    });
+    map.on("mouseenter", "route-pubs", () => { map.getCanvas().style.cursor = "pointer"; });
+    map.on("mouseleave", "route-pubs", () => { map.getCanvas().style.cursor = ""; });
+
+    // Secrets along the route: shelters, ghost stations, depots and oddities
+    // within ~400 m of the line — violet dots, tap for the story.
+    map.addSource("route-secrets", { type: "geojson", data: empty });
+    map.addLayer({ id: "route-secrets", type: "circle", source: "route-secrets", paint: {
+      "circle-radius": ["interpolate", ["linear"], ["zoom"], 11, 4, 15, 7],
+      "circle-color": "#5F259F", "circle-stroke-color": "#fff", "circle-stroke-width": 1.6, "circle-opacity": 0.95,
+    } }, before);
+    map.on("click", "route-secrets", (e) => {
+      const f = e.features && e.features[0];
+      if (!f) return;
+      new maplibregl.Popup({ offset: 10, maxWidth: "280px" }).setLngLat(f.geometry.coordinates)
+        .setText(`${f.properties.n} — ${f.properties.d}`).addTo(map);
+    });
+    map.on("mouseenter", "route-secrets", () => { map.getCanvas().style.cursor = "pointer"; });
+    map.on("mouseleave", "route-secrets", () => { map.getCanvas().style.cursor = ""; });
+    map.addControl({
+      onAdd() {
+        const div = document.createElement("div");
+        div.className = "maplibregl-ctrl maplibregl-ctrl-group";
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.textContent = "🍺";
+        btn.title = "Finish-line pints — well-rated pubs near the start and finish";
+        btn.setAttribute("aria-label", btn.title);
+        btn.setAttribute("aria-pressed", "true");
+        btn.addEventListener("click", () => {
+          const off = map.getLayoutProperty("route-pubs", "visibility") === "none";
+          map.setLayoutProperty("route-pubs", "visibility", off ? "visible" : "none");
+          btn.setAttribute("aria-pressed", String(off));
+          btn.style.opacity = off ? "" : "0.45";
+        });
+        div.appendChild(btn);
+        const sBtn = document.createElement("button");
+        sBtn.type = "button";
+        sBtn.textContent = "👁";
+        sBtn.title = "Secrets along the route — shelters, ghost stations, depots and oddities";
+        sBtn.setAttribute("aria-label", sBtn.title);
+        sBtn.setAttribute("aria-pressed", "true");
+        sBtn.addEventListener("click", () => {
+          const off = map.getLayoutProperty("route-secrets", "visibility") === "none";
+          map.setLayoutProperty("route-secrets", "visibility", off ? "visible" : "none");
+          sBtn.setAttribute("aria-pressed", String(off));
+          sBtn.style.opacity = off ? "" : "0.45";
+        });
+        div.appendChild(sBtn);
+        return div;
+      },
+      onRemove() { /* map teardown removes the DOM */ },
+    }, "top-right");
+
     const reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (!reduce) {
       let step = 0;
@@ -1623,6 +1774,20 @@
     map.getSource("route").setData({ type: "FeatureCollection", features: segs.map((coords) => ({ type: "Feature", geometry: { type: "LineString", coordinates: coords } })) });
     map.setPaintProperty("route-base", "line-color", colour);
     map.setPaintProperty("route-flow", "line-color", colour);
+    loadRoutePubs().then((pubs) => {
+      if (routeMap.current < 0 || ROUTES[routeMap.current].id !== r.id) return; // selection moved on while loading
+      const src = map.getSource("route-pubs");
+      if (src) src.setData({ type: "FeatureCollection", features: (pubs[r.id] || []).map((p) => ({ type: "Feature", geometry: { type: "Point", coordinates: [p.lon, p.lat] }, properties: { n: p.n, r: p.r, end: p.end } })) });
+    });
+    loadSecrets().then((all) => {
+      if (routeMap.current < 0 || ROUTES[routeMap.current].id !== r.id) return;
+      const src = map.getSource("route-secrets");
+      if (!src) return;
+      // near = within ~400 m of any route vertex (vertices are ~13 m apart)
+      const near = all.filter((p) => segs.some((seg) => seg.some((c) =>
+        Math.abs(c[1] - p.lat) < 0.005 && Math.abs(c[0] - p.lon) < 0.008 && haversineKm([0, c[1], c[0]], [0, p.lat, p.lon]) < 0.4)));
+      src.setData({ type: "FeatureCollection", features: near.map((p) => ({ type: "Feature", geometry: { type: "Point", coordinates: [p.lon, p.lat] }, properties: { n: p.n, d: p.d } })) });
+    });
 
     const startAt = segs[0][0], lastSeg = segs[segs.length - 1], finishAt = lastSeg[lastSeg.length - 1];
     const startLabel = routeMap.reversed ? "Start · from the far end (reversed)" : "Start · " + r.start;
@@ -1678,7 +1843,7 @@
     { key: "medium", label: "Medium · 5–10k", test: (k) => k >= 5 && k <= 10 },
     { key: "long", label: "Long · 10k+", test: (k) => k > 10 },
   ];
-  const TYPE_LABELS = { all: "All", park: "Parks", trail: "Trails", canal: "Canals", river: "Rivers", landmark: "Landmarks" };
+  const TYPE_LABELS = { all: "All", park: "Parks", trail: "Trails", canal: "Canals", river: "Rivers", landmark: "Landmarks", disused: "Disused railways" };
   const routeFilter = { type: "all", dist: "all" };
   const distBucket = (k) => { const b = DIST_BUCKETS.find((x) => x.test(k)); return b ? b.key : ""; };
   const routeMatches = (r) => (routeFilter.type === "all" || r.type === routeFilter.type)
@@ -1693,9 +1858,11 @@
         <p class="rc-meta"><strong>Start</strong> ${escapeHtml(r.start)}</p>
         <p class="rc-hi">${escapeHtml(r.highlights)}</p>
         ${r.suitability ? `<p class="rc-suit">${escapeHtml(r.suitability)}</p>` : ""}
+        ${routeKm(r) ? timesRowHtml(routeKm(r)) : ""}
         <div class="rc-actions">
           <button type="button" class="rc-mark" data-name="${escapeHtml(r.name)}">＋ Mark as run</button>
           <button type="button" class="rc-reverse" data-i="${i}">⇄ Reverse direction</button>
+          <button type="button" class="rc-share" data-i="${i}">🔗 Share</button>
         </div>
       </div>`;
   }
@@ -1718,18 +1885,34 @@
     el.innerHTML = visible.map((x) => routeCardHtml(x.r, x.i)).join("");
     el.querySelectorAll(".route-card").forEach((card) => {
       const i = parseInt(card.dataset.i, 10);
-      card.addEventListener("click", () => selectRoute(i));
-      card.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); selectRoute(i); } });
+      card.addEventListener("click", () => selectRoute(i, true));
+      card.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); selectRoute(i, true); } });
       const rev = card.querySelector(".rc-reverse");
       if (rev) rev.addEventListener("click", (e) => { e.stopPropagation(); reverseRoute(i, rev); });
+      const share = card.querySelector(".rc-share");
+      if (share) share.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        const url = routeShareUrl(ROUTES[i]);
+        // Native share sheet where it exists (mobile); otherwise copy the link.
+        if (navigator.share) { try { await navigator.share({ title: ROUTES[i].name, url }); } catch (_) { /* user dismissed */ } return; }
+        try {
+          await navigator.clipboard.writeText(url);
+          const was = share.textContent;
+          share.textContent = "✓ Link copied";
+          setTimeout(() => { share.textContent = was; }, 1600);
+        } catch (_) { window.prompt("Copy this route link:", url); }
+      });
       const mark = card.querySelector(".rc-mark");
       if (mark) {
         syncRouteMark(mark);
         mark.addEventListener("click", (e) => {
           e.stopPropagation();
           const n = mark.dataset.name;
-          if (routeRun.has(n)) routeRun.delete(n); else routeRun.add(n);
+          const adding = !routeRun.has(n);
+          if (adding) routeRun.add(n); else routeRun.delete(n);
+          stampRun(n, adding);
           saveRoutesRun(routeRun); syncRouteMark(mark); renderRouteProgress();
+          renderLineCollector(); // its stats row + borough bagger count routes too
         });
       }
     });
@@ -1765,9 +1948,22 @@
     }));
   }
 
-  function selectRoute(i) {
+  // A route's shareable URL, e.g. https://…/#routes/regents-canal.
+  function routeShareUrl(r) { return location.href.split("#")[0] + "#routes/" + r.id; }
+  // Index of the route named by a #routes/<id> deep link, or -1.
+  function routeIndexFromHash() {
+    const m = /^#routes\/(.+)$/.exec(location.hash);
+    if (!m) return -1;
+    const id = decodeURIComponent(m[1]);
+    return ROUTES.findIndex((r) => r.id === id);
+  }
+
+  function selectRoute(i, updateHash) {
     routeMap.current = i;
     routeMap.reversed = false; // a freshly-picked route starts in its forward direction
+    // Only user-initiated picks rewrite the URL — the boot-time auto-select
+    // must not stamp a deep link onto every visit.
+    if (updateHash) { try { history.replaceState(null, "", "#routes/" + ROUTES[i].id); } catch (_) { /* ignore */ } }
     document.querySelectorAll("#routeList .route-card").forEach((el) => {
       const on = +el.dataset.i === i;
       el.classList.toggle("on", on); el.setAttribute("aria-pressed", on ? "true" : "false");
@@ -1780,7 +1976,7 @@
   }
 
   function reverseRoute(i, btn) {
-    if (routeMap.current !== i) { selectRoute(i); return; }
+    if (routeMap.current !== i) { selectRoute(i, true); return; }
     routeMap.reversed = !routeMap.reversed;
     if (btn) btn.classList.toggle("on", routeMap.reversed);
     drawRoute(i);
@@ -1790,6 +1986,10 @@
     const el = document.getElementById("routeList");
     if (!el) return;
     renderFilters();
+    // Honour a #routes/<id> deep link: pre-select that route (initRoutesMap's
+    // first draw uses routeMap.current) before the cards render their state.
+    const linked = routeIndexFromHash();
+    if (linked >= 0) routeMap.current = linked;
     const first = renderRouteCards();
     renderRouteProgress();
 
@@ -1805,6 +2005,9 @@
     } else {
       initRoutesMap(mapEl, first);
     }
+    // A shared link should land the visitor on the route, not the hero:
+    // scrolling the map into view also triggers its lazy init above.
+    if (linked >= 0) requestAnimationFrame(() => mapEl.scrollIntoView({ block: "center" }));
   }
 
   // --- Run a bus route (live from the TfL API) --------------------------
@@ -2254,16 +2457,44 @@
   const lsSortVal = [(s) => s[0].toLowerCase(), (s) => s[1], (s) => s[2], (s) => s[1], (s) => s[1], (s) => s[1]];
   let lsSortCol = 1, lsSortDir = -1; // default: longest first
 
+  // National Rail rows for the line-by-line table, computed from the network
+  // data once it loads (length = the longest branch's station-to-station
+  // distance, so a slight under-read of true track length; stops = unique
+  // stations inside our commuter-belt clip).
+  let NR_STATS = null, nrStatsKicked = false;
+  function computeNrStats(net) {
+    return Object.keys(net).filter((id) => net[id].nr).map((id) => {
+      const ln = net[id];
+      let best = 0;
+      for (const b of ln.branches || []) {
+        let km = 0;
+        for (let i = 1; i < b.length; i++) {
+          const a = ln.stations[b[i - 1]], c = ln.stations[b[i]];
+          if (a && c) km += haversineKm([0, a.lat, a.lon], [0, c.lat, c.lon]);
+        }
+        if (km > best) best = km;
+      }
+      LINE_COLOURS[ln.name] = ln.colour; // row dot + detail map colour lookups
+      return [ln.name, Math.round(best * 10) / 10, Object.keys(ln.stations).length];
+    }).filter((r) => r[1] > 0).sort((a, b) => a[0].localeCompare(b[0]));
+  }
+
   function renderLineStats() {
     const el = document.getElementById("lineStats");
     if (!el) return;
-    const kms = LINE_STATS.map((s) => s[1]);
-    const stns = LINE_STATS.map((s) => s[2]);
+    if (!nrStatsKicked) {
+      nrStatsKicked = true;
+      loadNetwork().then((net) => { NR_STATS = computeNrStats(net); renderLineStats(); })
+        .catch(() => { /* the table simply stays TfL-only */ });
+    }
+    const allStats = NR_STATS ? LINE_STATS.concat(NR_STATS) : LINE_STATS;
+    const kms = allStats.map((s) => s[1]);
+    const stns = allStats.map((s) => s[2]);
     const maxKm = Math.max(...kms), minKm = Math.min(...kms);
     const maxSt = Math.max(...stns), minSt = Math.min(...stns);
     const active = nextRun ? nextRun.key : null;
     const sortVal = lsSortVal[lsSortCol];
-    const rows = [...LINE_STATS].sort((a, b) => {
+    const rows = [...allStats].sort((a, b) => {
       const va = sortVal(a), vb = sortVal(b);
       return va < vb ? -lsSortDir : va > vb ? lsSortDir : 0;
     }).map(([name, km, stations]) => {
@@ -2464,6 +2695,20 @@
       if (!opts) continue;
       for (const o of opts) entries.push({ id, wp: o.wp, group: net[id].name, label: o.label });
     }
+    // Every remaining line gets its single end-to-end route too — linear Tube
+    // and Overground lines (with their pavement GPX) and the National Rail
+    // lines (drawn as station hops) — so the picker covers the whole network.
+    const covered = new Set(Object.keys(LINE_VARIANTS));
+    if (hiId) covered.add(hiId);
+    // Grouping is by consecutive entries, so keep the TfL lines together first
+    // and the National Rail block after them.
+    const rest = Object.keys(net).filter((id) => !covered.has(id))
+      .sort((a, b) => (net[a].nr ? 1 : 0) - (net[b].nr ? 1 : 0) || net[a].name.localeCompare(net[b].name));
+    for (const id of rest) {
+      const wp = rtStations(net, net[id].name);
+      if (!wp || wp.length < 2) continue;
+      entries.push({ id, gpx: GPX_LINES.has(id), wp, group: net[id].nr ? "National Rail" : "More lines", label: `${net[id].name} · ${wp[0][0]} → ${wp[wp.length - 1][0]}` });
+    }
     return entries;
   }
 
@@ -2556,6 +2801,9 @@
     async function syncGpxDir() {
       if (!gpxLink) return;
       const slug = lineSlug(name);
+      // The TCX link converts on click, so it only needs to know the direction.
+      const tcxLink = gpxLink.parentElement && gpxLink.parentElement.querySelector(".tcx-dl");
+      if (tcxLink) tcxLink.dataset.rev = reversed ? "1" : "";
       if (!reversed) {
         if (revUrl) { URL.revokeObjectURL(revUrl); revUrl = null; }
         gpxLink.href = `routes/${slug}.gpx`;
@@ -2608,6 +2856,16 @@
   const LC_KEY = "tuberun_collector";
   function loadCollector() { return loadSet(LC_KEY); }
   function saveCollector(set) { saveSet(LC_KEY, set); }
+
+  // When a line direction or route is ticked off, remember the date — it feeds
+  // the "days active" stats. Older ticks pre-date this and simply have no date.
+  const RUN_DATES_KEY = "tuberun_run_dates";
+  let runDates = (() => { try { const m = JSON.parse(localStorage.getItem(RUN_DATES_KEY)); return m && typeof m === "object" && !Array.isArray(m) ? m : {}; } catch (_) { return {}; } })();
+  function stampRun(key, on) {
+    if (on) runDates[key] = new Date().toISOString().slice(0, 10);
+    else delete runDates[key];
+    try { localStorage.setItem(RUN_DATES_KEY, JSON.stringify(runDates)); } catch (_) { /* private mode */ }
+  }
   let collectorDone = loadCollector();
   // Line length (km) for collector distance totals.
   const LINE_KM = {};
@@ -2645,15 +2903,16 @@
     const total = TUBE_LINES.length * 2;
     let n = 0, collectedKm = 0, linesAny = 0, linesBoth = 0;
 
+    const nextUp = []; // suggester candidates: lines still missing a direction
     const rows = TUBE_LINES.map((name) => {
       const c = LINE_COLOURS[name] || "#0019A8";
       const dirs = LINE_DIRS[name] || ["→ one way", "→ the other"];
       const lineKm = LINE_KM[name] || 0;
-      let doneHere = 0;
+      let doneHere = 0, undoneLabel = "";
       const chips = dirs.map((label, i) => {
         const keyId = `${name}|${i}`;
         const isDone = collectorDone.has(keyId);
-        if (isDone) { n++; doneHere++; collectedKm += lineKm; }
+        if (isDone) { n++; doneHere++; collectedKm += lineKm; } else if (!undoneLabel) undoneLabel = label;
         const style = isDone
           ? `background:${c};color:${contrastText(c)};border-color:${c}`
           : `color:#2b3140;border-color:${lineTextColour(c)}`;
@@ -2661,11 +2920,28 @@
       }).join("");
       if (doneHere >= 1) linesAny++;
       if (doneHere >= 2) linesBoth++;
+      if (doneHere < 2) nextUp.push({ name, km: lineKm, doneHere, undoneLabel, colour: c });
       return `<div class="lc-row">
         <span class="lc-name" style="border-color:${c}"><i style="background:${c}"></i>${escapeHtml(name)}<span class="lc-km">${fmtKm(lineKm, 1)} each way</span></span>
         <span class="lc-dirs">${chips}</span>
       </div>`;
     }).join("");
+
+    // "What next?" — nudge toward untouched lines first, longest new ground first.
+    nextUp.sort((a, b) => a.doneHere - b.doneHere || b.km - a.km);
+    const next = nextUp[0];
+    const nextHtml = next && n > 0 ? `<p class="lc-next">🎯 Next tick: <b style="color:${lineTextColour(next.colour)}">${escapeHtml(next.name)}</b> ${escapeHtml(next.undoneLabel)} — ${next.doneHere ? "run it the other way to collect the pair" : `${fmtKm(next.km, 1)} of new ground`}</p>` : "";
+
+    // Stats from the run-date log (dates only accrue as you tick things off).
+    const routeKmDone = ROUTES.reduce((s, r) => s + (routeRun.has(r.name) ? routeKm(r) : 0), 0);
+    const dates = Object.values(runDates);
+    const daysActive = new Set(dates).size;
+    const lastRun = dates.length ? dates.slice().sort().pop() : null;
+    const statsHtml = `<div class="lc-stats">
+      <span class="lc-stat"><b>${fmtKm(collectedKm + routeKmDone, 1)}</b> lines + routes collected</span>
+      ${daysActive ? `<span class="lc-stat"><b>${daysActive}</b> day${daysActive === 1 ? "" : "s"} active</span>` : ""}
+      ${lastRun ? `<span class="lc-stat"><b>${escapeHtml(lastRun)}</b> last tick</span>` : ""}
+    </div>`;
 
     const ctx = {
       count: n, km: collectedKm, linesAny, linesBoth,
@@ -2682,6 +2958,8 @@
       </div>
       <p class="lc-hint"><strong>Tap a direction to tick off a line you've run</strong> — each counts twice, one each way. Your tally is saved in this browser. ${TUBE_LINES.length} lines, ${total} runs to collect them all.</p>
       <div class="lc-dist"><span class="lc-dist-big">${fmtKm(collectedKm, 1)}</span> collected so far <small>across ${n} direction${n === 1 ? "" : "s"}</small></div>
+      ${statsHtml}
+      ${nextHtml}
       <div class="lc-rows">${rows}</div>
       ${badgesHeadHtml("Badges", `${gotBadges} / ${BADGES.length} earned`)}
       <p class="lc-hint">Collect lines to unlock badges — from your first direction to the whole network, both ways.</p>
@@ -2689,12 +2967,46 @@
 
     el.querySelectorAll(".lc-dir").forEach((b) => b.addEventListener("click", () => {
       const k = b.dataset.key;
-      if (collectorDone.has(k)) collectorDone.delete(k); else collectorDone.add(k);
+      const adding = !collectorDone.has(k);
+      if (adding) collectorDone.add(k); else collectorDone.delete(k);
+      stampRun(k, adding);
       saveCollector(collectorDone);
       renderLineCollector();
     }));
     const reset = document.getElementById("lcReset");
-    if (reset) reset.addEventListener("click", () => { collectorDone = new Set(); saveCollector(collectorDone); renderLineCollector(); });
+    if (reset) reset.addEventListener("click", () => {
+      collectorDone = new Set();
+      saveCollector(collectorDone);
+      for (const k in runDates) if (k.includes("|")) stampRun(k, false); // route dates survive a line reset
+      renderLineCollector();
+    });
+    renderBoroughBagger();
+  }
+
+  // --- Borough bagger: which of the 33 boroughs your runs have touched -----
+  // Derived entirely from the line collector + marked routes (no storage of
+  // its own) against build-time tagging in data/boroughs.json.
+  let boroughsPromise = null;
+  function loadBoroughs() {
+    if (!boroughsPromise) boroughsPromise = fetch("data/boroughs.json").then((r) => (r.ok ? r.json() : null)).catch(() => null);
+    return boroughsPromise;
+  }
+  async function renderBoroughBagger() {
+    const el = document.getElementById("boroughBagger");
+    if (!el) return;
+    const data = await loadBoroughs();
+    if (!data || !data.names) { el.hidden = true; return; }
+    const covered = new Set();
+    TUBE_LINES.forEach((name) => {
+      if (collectorDone.has(`${name}|0`) || collectorDone.has(`${name}|1`)) (data.lines[lineSlug(name)] || []).forEach((b) => covered.add(b));
+    });
+    ROUTES.forEach((r) => { if (routeRun.has(r.name)) (data.routes[r.id] || []).forEach((b) => covered.add(b)); });
+    const chips = data.names.map((nm, i) => `<span class="bb-chip${covered.has(i) ? " got" : ""}">${covered.has(i) ? "✓ " : ""}${escapeHtml(nm)}</span>`).join("");
+    el.hidden = false;
+    el.innerHTML = `
+      ${badgesHeadHtml("Borough bagger", `${covered.size} / ${data.names.length} boroughs`)}
+      <p class="lc-hint">Every borough your ticked-off lines and marked routes pass through. Bag all ${data.names.length} — from Barking and Dagenham to Westminster.</p>
+      <div class="bb-grid">${chips}</div>`;
   }
 
   // --- Render: Gallery ---------------------------------------------------
@@ -2766,6 +3078,146 @@
   let geoTimeMode = "run";    // run | walk | off — badge mode on the highlighted line
   let geoShowToilets = true;  // toilet pins on the geographic map
   let geoShowWater = false;   // drinking-water pins on the geographic map
+  let tmYear = 9999;          // time-machine year on the geo map — 9999 = today
+
+  // Year each line's corridor first carried passengers. For the Overground and
+  // National Rail these are the Victorian railways the modern names run over
+  // (the Mildmay is the 1850 North London Railway, Southeastern descends from
+  // London's first railway of 1836) — approximate corridor heritage, not brands.
+  const HERITAGE_YEAR = {
+    metropolitan: 1863, "hammersmith-city": 1864, district: 1868, circle: 1884,
+    northern: 1890, "waterloo-city": 1898, central: 1900, bakerloo: 1906,
+    piccadilly: 1906, victoria: 1968, jubilee: 1979, elizabeth: 2022,
+    lioness: 1912, mildmay: 1850, windrush: 1869, weaver: 1872, suffragette: 1894, liberty: 1893,
+    southeastern: 1836, "south-western-railway": 1838, "great-western-railway": 1838,
+    "greater-anglia": 1839, southern: 1841, "great-northern": 1850, c2c: 1854,
+    thameslink: 1866, "chiltern-railways": 1899, "heathrow-express": 1998,
+  };
+  const lineYear = (id) => HERITAGE_YEAR[id] || 0; // unlisted lines always exist
+
+  // Station-level opening years where they differ from the line's first year —
+  // extensions came decades later (Battersea 2021, Morden 1926, Heathrow 1977)
+  // and some corridors pre-date their tube service (the Epping branch was a
+  // steam railway from 1856). Unlisted stations inherit the line year, so the
+  // remaining error is Victorian-era infill detail, never a modern segment
+  // shown early. Names must match the network data's station names.
+  const HERITAGE_STATIONS = {
+    northern: {
+      1907: ["Leicester Square", "Goodge Street", "Warren Street", "Mornington Crescent", "Camden Town", "Chalk Farm", "Belsize Park", "Hampstead", "Golders Green", "Tufnell Park", "Archway"],
+      1923: ["Brent Cross", "Hendon Central"],
+      1924: ["Colindale", "Burnt Oak", "Edgware"],
+      1926: ["Clapham South", "Tooting Bec", "Tooting Broadway", "Colliers Wood", "South Wimbledon", "Morden"],
+      // High Barnet / Mill Hill branch: a GNR steam railway from 1867-72, tube from 1939-41
+      1867: ["East Finchley", "Finchley Central", "Mill Hill East", "Highgate"],
+      1872: ["Woodside Park", "Totteridge & Whetstone", "High Barnet"],
+      1933: ["West Finchley"],
+      2021: ["Nine Elms", "Battersea Power Station"],
+    },
+    piccadilly: {
+      1932: ["Manor House", "Turnpike Lane", "Wood Green", "Bounds Green", "Arnos Grove"],
+      1933: ["Southgate", "Oakwood", "Cockfosters"],
+      1975: ["Hatton Cross"],
+      1977: ["Heathrow Terminals 2 & 3"],
+      1986: ["Heathrow Terminal 4"],
+      2008: ["Heathrow Terminal 5"],
+    },
+    central: {
+      1856: ["Leyton", "Leytonstone", "Snaresbrook", "South Woodford", "Woodford", "Buckhurst Hill", "Loughton"],
+      1865: ["Debden", "Theydon Bois", "Epping"],
+      1903: ["Newbury Park", "Barkingside", "Fairlop", "Hainault", "Grange Hill", "Chigwell"],
+      1908: ["White City"],
+      1920: ["East Acton"],
+      1923: ["North Acton", "West Acton"],
+      1936: ["Roding Valley"],
+      1946: ["Bethnal Green"],
+      1947: ["Hanger Lane", "Perivale", "Greenford", "Wanstead", "Redbridge", "Gants Hill"],
+      1948: ["Northolt", "Ruislip Gardens", "South Ruislip", "West Ruislip"],
+    },
+    bakerloo: { 1915: ["Kilburn Park", "Maida Vale", "Warwick Avenue"] },
+    jubilee: {
+      1932: ["Stanmore", "Canons Park", "Kingsbury"],
+      1934: ["Queensbury"],
+      1939: ["St John's Wood", "Swiss Cottage"],
+      1999: ["Southwark", "Bermondsey", "Canary Wharf", "North Greenwich", "Canning Town"],
+    },
+    victoria: { 1971: ["Brixton"], 1972: ["Pimlico"] },
+    metropolitan: {
+      1879: ["Finchley Road"], 1880: ["Harrow-on-the-Hill"], 1885: ["Pinner"],
+      1887: ["Northwood", "Rickmansworth"], 1889: ["Chorleywood", "Chalfont & Latimer", "Chesham"],
+      1892: ["Amersham"], 1894: ["Wembley Park"], 1904: ["Uxbridge", "Ruislip"], 1905: ["Ickenham"],
+      1906: ["Rayners Lane", "Eastcote"], 1908: ["Preston Road"], 1910: ["Moor Park"], 1912: ["Ruislip Manor"],
+      1915: ["North Harrow"], 1923: ["Northwick Park", "Hillingdon"], 1925: ["Croxley", "Watford"], 1933: ["Northwood Hills"],
+    },
+    district: { 1932: ["Upney", "Becontree", "Dagenham Heathway"], 1935: ["Elm Park"] },
+    windrush: { 1999: ["Canada Water"], 2010: ["Shoreditch High Street", "Hoxton", "Haggerston", "Dalston Junction"] },
+    weaver: { 1870: ["St James Street"], 1873: ["Wood Street", "Highams Park", "Chingford"], 1891: ["Southbury", "Turkey Street", "Theobalds Grove"] },
+    mildmay: { 1853: ["Acton Central"], 1869: ["Kew Gardens", "Gunnersbury", "Richmond"], 1880: ["South Acton"] },
+  };
+  // A station's opening year on a given line (falls back to the line year).
+  let stnYearNorm = null; // lineId -> { normName: year }, built lazily
+  function stationYear(id, name) {
+    if (!stnYearNorm) {
+      stnYearNorm = {};
+      for (const lid in HERITAGE_STATIONS) {
+        stnYearNorm[lid] = {};
+        for (const y in HERITAGE_STATIONS[lid]) for (const n of HERITAGE_STATIONS[lid][y]) stnYearNorm[lid][norm(n)] = +y;
+      }
+    }
+    const m = stnYearNorm[id];
+    return (m && m[norm(name)]) || lineYear(id);
+  }
+  // Latest opening year anywhere on a line — past it, the full modern geometry is honest.
+  function lineMaxYear(id) {
+    const segs = HERITAGE_STATIONS[id];
+    const top = segs ? Math.max(...Object.keys(segs).map(Number)) : 0;
+    return Math.max(lineYear(id), top);
+  }
+  // Era geometry for lines partially built at a given year: each branch drawn
+  // only through the stations that had opened — later infills skip cleanly,
+  // unbuilt extensions truncate. Shared by the geo map and the time machine.
+  function eraLayerFor(net, year) {
+    const grp = L.layerGroup();
+    for (const id in net) {
+      if (lineYear(id) > year || lineMaxYear(id) <= year) continue;
+      const ln = net[id];
+      for (const b of ln.branches || []) {
+        const pts = b.map((sid) => ln.stations[sid]).filter((s) => s && stationYear(id, s.n) <= year).map((s) => [s.lat, s.lon]);
+        if (pts.length > 1) L.polyline(pts, { color: ln.colour, weight: ln.nr ? 2 : 3, opacity: ln.nr ? 0.6 : 0.9, dashArray: ln.nr ? "6 5" : null, lineJoin: "round", lineCap: "round" }).addTo(grp);
+      }
+    }
+    return grp;
+  }
+  const TM_MILESTONES = [
+    [1836, "London's first railway opens — London Bridge to Deptford."],
+    [1838, "Brunel's Great Western steams out of Paddington."],
+    [1863, "The Metropolitan Railway opens — the world's first underground."],
+    [1868, "The District line begins at Westminster."],
+    [1869, "Brunel's Thames Tunnel carries its first trains — today's Windrush line."],
+    [1884, "The Circle is finally completed."],
+    [1890, "City & South London Railway — the first deep-level electric Tube."],
+    [1900, "The Central London Railway opens — the Twopenny Tube."],
+    [1906, "Bakerloo and Piccadilly tubes open within months of each other."],
+    [1908, "The bar-and-circle roundel first appears on platforms."],
+    [1911, "London's first escalator spirals into Earls Court."],
+    [1916, "Edward Johnston's lettering starts spreading across the network."],
+    [1926, "The Morden extension completes the Northern line's southern end."],
+    [1933, "Harry Beck's diagram map debuts as London Transport is formed."],
+    [1940, "Platforms shelter thousands each night through the Blitz."],
+    [1952, "London's last tram runs — for now."],
+    [1961, "Steam finally ends on the Metropolitan."],
+    [1968, "The Victoria line arrives, with automatic trains."],
+    [1977, "Heathrow becomes the world's first airport on a metro."],
+    [1979, "The Jubilee line opens, silver for the Silver Jubilee."],
+    [1988, "Thameslink reopens the Snow Hill tunnel through the City."],
+    [1994, "Aldwych closes, and the Epping–Ongar shuttle makes its last run."],
+    [1998, "Heathrow Express speeds airport runs from Paddington."],
+    [2000, "Trams return, in Croydon."],
+    [2003, "The Oyster card arrives."],
+    [2007, "TfL takes over the North London lines — the Overground is born."],
+    [2016, "The Night Tube begins."],
+    [2022, "The Elizabeth line opens at last."],
+    [2024, "The Overground's six lines get their own names."],
+  ];
   function geoDistStr(km) { return fmtKm(km, 1); } // follows the site-wide unit toggle
   // Compass bearing (deg, 0 = north) from waypoint a to b — for direction arrows.
   function bearingDeg(a, b) {
@@ -2794,9 +3246,16 @@
   function loadNetwork() {
     if (!netPromise) {
       netPromise = (async () => {
-        const [nRes, tRes, wRes] = await Promise.all([fetch("data/tube-network.json"), fetch("data/station-toilets.json"), fetch("data/facilities-water.json")]);
+        const [nRes, rRes, tRes, wRes] = await Promise.all([fetch("data/tube-network.json"), fetch("data/nr-network.json"), fetch("data/station-toilets.json"), fetch("data/facilities-water.json")]);
         if (!nRes.ok) throw new Error("network data");
         netData = await nRes.json();
+        // National Rail commuter lines join the same network model (marked
+        // `nr` so map bounds/styling can treat them as the outer layer);
+        // the site still works without the file.
+        if (rRes.ok) {
+          const nr = await rRes.json();
+          for (const id in nr) { nr[id].nr = true; netData[id] = nr[id]; }
+        }
         // Zero-trust: line colours end up in inline styles and SVG attributes,
         // and lineTextColour assumes 6-digit hex, so only that form passes.
         for (const id in netData) {
@@ -3082,9 +3541,15 @@
   let linesGeo = null;
   async function loadLines() {
     if (linesGeo) return linesGeo;
-    const res = await fetch("data/tube-lines.geojson");
+    const [res, nrRes] = await Promise.all([fetch("data/tube-lines.geojson"), fetch("data/nr-lines.geojson")]);
     if (!res.ok) throw new Error("lines geojson");
     linesGeo = await res.json();
+    // National Rail geometry rides along, marked `nr` so the map can style it
+    // as the outer layer and keep its default view fitted to the TfL network.
+    if (nrRes.ok) {
+      const nr = await nrRes.json();
+      (nr.features || []).forEach((f) => { f.properties.nr = true; linesGeo.features.push(f); });
+    }
     return linesGeo;
   }
   // Real pavement run route for a line, from the generated routes/<slug>.gpx
@@ -3094,6 +3559,7 @@
   const routeGpxCache = {};
   async function loadRouteGpx(slug) {
     if (!slug) return null;
+    if (!GPX_LINES.has(slug)) return null; // no file for this line — skip the 404 round-trip
     if (routeGpxCache[slug] !== undefined) return routeGpxCache[slug];
     try {
       const res = await fetch(`routes/${slug}.gpx`);
@@ -3306,15 +3772,19 @@
       const sel = L.DomUtil.create("select", "", row);
       sel.setAttribute("aria-label", "Choose which route to show on the map");
       sel.innerHTML = groupedOptionsHtml(entries, (e) => e.group, selectedIdx);
-      // GPX download for the selected line, kept in sync as the choice changes.
+      // GPX + TCX downloads for the selected line, kept in sync as the choice changes.
       const gpx = L.DomUtil.create("a", "gpx-dl geo-gpx", row);
       gpx.textContent = "↓ GPX";
+      const tcx = L.DomUtil.create("a", "gpx-dl tcx-dl geo-gpx", row);
+      tcx.textContent = "⌚ TCX";
+      tcx.href = "#";
+      tcx.title = "Download as a Garmin TCX course — Virtual Partner pacing at your site pace";
       // Distance / stops / running time of the selected route, under the picker.
       const stats = L.DomUtil.create("div", "geo-stats", div);
       const syncGpx = (i) => {
         const id = entries[i] && entries[i].id;
-        if (id && GPX_LINES.has(id)) { gpx.href = `routes/${id}.gpx`; gpx.download = `TubeRun-${id}.gpx`; gpx.title = "Download this line's pavement route as a GPX file for your watch"; gpx.style.display = ""; }
-        else { gpx.removeAttribute("href"); gpx.style.display = "none"; }
+        if (id && GPX_LINES.has(id)) { gpx.href = `routes/${id}.gpx`; gpx.download = `TubeRun-${id}.gpx`; gpx.title = "Download this line's pavement route as a GPX file for your watch"; gpx.style.display = ""; tcx.dataset.slug = id; tcx.style.display = ""; }
+        else { gpx.removeAttribute("href"); gpx.style.display = "none"; delete tcx.dataset.slug; tcx.style.display = "none"; }
       };
       const syncStats = (i) => {
         const wp = entries[i] && entries[i].wp;
@@ -3331,6 +3801,122 @@
       return div;
     };
     ctl.addTo(map);
+    return ctl; // so the time machine can swap the picker for another era's
+  }
+
+  // --- The time machine section: the network era by era, plus the nerd panel ---
+  // A dedicated year scrubber and map (the Map tab keeps its own inline version),
+  // with the running tally of what's open, each line's era extent, and the story.
+  function tm2PanelHtml(net, year) {
+    if (year < 1836) return `<h3 class="tm2-h">No railways yet</h3><p class="lc-hint">London in ${year} moves by horse, boat and boot. The first railway arrives in 1836 — London Bridge to Deptford.</p>`;
+    const open = [], soon = [], openSids = new Set();
+    for (const id in net) {
+      const ln = net[id], y0 = lineYear(id);
+      if (y0 > year) { soon.push({ n: ln.name, y: y0 }); continue; }
+      let stns = 0, total = 0;
+      for (const sid in ln.stations) { total++; if (stationYear(id, ln.stations[sid].n) <= year) { stns++; openSids.add(sid); } }
+      const br = ln.route || (ln.branches || []).reduce((a, b) => (b.length > a.length ? b : a), (ln.branches || [])[0] || []);
+      const ob = br.map((sid) => ln.stations[sid]).filter((s) => s && stationYear(id, s.n) <= year);
+      open.push({ n: ln.name, c: ln.colour, y: y0, stns, total, from: ob[0] && ob[0].n, to: ob.length > 1 ? ob[ob.length - 1].n : null, building: lineMaxYear(id) > year });
+    }
+    open.sort((a, b) => a.y - b.y || a.n.localeCompare(b.n));
+    soon.sort((a, b) => a.y - b.y);
+    const events = TM_MILESTONES.filter(([y]) => y <= year).slice(-7).reverse();
+    return `
+      <h3 class="tm2-h">${year} · ${open.length} line${open.length === 1 ? "" : "s"} · ${openSids.size} stations open</h3>
+      <div class="tm2-lines">${open.map((l) => `
+        <div class="tm2-line"><i style="background:${l.c}"></i><div>
+          <b>${escapeHtml(l.n)}</b> <span class="tm2-yr">opened ${l.y}${l.building ? " · still growing" : ""}</span>
+          ${l.from && l.to ? `<span class="tm2-ext">${escapeHtml(l.from)} → ${escapeHtml(l.to)} · ${l.stns}/${l.total} of today's stations</span>` : ""}
+        </div></div>`).join("")}</div>
+      ${soon.length ? `<p class="tm2-soon"><b>Not yet built:</b> ${soon.map((s) => `${escapeHtml(s.n)} (${s.y})`).join(" · ")}</p>` : ""}
+      <h3 class="tm2-h">The story so far</h3>
+      <ul class="tm2-events">${events.map(([y, t]) => `<li><b>${y}</b> ${escapeHtml(t)}</li>`).join("")}</ul>`;
+  }
+
+  function renderTimeMachine() {
+    const mapEl = document.getElementById("tm2Map");
+    if (!mapEl) return;
+    const init = async () => {
+      if (typeof L === "undefined") { mapUnavailable(mapEl); return; }
+      const [net, geo] = await Promise.all([loadNetwork(), loadLines()]);
+      const slider = document.getElementById("tm2Year"), lbl = document.getElementById("tm2YearLbl"),
+        note = document.getElementById("tm2Note"), panel = document.getElementById("tm2Panel");
+      let year = +slider.value;
+      const map = createSiteMap(mapEl);
+      const style = (f) => {
+        const id = f.properties.line, nr = f.properties.nr;
+        if (lineYear(id) > year) return { color: f.properties.colour, weight: 1, opacity: 0.06, dashArray: "2 6" };
+        if (lineMaxYear(id) > year) return { color: f.properties.colour, weight: 0, opacity: 0 };
+        return { color: f.properties.colour, weight: nr ? 2 : 3, opacity: nr ? 0.6 : 0.9, dashArray: nr ? "6 5" : null, lineJoin: "round", lineCap: "round" };
+      };
+      const lineLayer = L.geoJSON(geo, { style }).addTo(map);
+      const b = L.latLngBounds([]);
+      lineLayer.eachLayer((l) => { if (!l.feature.properties.nr) b.extend(l.getBounds()); });
+      if (b.isValid()) map.fitBounds(b, { padding: [14, 14] });
+
+      // The secrets layer: shelters, ghost stations, depots and oddities —
+      // violet dots, hover for the name, tap for the story.
+      loadSecrets().then((all) => {
+        const grp = L.layerGroup();
+        for (const p of all) {
+          L.circleMarker([p.lat, p.lon], { radius: 3.4, weight: 1.2, color: "#fff", fillColor: "#5F259F", fillOpacity: 1 })
+            .bindTooltip(escapeHtml(p.n), { direction: "top" })
+            .bindPopup(`<b>${escapeHtml(p.n)}</b><br>${escapeHtml(p.d)}`, { maxWidth: 260 })
+            .addTo(grp);
+        }
+        grp.addTo(map);
+      });
+
+      // Open-station dots (tooltip names the opening year); NR platforms on a
+      // same-named TfL station are skipped like the geo map's markers.
+      let eraGrp = null, stnGrp = null;
+      const redraw = () => {
+        lineLayer.setStyle(style);
+        if (eraGrp) map.removeLayer(eraGrp);
+        eraGrp = eraLayerFor(net, year).addTo(map);
+        if (stnGrp) map.removeLayer(stnGrp);
+        stnGrp = L.layerGroup();
+        const tflByName = {}, chosen = {};
+        for (const id in net) { if (net[id].nr) continue; const st = net[id].stations; for (const sid in st) {
+          const y = stationYear(id, st[sid].n);
+          if (y > year) continue;
+          tflByName[norm(st[sid].n)] = st[sid];
+          if (!chosen[sid] || y < chosen[sid].y) chosen[sid] = { s: st[sid], y, c: net[id].colour };
+        } }
+        for (const id in net) { if (!net[id].nr) continue; const st = net[id].stations; for (const sid in st) {
+          const y = stationYear(id, st[sid].n);
+          if (y > year) continue;
+          const twin = tflByName[norm(st[sid].n)];
+          if (twin && Math.abs(twin.lat - st[sid].lat) < 0.004 && Math.abs(twin.lon - st[sid].lon) < 0.006) continue;
+          if (!chosen[sid] || y < chosen[sid].y) chosen[sid] = { s: st[sid], y, c: net[id].colour };
+        } }
+        for (const sid in chosen) {
+          const { s, y, c } = chosen[sid];
+          L.circleMarker([s.lat, s.lon], { radius: 2.8, weight: 1, color: "#fff", fillColor: c, fillOpacity: 1 })
+            .bindTooltip(`${escapeHtml(s.n)} · opened ${y}`, { direction: "top" }).addTo(stnGrp);
+        }
+        stnGrp.addTo(map);
+        let story = "London before the railways.";
+        for (const [my, txt] of TM_MILESTONES) if (my <= year) story = `${my} — ${txt}`;
+        note.textContent = story;
+        panel.innerHTML = tm2PanelHtml(net, year);
+      };
+      let deb = null;
+      slider.addEventListener("input", () => {
+        year = +slider.value;
+        lbl.textContent = String(year);
+        clearTimeout(deb);
+        deb = setTimeout(redraw, 120);
+      });
+      redraw();
+    };
+    if ("IntersectionObserver" in window) {
+      const io = new IntersectionObserver((entries, obs) => {
+        if (entries.some((e) => e.isIntersecting)) { obs.disconnect(); init(); }
+      }, { rootMargin: "250px" });
+      io.observe(mapEl);
+    } else init();
   }
 
   // Friendly message in a map container when Leaflet itself failed to load.
@@ -3370,15 +3956,18 @@
     return out;
   }
 
-  function geoCaption(cap, net, hi, redraw) {
+  function geoCaption(cap, net, hi, redraw, applyYear) {
     if (!cap) return;
     const modes = hi ? `<span class="geo-modes">Times: ${["run", "walk", "off"].map((m) =>
       `<button type="button" class="geo-mode" data-mode="${m}"${geoTimeMode === m ? ' data-on="1"' : ""}>${m === "off" ? "Off" : m[0].toUpperCase() + m.slice(1)}</button>`).join("")}</span>` : "";
     const wcBtn = `<button type="button" class="geo-mode geo-wc-btn" data-wc="1"${geoShowToilets ? ' data-on="1"' : ""}>🚻 Toilets</button>`;
     const waterBtn = `<button type="button" class="geo-mode geo-water-btn" data-water="1"${geoShowWater ? ' data-on="1"' : ""}>💧 Water</button>`;
+    const tmOn = tmYear < 9999;
+    const tmBtn = `<button type="button" class="geo-mode geo-tm-btn"${tmOn ? ' data-on="1"' : ""}>🕰 Time machine</button>`;
+    const tmRowHtml = `<span class="tm-year-row"${tmOn ? "" : " hidden"}><input type="range" class="tm-year" min="1830" max="2026" step="1" value="${tmOn ? tmYear : 2026}" aria-label="Show the network as it was in this year" /><b class="tm-year-lbl"></b><span class="tm-year-note"></span></span>`;
     cap.innerHTML = (hi
       ? `<strong style="color:${lineTextColour(net[hi].colour)}">${escapeHtml(net[hi].name)} line</strong> lit up for the next run — arrows show the direction of travel, with running time, distance and the group's expected arrival window (from a ${MEET_TIME} start) at each stop. Every stop is a bail-out — hop the train back — and the black-ringed interchanges get you onto other lines. `
-      : `Our own live map — real streets, parks and the Thames, with every tube line on top. `) + modes + " " + wcBtn + " " + waterBtn;
+      : `Our own live map — real streets, parks and the Thames, with every tube line on top. `) + modes + " " + wcBtn + " " + waterBtn + " " + tmBtn + tmRowHtml;
     cap.querySelectorAll(".geo-mode[data-on]").forEach((b) => b.classList.add("on"));
     cap.querySelectorAll(".geo-mode[data-mode]").forEach((b) => b.addEventListener("click", () => {
       geoTimeMode = b.dataset.mode;
@@ -3389,6 +3978,28 @@
     if (wb) wb.addEventListener("click", () => { geoShowToilets = !geoShowToilets; wb.classList.toggle("on", geoShowToilets); redraw(); });
     const wtb = cap.querySelector(".geo-water-btn");
     if (wtb) wtb.addEventListener("click", () => { geoShowWater = !geoShowWater; wtb.classList.toggle("on", geoShowWater); redraw(); });
+    // Time machine: scrub the year and the map ghosts every line that hadn't
+    // opened yet, with a milestone caption for the era you've landed in.
+    const tmb = cap.querySelector(".geo-tm-btn"), tmRow = cap.querySelector(".tm-year-row"),
+      tmSlider = cap.querySelector(".tm-year"), tmLbl = cap.querySelector(".tm-year-lbl"), tmNote = cap.querySelector(".tm-year-note");
+    const syncTm = () => {
+      const y = +tmSlider.value;
+      tmLbl.textContent = String(y);
+      let note = "London before the railways.";
+      for (const [my, txt] of TM_MILESTONES) if (my <= y) note = `${my} — ${txt}`;
+      tmNote.textContent = note;
+    };
+    if (tmb && applyYear) {
+      tmb.addEventListener("click", () => {
+        const on = tmRow.hidden;
+        tmRow.hidden = !on;
+        tmb.classList.toggle("on", on);
+        applyYear(on ? +tmSlider.value : 9999);
+        syncTm();
+      });
+      tmSlider.addEventListener("input", () => { applyYear(+tmSlider.value); syncTm(); });
+      syncTm();
+    }
   }
 
   // Real geographic map: Leaflet + CARTO Voyager basemap + our tube overlays.
@@ -3403,9 +4014,30 @@
     const map = createSiteMap("tmMap", { zoomHint: true });
     tmMap.map = map;
 
-    // Tube lines (real track geometry). Highlighted line bold & on top, others dimmed.
-    const lineLayer = L.geoJSON(geo, { style: (f) => { const on = hi && f.properties.line === hi;
-      return { color: f.properties.colour, weight: on ? 5 : 3, opacity: on ? 1 : (hi ? 0.3 : 0.9), lineJoin: "round", lineCap: "round" }; } }).addTo(map);
+    // Tube lines (real track geometry). Highlighted line bold & on top, others
+    // dimmed. National Rail rides underneath — thinner and dashed, the classic
+    // NR cartography — so the TfL network stays the hero of the map. Lines the
+    // time machine says don't exist yet linger as faint ghosts.
+    const lineStyle = (f) => {
+      const on = hi && f.properties.line === hi, nr = f.properties.nr;
+      if (lineYear(f.properties.line) > tmYear) return { color: f.properties.colour, weight: 1, opacity: 0.07, dashArray: "2 6", lineJoin: "round", lineCap: "round" };
+      // Partially built in this year: hide the modern geometry — the era layer
+      // below draws only the extent that had actually opened.
+      if (tmYear < 9999 && lineMaxYear(f.properties.line) > tmYear) return { color: f.properties.colour, weight: 0, opacity: 0 };
+      return { color: f.properties.colour, weight: on ? 5 : (nr ? 2 : 3), opacity: on ? 1 : (hi ? 0.3 : (nr ? 0.6 : 0.9)), dashArray: nr ? "6 5" : null, lineJoin: "round", lineCap: "round" };
+    };
+    const lineLayer = L.geoJSON(geo, { style: lineStyle }).addTo(map);
+
+    // Era geometry for partially built lines: each branch drawn only through
+    // the stations that had opened by the time-machine year (skipping later
+    // infills without breaking, truncating unbuilt extensions naturally).
+    let eraGrp = null;
+    function drawEra() {
+      if (eraGrp) { map.removeLayer(eraGrp); eraGrp = null; }
+      if (tmYear >= 9999) return;
+      eraGrp = eraLayerFor(net, tmYear).addTo(map);
+    }
+    if (tmYear < 9999) drawEra(); // a persisted time-machine year applies on re-render
     lineLayer.eachLayer((l) => { if (hi && l.feature.properties.line === hi) l.bringToFront(); });
 
     // Route overlay + picker (top-left). The picker always lists this month's run
@@ -3413,21 +4045,40 @@
     // so any route can be explored on the map. drawMapRoute swaps the highlight:
     // a soft base + animated flow line with start/finish markers and arrows, and
     // brings the chosen line's track to the front.
-    let hiRouteGrp = null;
+    let hiRouteGrp = null, curEntry = null;
     async function drawMapRoute(entry) {
       if (hiRouteGrp) { hiRouteGrp.remove(); hiRouteGrp = null; }
+      curEntry = entry;
       const r = await drawRunRoute(map, net, entry.id, entry.gpx ? { stale } : { waypoints: entry.wp, stale });
       hiRouteGrp = r && r.group;
       lineLayer.eachLayer((l) => { if (l.feature.properties.line === entry.id) l.bringToFront(); });
     }
-    const routeEntries = mapRouteEntries(net, hi);
+    // The picker honours the time machine: only lines whose corridor existed
+    // in the chosen year are offered (before 1836 there's nothing to run).
+    const allRouteEntries = mapRouteEntries(net, hi);
+    const entriesForYear = () => (tmYear >= 9999 ? allRouteEntries : allRouteEntries.filter((e) => lineYear(e.id) <= tmYear));
+    let variantCtl = null;
+    function buildPicker(entries, selectedIdx) {
+      if (variantCtl) { variantCtl.remove(); variantCtl = null; }
+      if (entries.length) variantCtl = addMapVariantControl(map, entries, selectedIdx, (i) => drawMapRoute(entries[i]));
+    }
+    const routeEntries = entriesForYear();
     if (routeEntries.length) await drawMapRoute(routeEntries[0]);
     if (stale && stale()) return;
-    if (routeEntries.length) addMapVariantControl(map, routeEntries, 0, (i) => drawMapRoute(routeEntries[i]));
+    buildPicker(routeEntries, 0);
 
     // Station lookup: dedup by id, count lines per station (interchange), colour.
-    const count = {}, coordById = {}, colourById = {};
-    for (const id in net) { const st = net[id].stations; for (const sid in st) { count[sid] = (count[sid] || 0) + 1;
+    // National Rail platforms carry different Naptan ids (910G…) from the tube
+    // station they share a building with (940G…), so also drop any NR station
+    // sitting on a same-named TfL one — otherwise interchanges draw two markers.
+    const count = {}, coordById = {}, colourById = {}, tflByName = {}, sidYear = {};
+    const markYear = (sid, id, name) => { const y = stationYear(id, name); if (sidYear[sid] === undefined || y < sidYear[sid]) sidYear[sid] = y; };
+    for (const id in net) { if (net[id].nr) continue; const st = net[id].stations; for (const sid in st) { count[sid] = (count[sid] || 0) + 1; markYear(sid, id, st[sid].n);
+      if (!coordById[sid]) { coordById[sid] = st[sid]; colourById[sid] = net[id].colour; tflByName[norm(st[sid].n)] = st[sid]; } } }
+    for (const id in net) { if (!net[id].nr) continue; const st = net[id].stations; for (const sid in st) {
+      const twin = tflByName[norm(st[sid].n)];
+      if (twin && Math.abs(twin.lat - st[sid].lat) < 0.004 && Math.abs(twin.lon - st[sid].lon) < 0.006) continue;
+      count[sid] = (count[sid] || 0) + 1; markYear(sid, id, st[sid].n);
       if (!coordById[sid]) { coordById[sid] = st[sid]; colourById[sid] = net[id].colour; } } }
     const km = tmComputeKm(net, hi);
     // Per-day ETA table so multi-day runs count each day's windows from that day's
@@ -3450,6 +4101,7 @@
       const dense = map.getZoom() < 12; // thin the permanent labels when zoomed out to avoid overlap
       stationGrp = L.layerGroup();
       for (const sid in coordById) { const s = coordById[sid], inter = count[sid] > 1, onHi = km[sid] !== undefined, dim = hi && !onHi;
+        if ((sidYear[sid] || 0) > tmYear) continue; // station's every line post-dates the time machine year
         const m = L.circleMarker([s.lat, s.lon], {
           radius: inter ? (onHi ? 6 : 4.5) : 3, weight: inter ? 1.5 : 1,
           color: inter ? "#111" : (dim ? "#9aa3ad" : colourById[sid]),
@@ -3480,7 +4132,29 @@
       waterGrp.addTo(map);
     }
     draw();
-    geoCaption(cap, net, hi, draw);
+    // Year change: restyle lines and stations live, then (debounced, so slider
+    // drags stay smooth) refresh the route picker to the lines of that era —
+    // swapping the drawn route out if its line hasn't been built yet.
+    let tmRebuild = null;
+    const applyYear = (y) => {
+      tmYear = y;
+      lineLayer.setStyle(lineStyle);
+      drawEra();
+      draw();
+      clearTimeout(tmRebuild);
+      tmRebuild = setTimeout(() => {
+        const list = entriesForYear();
+        const keep = curEntry ? list.indexOf(curEntry) : -1;
+        if (keep >= 0) { buildPicker(list, keep); return; }
+        if (list.length) { drawMapRoute(list[0]); buildPicker(list, 0); }
+        else { // pre-railway London: nothing to run yet
+          if (hiRouteGrp) { hiRouteGrp.remove(); hiRouteGrp = null; }
+          curEntry = null;
+          buildPicker(list, 0);
+        }
+      }, 250);
+    };
+    geoCaption(cap, net, hi, draw, applyYear);
     geoRefresh = () => { if (tmMap.map === map) draw(); };
     let wasDense = map.getZoom() < 12;
     map.on("zoomend", () => { const d = map.getZoom() < 12; if (d !== wasDense) { wasDense = d; draw(); } });
@@ -3488,7 +4162,11 @@
     requestAnimationFrame(() => { map.invalidateSize(false);
       if (hi) { const b = L.latLngBounds([]); lineLayer.eachLayer((l) => { if (l.feature.properties.line === hi) b.extend(l.getBounds()); });
         if (b.isValid()) map.fitBounds(b, { padding: [28, 28] }); }
-      else map.fitBounds(lineLayer.getBounds(), { padding: [16, 16] }); });
+      else { // default view: fit the TfL network only — NR geometry reaches Reading and would zoom London out
+        const b = L.latLngBounds([]);
+        lineLayer.eachLayer((l) => { if (!l.feature.properties.nr) b.extend(l.getBounds()); });
+        map.fitBounds(b.isValid() ? b : lineLayer.getBounds(), { padding: [16, 16] });
+      } });
   }
 
   // Per-station running times — any line, at an adjustable pace.
@@ -4106,6 +4784,7 @@
     rtPace = Math.min(9, Math.max(4, parseFloat(v) || 6.5));
     try { localStorage.setItem("tuberun_rtpace", String(rtPace)); } catch (_) { /* private mode */ }
     syncPaceSelect();
+    renderRouteCards(); // cards only — their run-time estimates use rtPace
     return rtPaceLabel();
   }
   // Snap the planner's coarse pace select to the option nearest rtPace.
@@ -4234,6 +4913,7 @@
     ["setupPlanner", setupPlanner], ["enrichInterchanges", enrichInterchanges], ["setupBusRunner", setupBusRunner],
     ["setupFollowAlong", setupFollowAlong],
     ["setupJourneyPlanner", setupJourneyPlanner], ["renderLineCollector", renderLineCollector],
+    ["renderTimeMachine", renderTimeMachine],
     ["renderGallery", renderGallery], ["wireSocials", wireSocials],
     ["loadWeather", loadWeather], ["setupScrollSpy", setupScrollSpy],
     ["setupUnitToggle", setupUnitToggle], ["setupLiveClock", setupLiveClock],

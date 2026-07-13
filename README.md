@@ -2,7 +2,7 @@
 
 **▶ Live site: [psurma.github.io/TubeRun](https://psurma.github.io/TubeRun/)**
 
-Website for **London Tube Run** — a free, social running club that runs the course of London Underground (and Overground / Elizabeth line) routes above ground, once a month (sometimes more). Also does river/canal, landmark and out-of-town adventure routes.
+Website for **London Tube Run** — a free, social running club that runs London's transport network above ground: Underground, Overground and Elizabeth lines once a month (sometimes more), plus the National Rail commuter lines, bus routes, and river/canal, park, landmark and out-of-town adventure routes.
 
 Plain HTML/CSS/JS. No build step.
 
@@ -29,7 +29,7 @@ Then open http://localhost:8000 (opening `index.html` via `file://` is blocked b
 - **Next run** card with live weather (Open-Meteo) and a Google Maps meeting-point link
 - **Plan** — station-to-station distance/time planner with run + walk times and a km/miles toggle
 - **Map** — tabbed viewer led by our own real geographic Leaflet map (next line lit up with running times), plus Running times, Walking times, Toilets, official Tube map, Overground and Rail connections
-- **Lines** — every Underground line ranked by length with run/walk times
+- **Lines** — every line ranked by length with run/walk times: Underground, Overground, Elizabeth and the ten National Rail commuter operators
 - **Schedule** — monthly runs, auto-dated to first Sundays, plus multi-day adventures
 - **Route ideas** — a library of group-friendly London routes, each traced on an interactive Leaflet map (tap a card to draw its route)
 - **Line collector** — gamified progress (both directions of every line)
@@ -59,9 +59,12 @@ The map viewer (`#network`) has several tabs:
 
 ### Data & attribution
 
-- `data/tube-network.json` — 18 lines / 425 stations with real coordinates, compiled from the [TfL Unified API](https://api.tfl.gov.uk) (open data). Drives station markers, interchange detection and running-time calculations.
-- `data/tube-lines.geojson` — real track geometry for all 18 lines (`MultiLineString` per line), drawn as the coloured line overlay on the Leaflet map.
+- `data/tube-network.json` — 18 TfL lines / 425 stations with real coordinates, compiled from the [TfL Unified API](https://api.tfl.gov.uk) (open data). Drives station markers, interchange detection and running-time calculations.
+- `data/nr-network.json` + `data/nr-lines.geojson` — the ten National Rail commuter operators (stations, branches and track geometry, clipped to the commuter belt), also from the TfL Unified API via `tools/generate-nr-lines.mjs`. Together the site covers 28 lines / ~780 stations.
+- `data/tube-lines.geojson` — real track geometry for the 18 TfL lines (`MultiLineString` per line), drawn as the coloured line overlay on the Leaflet map.
 - `data/station-toilets.json` — stations with confirmed toilets, from TfL StopPoint facility data.
+- `data/boroughs.json` — station/route → London borough tagging for the Borough bagger, from [ONS Open Geography](https://geoportal.statistics.gov.uk/) boundaries (OGL) via `tools/generate-boroughs.mjs`.
+- `data/route-pubs.json` — well-rated pubs near each curated route's ends, from the [Food Standards Agency API](https://ratings.food.gov.uk) (open data) via `tools/generate-pubs.mjs`.
 - Basemap tiles © [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors, © [CARTO](https://carto.com/attributions); Leaflet is BSD-2-licensed.
 - `data/schematic.json` — Beck-style schematic coordinates (seeded from [`d3-tube-map`](https://github.com/johnwalley/d3-tube-map) by John Walley, **MIT licence**); retained for reference, not currently shown.
 

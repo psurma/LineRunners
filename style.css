@@ -792,6 +792,31 @@ body.tm-map-active .tm-zoom, body.tm-map-active .tm-scrollhint { display: none; 
 .geo-modes { display: inline-flex; align-items: center; gap: 4px; margin-left: 8px; }
 .geo-mode { font: 600 12px Inter, sans-serif; border: 1px solid var(--line); background: #fff; color: var(--muted); padding: 2px 9px; border-radius: 20px; cursor: pointer; }
 .geo-mode.on { background: var(--tfl-blue); border-color: var(--tfl-blue); color: #fff; }
+/* ---------- Time machine section ---------- */
+.tm2-controls { display: flex; align-items: center; gap: 14px; margin-bottom: 6px; }
+.tm2-controls input { flex: 1; max-width: 520px; accent-color: var(--tfl-blue); }
+#tm2YearLbl { font-size: 26px; font-weight: 800; color: var(--tfl-blue); font-variant-numeric: tabular-nums; }
+.tm2-note { color: var(--muted); font-size: 14px; margin: 0 0 14px; min-height: 20px; }
+.tm2-layout { display: grid; gap: 18px; }
+@media (min-width: 900px) { .tm2-layout { grid-template-columns: minmax(0, 1fr) 340px; align-items: start; } }
+.tm2-map { height: 520px; border-radius: 16px; overflow: hidden; border: 1px solid var(--line); box-shadow: var(--shadow); background: #eef1f4; isolation: isolate; }
+.tm2-panel { background: var(--card); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow); padding: 16px 18px; max-height: 520px; overflow-y: auto; }
+.tm2-h { font-size: 15px; font-weight: 800; margin: 0 0 10px; }
+.tm2-lines { display: grid; gap: 8px; margin-bottom: 12px; }
+.tm2-line { display: flex; gap: 8px; font-size: 13.5px; line-height: 1.35; }
+.tm2-line i { flex: none; width: 10px; height: 10px; border-radius: 3px; margin-top: 3px; }
+.tm2-yr { color: var(--muted); margin-left: 4px; font-size: 12.5px; }
+.tm2-ext { display: block; color: var(--muted); font-size: 12px; }
+.tm2-soon { font-size: 12.5px; color: var(--muted); margin: 0 0 14px; }
+.tm2-events { list-style: none; padding: 0; margin: 0; display: grid; gap: 7px; font-size: 12.5px; color: #2b3140; }
+.tm2-events b { color: var(--tfl-blue); margin-right: 4px; }
+
+/* time machine: year scrubber under the map caption */
+.tm-year-row { display: flex; align-items: center; gap: 10px; margin-top: 10px; width: 100%; }
+.tm-year-row[hidden] { display: none; }
+.tm-year { flex: 1 1 160px; min-width: 120px; accent-color: var(--tfl-blue); }
+.tm-year-lbl { font-size: 15px; color: var(--tfl-blue); font-variant-numeric: tabular-nums; }
+.tm-year-note { font-size: 12.5px; color: var(--muted); flex: 2 1 220px; }
 
 /* running-times data view */
 .rt-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px; padding: 6px 4px 14px; border-bottom: 2px solid; margin-bottom: 6px; }
@@ -834,11 +859,12 @@ body.tm-map-active .tm-zoom, body.tm-map-active .tm-scrollhint { display: none; 
 }
 .route-card:hover { transform: translateY(-2px); box-shadow: 0 8px 22px rgba(0, 0, 0, 0.12); }
 .route-card:focus-visible { outline: 2px solid var(--tfl-blue); outline-offset: 2px; }
+.route-card .cr-times { font-size: 13px; gap: 4px 12px; margin-top: 2px; }
 .route-card.on { box-shadow: 0 0 0 2px var(--tfl-blue), var(--shadow); }
 .rc-actions { margin-top: 10px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.rc-reverse { display: none; font: 700 13px Inter, sans-serif; padding: 6px 13px; border-radius: 20px; border: 1px solid var(--tfl-blue); background: #fff; color: var(--tfl-blue); cursor: pointer; transition: all 0.12s; }
-.route-card.on .rc-reverse { display: inline-flex; align-items: center; gap: 5px; }
-.rc-reverse:hover { background: var(--tfl-blue); color: #fff; }
+.rc-reverse, .rc-share { display: none; font: 700 13px Inter, sans-serif; padding: 6px 13px; border-radius: 20px; border: 1px solid var(--tfl-blue); background: #fff; color: var(--tfl-blue); cursor: pointer; transition: all 0.12s; }
+.route-card.on .rc-reverse, .route-card.on .rc-share { display: inline-flex; align-items: center; gap: 5px; }
+.rc-reverse:hover, .rc-share:hover { background: var(--tfl-blue); color: #fff; }
 .rc-reverse.on { background: var(--tfl-blue); color: #fff; }
 .rc-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
 .rc-type { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; color: #fff; padding: 3px 10px; border-radius: 20px; }
@@ -1124,6 +1150,16 @@ body.map-fullwindow-open .site-header { display: none !important; }
 .lc-dist { margin: 18px 0 4px; font-size: 15px; color: var(--muted); }
 .lc-dist-big { font-size: 22px; font-weight: 800; color: var(--tfl-blue); }
 .lc-dist small { display: block; font-size: 13px; }
+/* run-log stats + what-next nudge */
+.lc-stats { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 8px 0 2px; font-size: 13.5px; color: var(--muted); }
+.lc-stat b { color: var(--tfl-blue); font-weight: 800; }
+.lc-next { margin: 10px 0 14px; font-size: 14.5px; color: #2b3140; }
+/* borough bagger */
+.borough-bagger { margin-top: 30px; }
+.borough-bagger[hidden] { display: none; }
+.bb-grid { display: flex; flex-wrap: wrap; gap: 7px; }
+.bb-chip { font: 600 12.5px Inter, sans-serif; color: #2b3140; background: #fff; border: 1px solid var(--line); border-radius: 999px; padding: 4px 11px; }
+.bb-chip.got { background: var(--tfl-blue); border-color: var(--tfl-blue); color: #fff; }
 .lc-badges-head { display: flex; align-items: baseline; gap: 12px; margin: 30px 0 6px; }
 .lc-badges-head h3 { font-size: 20px; font-weight: 800; }
 .lc-badges-count { font-size: 14px; font-weight: 700; color: var(--tfl-blue); }
