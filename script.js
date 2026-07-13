@@ -3088,7 +3088,7 @@
     metropolitan: 1863, "hammersmith-city": 1864, district: 1868, circle: 1884,
     northern: 1890, "waterloo-city": 1898, central: 1900, bakerloo: 1906,
     piccadilly: 1906, victoria: 1968, jubilee: 1979, elizabeth: 2022,
-    lioness: 1912, mildmay: 1850, windrush: 1869, weaver: 1840, suffragette: 1894, liberty: 1893,
+    lioness: 1912, mildmay: 1850, windrush: 1869, weaver: 1872, suffragette: 1894, liberty: 1893,
     southeastern: 1836, "south-western-railway": 1838, "great-western-railway": 1838,
     "greater-anglia": 1839, southern: 1841, "great-northern": 1850, c2c: 1854,
     thameslink: 1866, "chiltern-railways": 1899, "heathrow-express": 1998,
@@ -3107,7 +3107,10 @@
       1923: ["Brent Cross", "Hendon Central"],
       1924: ["Colindale", "Burnt Oak", "Edgware"],
       1926: ["Clapham South", "Tooting Bec", "Tooting Broadway", "Colliers Wood", "South Wimbledon", "Morden"],
-      1940: ["East Finchley", "Highgate", "Finchley Central", "West Finchley", "Woodside Park", "Totteridge & Whetstone", "High Barnet", "Mill Hill East"],
+      // High Barnet / Mill Hill branch: a GNR steam railway from 1867-72, tube from 1939-41
+      1867: ["East Finchley", "Finchley Central", "Mill Hill East", "Highgate"],
+      1872: ["Woodside Park", "Totteridge & Whetstone", "High Barnet"],
+      1933: ["West Finchley"],
       2021: ["Nine Elms", "Battersea Power Station"],
     },
     piccadilly: {
@@ -3147,8 +3150,8 @@
     },
     district: { 1932: ["Upney", "Becontree", "Dagenham Heathway"], 1935: ["Elm Park"] },
     windrush: { 1999: ["Canada Water"], 2010: ["Shoreditch High Street", "Hoxton", "Haggerston", "Dalston Junction"] },
-    weaver: { 1873: ["St James Street", "Wood Street", "Highams Park", "Chingford"], 1891: ["Southbury", "Turkey Street", "Theobalds Grove"] },
-    mildmay: { 1869: ["South Acton", "Acton Central", "Kew Gardens", "Gunnersbury", "Richmond"] },
+    weaver: { 1870: ["St James Street"], 1873: ["Wood Street", "Highams Park", "Chingford"], 1891: ["Southbury", "Turkey Street", "Theobalds Grove"] },
+    mildmay: { 1853: ["Acton Central"], 1869: ["Kew Gardens", "Gunnersbury", "Richmond"], 1880: ["South Acton"] },
   };
   // A station's opening year on a given line (falls back to the line year).
   let stnYearNorm = null; // lineId -> { normName: year }, built lazily
