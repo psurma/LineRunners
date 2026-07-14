@@ -19,6 +19,7 @@
   <meta name="twitter:title" content="Tube Run · Running London's transport network, above ground" />
   <meta name="twitter:description" content="A free, social London running club that traces the transport network above ground — one Tube line a month, plus National Rail lines, bus routes, river, canal and park runs." />
   <meta name="twitter:image" content="https://psurma.github.io/TubeRun/img/icon-512.png" />
+  <link rel="alternate" type="text/markdown" href="llms.txt" title="llms.txt — machine-readable guide for AI agents" />
   <link rel="manifest" href="site.webmanifest" />
   <meta name="theme-color" content="#f7f8fa" />
   <link rel="icon" href="img/favicon-32.png" sizes="32x32" type="image/png" />
@@ -28,10 +29,33 @@
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-title" content="Tube Run" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-  <link rel="stylesheet" href="vendor/fonts/fonts.css?v=255" />
+  <link rel="stylesheet" href="vendor/fonts/fonts.css?v=256" />
   <link rel="stylesheet" href="vendor/leaflet/leaflet.css" />
   <script src="vendor/leaflet/leaflet.js" defer></script>
-  <link rel="stylesheet" href="style.css?v=255" />
+  <link rel="stylesheet" href="style.css?v=256" />
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "SportsClub",
+        "name": "Tube Run",
+        "sport": "Running",
+        "url": "https://psurma.github.io/TubeRun/",
+        "logo": "https://psurma.github.io/TubeRun/img/icon-512.png",
+        "description": "A free, social London running club that runs the city's transport network above ground — one Tube line a month, plus National Rail lines, bus routes, disused railways, rivers, canals and parks.",
+        "areaServed": { "@type": "City", "name": "London", "sameAs": "https://en.wikipedia.org/wiki/London" },
+        "isAccessibleForFree": true
+      },
+      {
+        "@type": "WebSite",
+        "name": "Tube Run",
+        "url": "https://psurma.github.io/TubeRun/",
+        "about": { "@type": "Thing", "name": "Running London's transport network above ground" }
+      }
+    ]
+  }
+  </script>
 </head>
 <body>
   <header class="site-header">
@@ -447,6 +471,6 @@
     <p class="fine">Not affiliated with Transport for London. Roundel-inspired branding used with affection, not endorsement.</p>
   </footer>
 
-  <script src="script.js?v=255" defer></script>
+  <script src="script.js?v=256" defer></script>
 </body>
 </html>

@@ -1,4 +1,14 @@
+# Tube Run — all crawlers and AI agents welcome.
+#
+# Note: robots.txt is an origin-root protocol and this is a GitHub Pages
+# project site, so most crawlers actually consult
+# https://psurma.github.io/robots.txt. This file documents intent and takes
+# effect if the site ever moves to its own domain.
+
 User-agent: *
 Allow: /
 
 Sitemap: https://psurma.github.io/TubeRun/sitemap.xml
+
+# Machine-readable site guide for LLMs and agents:
+# https://psurma.github.io/TubeRun/llms.txt
