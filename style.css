@@ -1115,6 +1115,8 @@ tr.ls-open .ls-caret { transform: rotate(90deg); }
 /* Bus route runner */
 .busrun-controls { display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-end; margin-bottom: 18px; }
 .busrun-controls .field { min-width: 170px; }
+.busrun-controls .bus-place-field { flex: 1 1 300px; min-width: 260px; max-width: 520px; }
+.busrun-controls .bus-place-field input { width: 100%; }
 .busrun-controls #busPick { width: 100%; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; font: inherit; background: #fff; }
 .busrun-controls #busPick:focus { outline: none; border-color: var(--tfl-blue); box-shadow: 0 0 0 3px rgba(0, 25, 168, 0.12); }
 .busrun-controls #busGo { align-self: flex-end; }
