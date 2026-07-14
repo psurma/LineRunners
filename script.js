@@ -4624,9 +4624,26 @@
     return html + `</div>`;
   }
   // Distance/time summary + the tube-map strip for a routed journey.
+  // A→B cap (km, 0 = no limit) from the planner's Max distance slider —
+  // over-cap routes get a bail-out suggestion rather than a refusal.
+  let abMaxKm = (() => { try { const v = parseInt(localStorage.getItem("tuberun_abmax"), 10); return v >= 1 && v <= 42 ? v : 0; } catch (_) { return 0; } })();
+
   function journeyResultHtml(res, segments, graph) {
     const path = res.path, km = res.km, nodes = graph.nodes;
     const from = nodes[path[0]].name, to = nodes[path[path.length - 1]].name;
+    // Over the max-distance cap: name the last station within it as the bail-out.
+    let capNote = "";
+    if (abMaxKm > 0 && !res.loop && km > abMaxKm + 0.05) {
+      let cum = 0, bail = null, bailKm = 0;
+      for (let i = 1; i < path.length; i++) {
+        const a = nodes[path[i - 1]], b = nodes[path[i]];
+        cum += haversineKm([0, a.lat, a.lon], [0, b.lat, b.lon]) * ROAD_FACTOR;
+        if (cum <= abMaxKm) { bail = b.name; bailKm = cum; } else break;
+      }
+      capNote = bail && bail !== to
+        ? `<p class="jr-cap">Over your ${fmtKm(abMaxKm, 0)} cap — bail out at <b>${escapeHtml(bail)}</b> (${fmtKm(bailKm, 1)} in) and hop the train the rest of the way.</p>`
+        : `<p class="jr-cap">This one runs ${fmtKm(km, 1)} — over your ${fmtKm(abMaxKm, 0)} cap.</p>`;
+    }
     const changes = Math.max(0, segments.length - 1);
     const isOB = res.loop && res.retrace > 0.85;
     const head = res.loop
@@ -4643,6 +4660,7 @@
     return `
       ${head}
       <div class="cr-main"><span class="cr-km">${fmtKm(km, 1)}</span> <span class="jr-stops">${meta}</span></div>
+      ${capNote}
       ${timesRowHtml(km)}
       ${journeyStripHtml(segments, graph)}
       <div class="jr-elev" aria-live="polite"></div>
@@ -4716,20 +4734,38 @@
       }
       render(res);
     }
-    // Surprise route: a random connected pair, preferring a proper 5–25 km run.
+    // Max-distance cap: label sync, persistence, and a live re-render so the
+    // bail-out note appears or clears as the slider moves.
+    const maxEl = document.getElementById("abMax"), maxVal = document.getElementById("abMaxVal");
+    const syncMax = () => { if (maxVal) maxVal.textContent = abMaxKm ? fmtKm(abMaxKm, 0) : "any"; };
+    if (maxEl) {
+      maxEl.value = String(abMaxKm);
+      syncMax();
+      maxEl.addEventListener("input", () => {
+        abMaxKm = +maxEl.value;
+        try { localStorage.setItem("tuberun_abmax", String(abMaxKm)); } catch (_) { /* private mode */ }
+        syncMax();
+        if (last && !last.loop) render(last);
+      });
+    }
+
+    // Surprise route: a random connected pair, preferring a proper 5–25 km run
+    // (and always respecting the max-distance cap when one is set).
     function randomRoute() {
       if (!graph) { result.innerHTML = loadingHint; return; }
       const names = Object.values(graph.nodes).map((n) => n.name);
       if (names.length < 2) return;
       const pick = () => names[Math.floor(Math.random() * names.length)];
+      const cap = abMaxKm || 25;
       let best = null;
-      for (let i = 0; i < 40; i++) {
+      for (let i = 0; i < 60; i++) {
         const a = pick(), b = pick();
         if (a === b) continue;
         const res = shortestPath(graph, a, b, allowed);
         if (!res || res.path.length < 2) continue;
-        best = { a, b, res };
-        if (res.km >= 5 && res.km <= 25) break; // a decent run; otherwise keep looking
+        if (abMaxKm && res.km > abMaxKm) continue;
+        if (!best || res.km > best.res.km) best = { a, b, res }; // longest run inside the cap
+        if (res.km >= Math.min(5, cap) && res.km <= cap) break;
       }
       if (!best) return;
       fromEl.value = best.a; toEl.value = best.b;

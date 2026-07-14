@@ -28,10 +28,10 @@
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-title" content="Tube Run" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-  <link rel="stylesheet" href="vendor/fonts/fonts.css?v=246" />
+  <link rel="stylesheet" href="vendor/fonts/fonts.css?v=247" />
   <link rel="stylesheet" href="vendor/leaflet/leaflet.css" />
   <script src="vendor/leaflet/leaflet.js" defer></script>
-  <link rel="stylesheet" href="style.css?v=246" />
+  <link rel="stylesheet" href="style.css?v=247" />
 </head>
 <body>
   <header class="site-header">
@@ -218,6 +218,10 @@
         <div class="field">
           <label for="abTo">To</label>
           <input id="abTo" class="ab-input" list="abStations" placeholder="e.g. Hampstead Heath" autocomplete="off" />
+        </div>
+        <div class="field loop-slider ab-max">
+          <label for="abMax">Max distance: <b id="abMaxVal">any</b></label>
+          <input type="range" id="abMax" min="0" max="42" step="1" value="0" />
         </div>
         <button type="button" id="abGo" class="btn btn-primary">Find route</button>
         <button type="button" id="abRandom" class="btn ab-random" title="Surprise me with a random route">&#127922; Random</button>
@@ -435,6 +439,6 @@
     <p class="fine">Not affiliated with Transport for London. Roundel-inspired branding used with affection, not endorsement.</p>
   </footer>
 
-  <script src="script.js?v=246" defer></script>
+  <script src="script.js?v=247" defer></script>
 </body>
 </html>

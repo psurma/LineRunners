@@ -439,6 +439,11 @@ section { max-width: var(--max); margin: 0 auto; padding: clamp(48px, 8vw, 88px)
   border-radius: 1px;
   background: color-mix(in srgb, var(--line-col, #0019a8) 45%, #d7dae0);
 }
+/* A→B max-distance cap: slider + over-cap bail-out note */
+.ab-max { min-width: 190px; }
+.jr-cap { margin: 8px 0 0; padding: 6px 11px; border-radius: 8px; background: #fff4c2; color: #7a5c00; font-size: 13.5px; font-weight: 600; }
+.jr-cap b { color: #5c4400; }
+
 /* station strip under each line-by-line mini-map */
 .ls-strip { overflow-x: auto; margin-top: 12px; padding-bottom: 4px; }
 .ls-strip:empty { display: none; }
