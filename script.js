@@ -877,13 +877,23 @@
   let firstPick = true;
 
   // Interchange data for the carriage-style strip map: which tube lines meet at each stop.
-  let interchangeMap = null; // norm(station name) -> [{name, colour}]
+  let interchangeMap = null; // interKey(station name) -> [{name, colour}]
+  // National Rail termini carry a "London " prefix the tube names don't
+  // ("London Waterloo" vs "Waterloo"), and the King's Cross cluster goes by
+  // three names — canonicalise so the same place shares one interchange bucket.
+  const INTERCHANGE_ALIAS = {
+    kingscross: "kingscrossstpancras",
+    stpancrasinternational: "kingscrossstpancras",
+    stpancrasinternationalll: "kingscrossstpancras", // Thameslink's low-level platforms
+    newcrossell: "newcross", // Windrush's New Cross as named on the East London line
+  };
+  const interKey = (n) => { const k = norm(n).replace(/^london/, ""); return INTERCHANGE_ALIAS[k] || k; };
   function buildInterchangeMap(net) {
     const m = {};
     for (const id in net) {
       const ln = net[id];
       for (const sid in ln.stations) {
-        const k = norm(ln.stations[sid].n);
+        const k = interKey(ln.stations[sid].n);
         if (!m[k]) m[k] = [];
         if (!m[k].some((x) => x.name === ln.name)) m[k].push({ name: ln.name, colour: ln.colour, nr: !!ln.nr });
       }
@@ -935,9 +945,9 @@
     if (!line) return "";
     if (!nonTubeByNorm) {
       nonTubeByNorm = {};
-      for (const k in NON_TUBE_INTERCHANGES) nonTubeByNorm[norm(k)] = NON_TUBE_INTERCHANGES[k];
+      for (const k in NON_TUBE_INTERCHANGES) nonTubeByNorm[interKey(k)] = NON_TUBE_INTERCHANGES[k];
     }
-    const key = norm(name);
+    const key = interKey(name);
     const tube = interchangeMap ? (interchangeMap[key] || []).filter((x) => norm(x.name) !== norm(line)) : [];
     // Drop a hardcoded "<name> line" (e.g. "Elizabeth line") when the network already
     // supplies that line as a Tube interchange, so it isn't listed twice — and drop
