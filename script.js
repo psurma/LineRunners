@@ -3487,8 +3487,9 @@
       }
       const net = await loadNetwork().catch(() => null);
       let st = null;
+      let stId = null;
       if (net) outer: for (const id in net) for (const sid in net[id].stations) {
-        if (norm(net[id].stations[sid].n) === norm(name)) { st = net[id].stations[sid]; break outer; }
+        if (norm(net[id].stations[sid].n) === norm(name)) { st = net[id].stations[sid]; stId = sid; break outer; }
       }
       document.getElementById("network").scrollIntoView({ behavior: "smooth" });
       if (!st) return;
@@ -3498,7 +3499,7 @@
       if (!tmMap.map) return;
       tmMap.map.setView([st.lat, st.lon], Math.max(tmMap.map.getZoom(), 14), { animate: true });
       L.popup({ autoPan: false }).setLatLng([st.lat, st.lon])
-        .setContent(`<b>${escapeHtml(st.n)}</b>` + interchangeTags(st.n, "search")).openOn(tmMap.map);
+        .setContent(`<b>${escapeHtml(st.n)}</b>` + interchangeTags(st.n, "search") + `<div class="iso-row"><button type="button" class="iso-go" data-sid="${escapeHtml(stId)}">How far from here?</button></div>`).openOn(tmMap.map);
     };
     input.addEventListener("change", () => go());
     input.addEventListener("keydown", (e) => { if (e.key === "Enter") go(); });
@@ -4432,6 +4433,140 @@
       return arrivalWindow(Math.max(0, kmCum - seg.fromKm) * perKm, seg.start);
     }
 
+    // --- Run + ride reach (Chronotrains-style) ---------------------------
+    // From a tapped station: everywhere you can get in 30/60/90 minutes by
+    // running at the site pace and/or riding the network. Rough rail model:
+    // ~30 km/h tube, ~50 km/h National Rail (both incl. stops), 0.7 min
+    // dwell per hop, 4 min to board at the origin, 6 min to change between
+    // nearby stations. Each reachable station then contributes a running
+    // circle of whatever time remains, drawn to one canvas per band.
+    let isoGrp = null, isoCtl = null, isoAdj = null;
+    function clearIso() {
+      if (isoGrp) { isoGrp.remove(); isoGrp = null; }
+      if (isoCtl) { isoCtl.remove(); isoCtl = null; }
+    }
+    // One canvas, each band drawn solid to an offscreen buffer then composited
+    // once at the band's opacity — overlapping circles inside a band merge into
+    // a flat region instead of stacking towards solid navy.
+    const IsoLayer = L.Layer.extend({
+      initialize(bands) { this._bands = bands; },
+      onAdd(map) {
+        this._map = map;
+        this._canvas = L.DomUtil.create("canvas", "leaflet-layer");
+        this._canvas.style.pointerEvents = "none";
+        map.getPanes().overlayPane.appendChild(this._canvas);
+        map.on("move zoomend viewreset resize", this._redraw, this);
+        this._redraw();
+      },
+      onRemove(map) {
+        map.off("move zoomend viewreset resize", this._redraw, this);
+        this._canvas.remove();
+      },
+      _redraw() {
+        const map = this._map, size = map.getSize();
+        this._canvas.width = size.x; this._canvas.height = size.y;
+        L.DomUtil.setPosition(this._canvas, map.containerPointToLayerPoint([0, 0]));
+        const ctx = this._canvas.getContext("2d");
+        const mpp = 40075016.686 * Math.abs(Math.cos(map.getCenter().lat * Math.PI / 180)) / (256 * Math.pow(2, map.getZoom()));
+        const off = document.createElement("canvas");
+        off.width = size.x; off.height = size.y;
+        const octx = off.getContext("2d");
+        octx.fillStyle = "#1c3f94";
+        for (const band of this._bands) {
+          octx.clearRect(0, 0, size.x, size.y);
+          for (const c of band.list) {
+            const p = map.latLngToContainerPoint([c.lat, c.lon]);
+            const r = c.radM / mpp;
+            if (p.x < -r || p.y < -r || p.x > size.x + r || p.y > size.y + r) continue;
+            octx.beginPath();
+            octx.arc(p.x, p.y, r, 0, 6.2832);
+            octx.fill();
+          }
+          ctx.globalAlpha = band.op;
+          ctx.drawImage(off, 0, 0);
+        }
+        ctx.globalAlpha = 1;
+      },
+    });
+    function isoGraph() {
+      if (isoAdj) return isoAdj;
+      const adj = {};
+      const add = (a, b, min) => { (adj[a] = adj[a] || []).push({ to: b, min }); (adj[b] = adj[b] || []).push({ to: a, min }); };
+      for (const id in net) {
+        const ln = net[id], speed = ln.nr ? 50 : 30;
+        for (const br of ln.branches || []) for (let i = 1; i < br.length; i++) {
+          const A = ln.stations[br[i - 1]], B = ln.stations[br[i]];
+          if (A && B) add(br[i - 1], br[i], (haversineKm([0, A.lat, A.lon], [0, B.lat, B.lon]) * 1.2 / speed) * 60 + 0.7);
+        }
+      }
+      // Out-of-station interchanges: distinct ids within 250 m of each other
+      // (tube Victoria <-> NR London Victoria and friends).
+      const sids = Object.keys(coordById);
+      for (let i = 0; i < sids.length; i++) {
+        const A = coordById[sids[i]];
+        for (let j = i + 1; j < sids.length; j++) {
+          const B = coordById[sids[j]];
+          if (Math.abs(A.lat - B.lat) > 0.004 || Math.abs(A.lon - B.lon) > 0.006) continue;
+          if (haversineKm([0, A.lat, A.lon], [0, B.lat, B.lon]) < 0.25) add(sids[i], sids[j], 6);
+        }
+      }
+      isoAdj = adj;
+      return adj;
+    }
+    function isoReach(sid0) {
+      const adj = isoGraph();
+      const dist = { [sid0]: 0 };
+      const done = new Set();
+      for (;;) {
+        let u = null, best = Infinity;
+        for (const k in dist) if (!done.has(k) && dist[k] < best) { best = dist[k]; u = k; }
+        if (u === null) break;
+        done.add(u);
+        const wait = u === sid0 ? 4 : 0;
+        for (const e of adj[u] || []) {
+          const nd = dist[u] + e.min + wait;
+          if (nd < (dist[e.to] ?? Infinity)) dist[e.to] = nd;
+        }
+      }
+      return dist;
+    }
+    function showReach(sid) {
+      clearIso();
+      const s0 = coordById[sid];
+      if (!s0) return;
+      map.closePopup();
+      const dist = isoReach(sid);
+      const paceCrow = rtPace * ROAD_FACTOR; // min per crow-fly km on real streets
+      const bands = [{ min: 90, op: 0.12, list: [] }, { min: 60, op: 0.14, list: [] }, { min: 30, op: 0.18, list: [] }];
+      for (const band of bands) {
+        for (const sid2 in coordById) {
+          const t = sid2 === sid ? 0 : dist[sid2];
+          if (t === undefined || (sidYear[sid2] || 0) > tmYear) continue;
+          const rem = band.min - t;
+          if (rem < 3) continue;
+          band.list.push({ lat: coordById[sid2].lat, lon: coordById[sid2].lon, radM: (rem / paceCrow) * 1000 });
+        }
+      }
+      isoGrp = new IsoLayer(bands);
+      isoGrp.addTo(map);
+      isoCtl = L.control({ position: "topleft" });
+      isoCtl.onAdd = () => {
+        const d = L.DomUtil.create("div", "iso-legend");
+        d.innerHTML = `<b>Run + ride from ${escapeHtml(s0.n)}</b>
+          <span class="iso-bands"><i style="opacity:.9"></i>30 min <i style="opacity:.55"></i>60 min <i style="opacity:.3"></i>90 min</span>
+          <span class="iso-note">running ~${fmtTime(rtPace)}/km, rough train times</span>
+          <button type="button" class="iso-x" aria-label="Clear the reach shading">&times;</button>`;
+        L.DomEvent.disableClickPropagation(d);
+        d.querySelector(".iso-x").addEventListener("click", clearIso);
+        return d;
+      };
+      isoCtl.addTo(map);
+    }
+    map.getContainer().addEventListener("click", (e) => {
+      const b = e.target.closest(".iso-go");
+      if (b) showReach(b.dataset.sid);
+    });
+
     let stationGrp = null, toiletGrp = null, waterGrp = null;
     function draw() {
       if (stationGrp) map.removeLayer(stationGrp);
@@ -4455,6 +4590,11 @@
           const t = onHi && geoTimeMode !== "off" ? `${escapeHtml(s.n)} · ${fmtTime(mins)} · ${geoDistStr(km[sid])} · group here ~${etaWindow(km[sid], perKm)}` : escapeHtml(s.n);
           m.bindTooltip(t, { direction: "top", className: "tm-hover-label" });
         }
+        m.on("click", () => {
+          L.popup({ offset: [0, -2], autoPan: false }).setLatLng([s.lat, s.lon])
+            .setContent(`<b>${escapeHtml(s.n)}</b>${interchangeTags(s.n, "search")}<div class="iso-row"><button type="button" class="iso-go" data-sid="${escapeHtml(sid)}">How far from here?</button></div>`)
+            .openOn(map);
+        });
         stationGrp.addLayer(m);
       }
       stationGrp.addTo(map);

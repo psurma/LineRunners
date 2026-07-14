@@ -46,9 +46,8 @@ within sections is roughly impact-per-effort.
 - **Printable route cards** (steal: Dutch Railways'
   [NS Wandelingen](https://www.ns.nl/dagje-uit/wandelen) packaging) — one print-friendly
   card per run/journey: start, finish, distance, escape points, pubs, toilets, GPX QR code.
-- **Run isochrones** (steal: [Chronotrains](https://www.chronotrains.com/)) — hover a
-  station: shade everywhere reachable on foot in 30/60/90 min using our pace model and
-  walk-times data.
+- ~~**Run isochrones**~~ (steal: [Chronotrains](https://www.chronotrains.com/)) — SHIPPED:
+  tap a station on the Map, "How far from here?" shades run + ride reach at 30/60/90 min.
 - **New-ground scoring** (steal: [Wandrer](https://wandrer.earth/)) — only km on paths never
   run before count; monthly new-km totals.
 - **Explorer tiles** (steal: [VeloViewer Max Square](https://blog.veloviewer.com/veloviewer-explorer-tiles-global-heatmap/),
