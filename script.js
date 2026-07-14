@@ -3482,6 +3482,14 @@
       if (!el) return;
       const dx = e.clientX - startX;
       if (!dragged && Math.abs(dx) < 5) return;
+      if (!dragged) {
+        // A text selection may have started in the pre-threshold pixels and
+        // would grow across the page as the drag continues — clear it and
+        // switch off selection everywhere until the pointer is released.
+        const sel = getSelection();
+        if (sel) sel.removeAllRanges();
+        document.body.classList.add("strip-drag");
+      }
       dragged = true;
       el.classList.add("strip-dragging");
       el.scrollLeft = startLeft - dx;
@@ -3489,6 +3497,7 @@
     const end = () => {
       if (!el) return;
       el.classList.remove("strip-dragging");
+      document.body.classList.remove("strip-drag");
       el = null;
       if (dragged) { justDragged = true; setTimeout(() => { justDragged = false; }, 80); }
     };

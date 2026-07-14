@@ -477,6 +477,7 @@ section { max-width: var(--max); margin: 0 auto; padding: clamp(48px, 8vw, 88px)
 .ls-strip::-webkit-scrollbar-track, .route-strip::-webkit-scrollbar-track, .line-diagram::-webkit-scrollbar-track { background: transparent; }
 .ls-strip, .route-strip, .line-diagram { cursor: grab; }
 .strip-dragging { cursor: grabbing; user-select: none; }
+body.strip-drag { user-select: none; -webkit-user-select: none; }
 .stn-tag { cursor: pointer; }
 
 /* access-point strip under the routes map, styled like the trailside sign */
