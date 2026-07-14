@@ -2714,6 +2714,32 @@
     });
     return options.length ? options : null;
   }
+  // National Rail lines don't need hand-curated variants: every branch in the
+  // network data is already a complete end-to-end service pattern, and
+  // data/nr-branch-routes.json carries a pavement polyline for each non-main
+  // branch (aligned by the same skip rule the generator uses). The main route
+  // leads, drawn from its GPX; one direction each — the ⇄ Reverse button flips.
+  async function buildNrBranchOptions(net, id) {
+    const ln = net[id];
+    if (!ln || !ln.nr || !ln.route || !(ln.branches || []).length) return null;
+    const toWp = (b) => b.map((sid) => { const s = ln.stations[sid]; return s ? [s.n, s.lat, s.lon] : null; }).filter(Boolean);
+    let geo = [];
+    try { geo = (await loadNrBranches())[id] || []; } catch (_) { /* fall back to station hops */ }
+    const options = [];
+    const mainWp = toWp(ln.route);
+    if (mainWp.length > 1) options.push({ label: `${mainWp[0][0]} → ${mainWp[mainWp.length - 1][0]} · main route`, wp: mainWp, pair: "", gpx: true });
+    const mainKey = ln.route.join("|"), mainRev = [...ln.route].reverse().join("|");
+    let gi = 0;
+    for (const b of ln.branches) {
+      if (b.join("|") === mainKey || b.join("|") === mainRev || b.length < 2) continue;
+      const wp = toWp(b);
+      if (wp.length < 2) continue;
+      const route = geo[gi] && geo[gi].length > 1 ? geo[gi] : null;
+      gi++;
+      options.push({ label: `${wp[0][0]} → ${wp[wp.length - 1][0]}`, wp, pair: "", route });
+    }
+    return options.length > 1 ? options : null;
+  }
   // Build <option>/<optgroup> markup, grouping consecutive entries by groupOf(e).
   function groupedOptionsHtml(entries, groupOf, selectedIdx) {
     let html = "", cur = null, open = false;
@@ -2834,7 +2860,7 @@
     // Lines with multiple paths get a dropdown — the default route plus every
     // variant both ways; picking one redraws the map and updates the row's figures.
     const vroutes = await loadVariantRoutes();
-    const options = buildVariantOptions(net, id, vroutes[id]);
+    const options = buildVariantOptions(net, id, vroutes[id]) || (net[id].nr ? await buildNrBranchOptions(net, id) : null);
     const detailInner = mapDiv.parentNode;
     const reverseBtn = detailInner.querySelector(".ls-reverse");
     const gpxLink = detailInner.querySelector(".ls-gpx");
