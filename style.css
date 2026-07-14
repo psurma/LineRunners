@@ -17,6 +17,10 @@
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
 html { scroll-behavior: smooth; scroll-padding-top: 80px; }
+/* While typing in a field (e.g. the header search), smooth scrolling must be
+   off — Chrome's caret-into-view targets a sticky input's layout position at
+   the top of the document and nudges the page up on every keystroke. */
+html:focus-within { scroll-behavior: auto; }
 
 body {
   font-family: "Inter", system-ui, -apple-system, sans-serif;
@@ -30,7 +34,12 @@ a { color: inherit; text-decoration: none; }
 
 /* ---------- Header ---------- */
 .site-header {
-  position: sticky;
+  /* fixed, not sticky: a sticky header's inputs keep their layout position at
+     the document top, so typing in them makes Chrome scroll the page toward
+     it. Fixed positioning is viewport-relative — the bug class can't exist. */
+  position: fixed;
+  left: 0;
+  right: 0;
   top: 0;
   z-index: 20;
   display: flex;
@@ -914,7 +923,7 @@ body.tm-map-active .tm-zoom, body.tm-map-active .tm-scrollhint { display: none; 
 @media (min-width: 861px) {
   .route-layout { grid-template-columns: minmax(0, 1fr) minmax(340px, 460px); align-items: start; }
   #routeList { grid-column: 1; grid-row: 1; }
-  .route-side { grid-column: 2; grid-row: 1; position: sticky; top: 80px; }
+  .route-side { grid-column: 2; grid-row: 1; position: sticky; top: calc(var(--hdr-h, 68px) + 12px); }
   #routeMap { height: min(64vh, 560px); }
 }
 .route-card {

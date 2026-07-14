@@ -3345,28 +3345,91 @@
   // line expands its Lines row, a route selects its card, a station centres
   // the geographic map on it. The index respects the Tube / All lines mode.
   function setupSiteSearch() {
+    // The fixed header no longer occupies flow space — pad the page to match
+    // its real (possibly wrapped) height, and keep anchor scrolling clear of it.
+    const hdr = document.querySelector(".site-header");
+    const padForHeader = () => {
+      if (!hdr) return;
+      const h = hdr.offsetHeight;
+      document.body.style.paddingTop = h + "px";
+      document.documentElement.style.scrollPaddingTop = (h + 12) + "px";
+      document.documentElement.style.setProperty("--hdr-h", h + "px");
+    };
+    padForHeader();
+    window.addEventListener("resize", padForHeader);
+
     const input = document.getElementById("siteSearch"), dl = document.getElementById("siteSearchList");
     if (!input || !dl) return;
-    input.addEventListener("focus", async () => {
+    // The index always covers the FULL network — searching for Liphook while
+    // in Tube mode finds it, switches to All lines, and resumes the search.
+    const buildIndex = async () => {
       const net = await loadNetwork().catch(() => null);
-      if (!net || dl.childElementCount) return;
-      const opts = [];
-      for (const id in net) opts.push(`${net[id].name} (line)`);
-      const seen = new Set();
-      for (const id in net) for (const sid in net[id].stations) {
-        const n = net[id].stations[sid].n, k = norm(n);
-        if (!seen.has(k)) { seen.add(k); opts.push(`${n} (station)`); }
-      }
-      ROUTES.forEach((r) => { if (NET_MODE === "all" || !r.far) opts.push(`${r.name} (route)`); });
+      if (!net || searchIndex) return;
+      const extra = NET_MODE === "all" ? {} : await vfetch("data/nr-network.json").then((r) => (r.ok ? r.json() : {})).catch(() => ({}));
+      const opts = [], seen = new Set();
+      const add = (src) => {
+        for (const id in src) {
+          opts.push(`${src[id].name} (line)`);
+          for (const sid in src[id].stations) {
+            const n = src[id].stations[sid].n, k = norm(n);
+            if (!seen.has(k)) { seen.add(k); opts.push(`${n} (station)`); }
+          }
+        }
+      };
+      add(net); add(extra);
+      ROUTES.forEach((r) => opts.push(`${r.name} (route)`));
       opts.sort((a, b) => a.localeCompare(b));
-      dl.innerHTML = opts.map((o) => `<option value="${escapeHtml(o)}"></option>`).join("");
-    }, { once: true });
-    const go = async () => {
-      const m = /^(.+) \((line|station|route)\)$/.exec(input.value.trim());
+      searchIndex = [...new Set(opts)];
+    };
+    // Only ever render a dozen suggestions — a 400-option datalist makes
+    // Chrome re-anchor the page on every keystroke (the creeping-scroll bug).
+    let searchIndex = null;
+    const suggest = () => {
+      if (!searchIndex) return;
+      const q = input.value.trim().toLowerCase();
+      const hits = q.length < 2 ? [] : searchIndex.filter((o) => o.toLowerCase().includes(q)).slice(0, 12);
+      dl.innerHTML = hits.map((o) => `<option value="${escapeHtml(o)}"></option>`).join("");
+    };
+    input.addEventListener("focus", () => buildIndex().then(suggest), { once: true });
+    input.addEventListener("input", suggest);
+    // Chrome scrolls the page toward a sticky input's document position on
+    // focus and after every keystroke (asynchronously, so a post-input restore
+    // loses the race). Capture the position before each key, and revert any
+    // scroll that lands within a beat of it while the search has focus.
+    let lockY = null, lastKey = 0;
+    const arm = () => { lockY = scrollY; lastKey = performance.now(); };
+    input.addEventListener("pointerdown", arm);
+    input.addEventListener("keydown", arm);
+    input.addEventListener("focus", () => { lastKey = performance.now(); if (lockY == null) lockY = scrollY; });
+    window.addEventListener("scroll", () => {
+      if (document.activeElement !== input || lockY == null) return;
+      if (performance.now() - lastKey < 250 && Math.abs(scrollY - lockY) > 1 && Math.abs(scrollY - lockY) < 400) {
+        window.scrollTo({ top: lockY, behavior: "instant" });
+      }
+    }, { passive: true });
+    input.addEventListener("blur", () => { lockY = null; });
+    const go = async (forced) => {
+      const m = /^(.+) \((line|station|route)\)$/.exec((forced || input.value).trim());
       if (!m) return;
       const [, name, kind] = m;
       input.value = "";
       input.blur();
+      // Not in the current (Tube-mode) network but real? Switch to All lines
+      // and finish the search after the reload.
+      if (NET_MODE !== "all") {
+        const net = await loadNetwork().catch(() => null);
+        const inNet = net && (kind === "route"
+          ? ROUTES.some((r) => r.name === name && !r.far)
+          : Object.keys(net).some((id) => (kind === "line" ? net[id].name === name : Object.values(net[id].stations).some((s) => norm(s.n) === norm(name)))));
+        if (!inNet) {
+          try {
+            sessionStorage.setItem("tuberun_pending_search", `${name} (${kind})`);
+            localStorage.setItem("tuberun_netmode", "all");
+          } catch (_) { /* private mode */ }
+          location.reload();
+          return;
+        }
+      }
       if (kind === "route") {
         const card = [...document.querySelectorAll("#routeList .route-card")].find((c) => c.querySelector("h3").textContent === name);
         if (card) { card.scrollIntoView({ behavior: "smooth", block: "center" }); card.click(); }
@@ -3384,14 +3447,21 @@
         if (norm(net[id].stations[sid].n) === norm(name)) { st = net[id].stations[sid]; break outer; }
       }
       document.getElementById("network").scrollIntoView({ behavior: "smooth" });
-      if (st && tmMap.map) {
-        tmMap.map.setView([st.lat, st.lon], Math.max(tmMap.map.getZoom(), 14), { animate: true });
-        L.popup({ autoPan: false }).setLatLng([st.lat, st.lon])
-          .setContent(`<b>${escapeHtml(st.n)}</b>` + interchangeTags(st.n, "search")).openOn(tmMap.map);
-      }
+      if (!st) return;
+      // The geo map is created lazily when the section scrolls into view —
+      // which the line above just triggered. Wait for it before centring.
+      for (let i = 0; i < 30 && !tmMap.map; i++) await new Promise((r) => setTimeout(r, 100));
+      if (!tmMap.map) return;
+      tmMap.map.setView([st.lat, st.lon], Math.max(tmMap.map.getZoom(), 14), { animate: true });
+      L.popup({ autoPan: false }).setLatLng([st.lat, st.lon])
+        .setContent(`<b>${escapeHtml(st.n)}</b>` + interchangeTags(st.n, "search")).openOn(tmMap.map);
     };
-    input.addEventListener("change", go);
+    input.addEventListener("change", () => go());
     input.addEventListener("keydown", (e) => { if (e.key === "Enter") go(); });
+    // A search that switched modes resumes here, once the network is in.
+    let pending = null;
+    try { pending = sessionStorage.getItem("tuberun_pending_search"); sessionStorage.removeItem("tuberun_pending_search"); } catch (_) { /* private mode */ }
+    if (pending) loadNetwork().catch(() => null).then(() => setTimeout(() => go(pending), 900));
   }
 
   let netPromise = null; // memoise the in-flight fetch so parallel callers share one request
