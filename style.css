@@ -419,7 +419,26 @@ section { max-width: var(--max); margin: 0 auto; padding: clamp(48px, 8vw, 88px)
   pointer-events: none;
   white-space: nowrap;
 }
-.strip-total { margin-top: 12px; font-size: 12.5px; font-weight: 700; color: var(--muted); position: sticky; left: 0; width: max-content; }
+/* end-to-end total: centred ruler, sticky so it stays centred while the track scrolls */
+.strip-total {
+  margin-top: 12px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--muted);
+  position: sticky;
+  left: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  white-space: nowrap;
+}
+.strip-total::before, .strip-total::after {
+  content: "";
+  flex: 1;
+  height: 2px;
+  border-radius: 1px;
+  background: color-mix(in srgb, var(--line-col, #0019a8) 45%, #d7dae0);
+}
 /* station strip under each line-by-line mini-map */
 .ls-strip { overflow-x: auto; margin-top: 12px; padding-bottom: 4px; }
 .ls-strip:empty { display: none; }
