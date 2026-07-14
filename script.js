@@ -2748,17 +2748,16 @@
     });
     return options.length ? options : null;
   }
-  // National Rail lines don't need hand-curated variants: every branch in the
-  // network data is already a complete end-to-end service pattern, and
-  // data/nr-branch-routes.json carries a pavement polyline for each non-main
-  // branch (aligned by the same skip rule the generator uses). The main route
-  // leads, drawn from its GPX; one direction each — the ⇄ Reverse button flips.
-  async function buildNrBranchOptions(net, id) {
+  // Lines whose branches are already complete end-to-end patterns (every
+  // National Rail line, plus the DLR) don't need hand-curated variants: the
+  // caller passes the per-non-main-branch pavement polylines (geo, aligned by
+  // the same skip rule the generators use) and this turns each branch into a
+  // picker option. The main route leads, drawn from its GPX; one direction each
+  // — the ⇄ Reverse button flips.
+  function buildBranchOptions(net, id, geo = []) {
     const ln = net[id];
-    if (!ln || !ln.nr || !ln.route || !(ln.branches || []).length) return null;
+    if (!ln || !ln.route || !(ln.branches || []).length) return null;
     const toWp = (b) => b.map((sid) => { const s = ln.stations[sid]; return s ? [s.n, s.lat, s.lon] : null; }).filter(Boolean);
-    let geo = [];
-    try { geo = (await loadNrBranches())[id] || []; } catch (_) { /* fall back to station hops */ }
     const options = [];
     const mainWp = toWp(ln.route);
     if (mainWp.length > 1) options.push({ label: `${mainWp[0][0]} → ${mainWp[mainWp.length - 1][0]} · main route`, wp: mainWp, pair: "", gpx: true });
@@ -2897,7 +2896,15 @@
     // Lines with multiple paths get a dropdown — the default route plus every
     // variant both ways; picking one redraws the map and updates the row's figures.
     const vroutes = await loadVariantRoutes();
-    const options = buildVariantOptions(net, id, vroutes[id]) || (net[id].nr ? await buildNrBranchOptions(net, id) : null);
+    // Curated variants (District, Northern, …) win; otherwise a line with more
+    // than one branch gets a generated picker — but only when we actually hold
+    // pavement geometry for its branches (NR lines, and the DLR). This keeps
+    // straight-hop-only lines (e.g. the Circle) pickerless rather than ugly.
+    let options = buildVariantOptions(net, id, vroutes[id]);
+    if (!options && (net[id].branches || []).length > 1) {
+      const geo = net[id].nr ? (await loadNrBranches())[id] : (await loadTubeBranches())[id];
+      if (geo || net[id].nr) options = buildBranchOptions(net, id, geo || []);
+    }
     // A pill click may have asked to focus a specific station — start on the
     // first option (branch/variant) whose stops include it, not the main route.
     let initIdx = 0;
@@ -4958,13 +4965,21 @@
     if (!nrBranchPromise) nrBranchPromise = vfetch("data/nr-branch-routes.json").then((r) => (r.ok ? r.json() : {})).catch(() => ({}));
     return nrBranchPromise;
   }
+  // Pavement geometry for tube-network lines whose secondary branches need it —
+  // currently the DLR's Beckton/Woolwich arms and Bank/Tower Gateway spurs (its
+  // main branch lives in routes/dlr.gpx). Same shape as the NR branch file.
+  let tubeBranchPromise = null;
+  function loadTubeBranches() {
+    if (!tubeBranchPromise) tubeBranchPromise = vfetch("data/tube-branch-routes.json").then((r) => (r.ok ? r.json() : {})).catch(() => ({}));
+    return tubeBranchPromise;
+  }
   // Stitch a leg's real pavement hop by hop from every track we hold for the
-  // line: its main-route GPX, its routed NR branches, and its tube variants.
+  // line: its main-route GPX, its routed branches (NR + tube), and its variants.
   async function segmentPavement(segNodes, slug, nodes) {
     const coords = segNodes.map((k) => [nodes[k].lat, nodes[k].lon]);
     const segs = GPX_LINES.has(slug) ? await loadRouteGpx(slug) : null;
-    const [branches, variants] = await Promise.all([loadNrBranches(), loadVariantRoutes()]);
-    const tracks = [...(segs || []), ...(branches[slug] || []), ...((variants[slug] || []).filter((v) => v && v.length > 1))];
+    const [branches, tubeBranches, variants] = await Promise.all([loadNrBranches(), loadTubeBranches(), loadVariantRoutes()]);
+    const tracks = [...(segs || []), ...(branches[slug] || []), ...(tubeBranches[slug] || []), ...((variants[slug] || []).filter((v) => v && v.length > 1))];
     if (!tracks.length) return coords;
     const out = [];
     for (let i = 0; i < coords.length - 1; i++) {
