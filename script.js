@@ -2858,6 +2858,9 @@
     [1, 2, 3, 4, 5].forEach((i, k) => { if (cells[i]) cells[i].textContent = tr._origStats[k]; });
     tr._origStats = null;
   }
+  // Station to auto-focus when a line detail next opens (set by a pill click),
+  // consumed once by lineRouteMap to pick the branch/variant containing it.
+  let lineDetailFocus = null;
   async function lineRouteMap(mapDiv, name, tr) {
     if (!mapDiv) return;
     if (typeof L === "undefined") { mapDiv.innerHTML = '<p class="diagram-empty">The map couldn\'t load.</p>'; return; }
@@ -2871,6 +2874,15 @@
     // variant both ways; picking one redraws the map and updates the row's figures.
     const vroutes = await loadVariantRoutes();
     const options = buildVariantOptions(net, id, vroutes[id]) || (net[id].nr ? await buildNrBranchOptions(net, id) : null);
+    // A pill click may have asked to focus a specific station — start on the
+    // first option (branch/variant) whose stops include it, not the main route.
+    let initIdx = 0;
+    if (lineDetailFocus && options) {
+      const fk = norm(lineDetailFocus);
+      const fi = options.findIndex((o) => o.wp && o.wp.some((p) => norm(p[0]) === fk));
+      if (fi >= 0) initIdx = fi;
+    }
+    lineDetailFocus = null;
     const detailInner = mapDiv.parentNode;
     const reverseBtn = detailInner.querySelector(".ls-reverse");
     const gpxLink = detailInner.querySelector(".ls-gpx");
@@ -2880,7 +2892,7 @@
       const sel = document.createElement("select");
       sel.className = "ls-variant";
       sel.setAttribute("aria-label", "Choose a route and direction for the " + name + " line");
-      sel.innerHTML = groupedOptionsHtml(options, (o) => o.pair, 0);
+      sel.innerHTML = groupedOptionsHtml(options, (o) => o.pair, initIdx);
       sel.addEventListener("change", () => { setReversed(false); drawVariant(+sel.value); syncGpxDir(); });
       mapDiv.parentNode.insertBefore(sel, mapDiv);
     }
@@ -2972,7 +2984,7 @@
       }
     }
     if (reverseBtn) reverseBtn.addEventListener("click", () => { setReversed(!reversed); drawVariant(curIdx); syncGpxDir(); });
-    await drawVariant(0);
+    await drawVariant(initIdx);
     setTimeout(() => { if (lsMap === map) map.invalidateSize(); }, 60);
   }
 
@@ -3570,6 +3582,15 @@
       if (!btn) return; // pill names something without a Lines row (e.g. Tramlink)
       e.preventDefault();
       e.stopPropagation();
+      // The pill sits on a station (a strip stop, or a map popup) that may be on
+      // a branch rather than the line's main route — carry that station through
+      // so the opened line detail selects the branch containing it (e.g. clicking
+      // "South Western Railway" on Liphook opens the Portsmouth Direct branch).
+      const stnEl = tag.closest(".stn"), popupEl = tag.closest(".leaflet-popup-content");
+      lineDetailFocus = stnEl ? (stnEl.querySelector(".stn-name") || {}).textContent
+        : popupEl ? (popupEl.querySelector("b") || {}).textContent : null;
+      const wasOpen = btn.getAttribute("aria-expanded") === "true";
+      if (wasOpen && lineDetailFocus) btn.click(); // collapse so the reopen rebuilds with the focused branch
       if (btn.getAttribute("aria-expanded") !== "true") btn.click();
       // Expanding is an accordion: the source row's tall detail collapses
       // (shifting the target when it sat above) and the new detail's map,
