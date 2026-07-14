@@ -3516,7 +3516,11 @@
       e.preventDefault();
       e.stopPropagation();
       if (btn.getAttribute("aria-expanded") !== "true") btn.click();
-      btn.closest("tr").scrollIntoView({ behavior: "smooth", block: "center" });
+      // Scroll only after the detail row has rendered (expanding shifts the
+      // layout mid-scroll otherwise), and pin the line's row to the top so
+      // the whole detail is on screen below it.
+      const tr = btn.closest("tr");
+      setTimeout(() => tr.scrollIntoView({ behavior: "smooth", block: "start" }), 400);
     }, true);
   }
 
