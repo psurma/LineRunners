@@ -1327,7 +1327,7 @@
   // Downloadable pavement GPX per Tube line (generated into routes/<slug>.gpx and
   // also used to draw the maps). Accepts a line slug (network id) or a line name.
   const GPX_LINES = new Set(["bakerloo", "central", "circle", "district", "hammersmith-city", "jubilee", "metropolitan", "northern", "piccadilly", "victoria", "waterloo-city",
-    "lioness", "mildmay", "windrush", "weaver", "suffragette", "liberty", "elizabeth",
+    "lioness", "mildmay", "windrush", "weaver", "suffragette", "liberty", "elizabeth", "dlr",
     // National Rail (tools/generate-nr-routes.mjs — main branch, pavement-routed)
     "chiltern-railways", "thameslink", "c2c", "great-northern", "greater-anglia",
     "great-western-railway", "heathrow-express", "southeastern", "southern", "south-western-railway"]);
@@ -2541,7 +2541,11 @@
   // stations inside our commuter-belt clip).
   let NR_STATS = null, nrStatsKicked = false;
   function computeNrStats(net) {
-    return Object.keys(net).filter((id) => net[id].nr).map((id) => {
+    // Every network line not in the hardcoded tube LINE_STATS above — the
+    // National Rail lines and the DLR — gets its stats, colour and collector
+    // entry computed here from the data.
+    const hardcoded = new Set(LINE_STATS.map((s) => s[0]));
+    return Object.keys(net).filter((id) => !hardcoded.has(net[id].name)).map((id) => {
       const ln = net[id];
       let best = 0;
       for (const b of ln.branches || []) {
@@ -3243,7 +3247,7 @@
   const HERITAGE_YEAR = {
     metropolitan: 1863, "hammersmith-city": 1864, district: 1868, circle: 1884,
     northern: 1890, "waterloo-city": 1898, central: 1900, bakerloo: 1906,
-    piccadilly: 1906, victoria: 1968, jubilee: 1979, elizabeth: 2022,
+    piccadilly: 1906, victoria: 1968, jubilee: 1979, elizabeth: 2022, dlr: 1987,
     lioness: 1912, mildmay: 1850, windrush: 1869, weaver: 1872, suffragette: 1894, liberty: 1893,
     southeastern: 1836, "south-western-railway": 1838, "great-western-railway": 1838,
     "greater-anglia": 1839, southern: 1841, "great-northern": 1850, c2c: 1854,
