@@ -20,7 +20,10 @@ import { dirname, join } from "node:path";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const API = "https://api.tfl.gov.uk";
-const BBOX = { minLat: 51.23, maxLat: 51.8, minLon: -1.0, maxLon: 0.4 };
+// The "further afield" belt: the commuter box widened to reach Portsmouth
+// Harbour (the Portsmouth Direct line through Liss), Southend, Brighton-way
+// and Luton — adventure-run territory the club actually travels to.
+const BBOX = { minLat: 50.75, maxLat: 51.95, minLon: -1.15, maxLon: 0.75 };
 
 // Display names + line colours (brand-inspired, adjusted for distinctness
 // against the existing 18 tube/Overground colours — tweak freely).
@@ -147,7 +150,14 @@ for (const [id, meta] of Object.entries(NR_LINES)) {
   for (const b of branches) for (const s of b) stations[s.id] = { n: s.n, lat: s.lat, lon: s.lon };
   if (Object.keys(stations).length < 2) { summary.push({ line: id, stations: 0, note: "skipped — nothing inside bbox" }); continue; }
 
-  network[id] = { name: meta.name, colour: meta.colour, stations, branches: branches.map((b) => b.map((s) => s.id)) };
+  // The line's displayed main route: its longest branch by distance (a
+  // fast pattern to the coast beats a stop-heavy suburban one).
+  const toRad = Math.PI / 180;
+  const brKm = (b) => { let km = 0; for (let i = 1; i < b.length; i++) { const a = b[i - 1], c = b[i];
+    km += 12742 * Math.asin(Math.sqrt(Math.sin((c.lat - a.lat) * toRad / 2) ** 2 + Math.cos(a.lat * toRad) * Math.cos(c.lat * toRad) * Math.sin((c.lon - a.lon) * toRad / 2) ** 2)); } return km; };
+  const main = branches.reduce((a, b) => (brKm(b) > brKm(a) ? b : a), branches[0]);
+
+  network[id] = { name: meta.name, colour: meta.colour, stations, branches: branches.map((b) => b.map((s) => s.id)), route: main.map((s) => s.id) };
 
   const rings = (seq.lineStrings || []).flatMap((ls) => {
     let coords;

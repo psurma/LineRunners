@@ -111,8 +111,8 @@ const when = new Date().toISOString();
 const summary = [];
 for (const id of ids) {
   const ln = NET[id];
-  // Same main-branch rule as the site's rtStations: the longest branch wins.
-  const br = ln.branches.reduce((a, b) => (b.length > a.length ? b : a), ln.branches[0] || []);
+  // Same main-branch rule as the site's rtStations: the declared route first.
+  const br = ln.route && ln.route.length > 1 ? ln.route : ln.branches.reduce((a, b) => (b.length > a.length ? b : a), ln.branches[0] || []);
   const stations = br.map((sid) => ln.stations[sid]).filter(Boolean);
   if (stations.length < 2) { summary.push({ line: id, note: "skipped" }); continue; }
   process.stdout.write(`${id.padEnd(24)} ${String(stations.length).padStart(3)} stations … `);

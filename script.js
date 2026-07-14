@@ -1447,6 +1447,7 @@
     { id: "northern-heights", name: "Northern Heights", type: "disused", leg: "Mill Hill East → Mill Hill Broadway (the tube that never was)", start: "Mill Hill East (Northern)", distance: "2.3 mi (3.7 km)", highlights: "The Mill Hill Old Railway nature reserve follows the Edgware branch the Northern line was electrifying when war killed the Northern Heights plan — passenger trains never came back.", suitability: "Short and gentle on a single-track path — run single file, or pair it with a Dollis Valley extension.", loop: false, path: [[51.6082, -0.2103], [51.6165, -0.2295], [51.6127, -0.2489]] },
     { id: "ebury-way", name: "Ebury Way", type: "disused", leg: "Rickmansworth → Watford High Street rail trail", start: "Rickmansworth (Metropolitan)", distance: "4.7 mi (7.5 km)", highlights: "The 1862 Watford & Rickmansworth Railway, now a flat gravel greenway across the Colne and Gade — aquadrome lakes, watercress country and canal crossings all the way to Watford.", suitability: "Pancake-flat, traffic-free and easy to follow — an ideal winter longer run; Lioness line home.", loop: false, path: [[51.6404, -0.4736], [51.6355, -0.4630], [51.6480, -0.4230], [51.6524, -0.3917]] },
     { id: "surrey-iron-railway", name: "Surrey Iron Railway", type: "disused", leg: "Wandsworth → West Croydon down the Wandle", start: "Wandsworth Town (rail)", distance: "8.5 mi (13.6 km)", highlights: "Trace the world's first public railway — 1803, horse-drawn — along the Wandle Trail: mills, wetlands and Morden Hall Park on the way to Croydon.", suitability: "A proper point-to-point long run — flat, mostly riverside path, splittable at Colliers Wood or Mitcham.", loop: false, path: [[51.4610, -0.1881], [51.4424, -0.1875], [51.4180, -0.1778], [51.3898, -0.1578], [51.3784, -0.0999]] },
+    { id: "longmoor-military", name: "Longmoor Military Railway", type: "disused", far: true, leg: "Liss → Liss Forest on the old army railway", start: "Liss (South Western)", distance: "1.2 mi (2.0 km)", highlights: "The Riverside Railway Walk follows the Army's own railway (1903–1969) out of Liss beside the Rother — the line that trained generations of military railwaymen at Longmoor.", suitability: "Short, flat and out-of-town — an out-and-back leg-stretcher on the Shipwrights Way; the camp beyond is still MOD land.", loop: false, path: [[51.0447, -0.8927], [51.0505, -0.8877], [51.0571, -0.8842]] },
     { id: "grand-union-paddington", name: "Grand Union Canal (Paddington Arm)", type: "canal", leg: "Little Venice → Alperton", start: "Warwick Avenue (Bakerloo)", distance: "6.1 mi (9.8 km)", highlights: "Flat, quiet towpath out of Little Venice past Kensal Green and Wembley's edge — narrowboats all the way.", suitability: "Flat and easy underfoot — a calm long run away from the traffic.", loop: false, path: [[51.5225, -0.1830], [51.5270, -0.2200], [51.5330, -0.2550], [51.5400, -0.2990]] },
     { id: "lea-navigation", name: "Lea Navigation", type: "canal", leg: "Limehouse → Hackney Marshes", start: "Limehouse (DLR)", distance: "5.0 mi (8 km)", highlights: "Towpath from the Thames up past the Olympic Park and out to the wide-open Hackney Marshes.", suitability: "Flat, traffic-free and splittable — a favourite east London long run.", loop: false, path: [[51.5122, -0.0395], [51.5250, -0.0380], [51.5400, -0.0360], [51.5560, -0.0300]] },
     { id: "olympic-park", name: "Queen Elizabeth Olympic Park", type: "landmark", leg: "Stadium, Orbit & waterways loop", start: "Stratford / Hackney Wick", distance: "2.6 mi (4.2 km)", highlights: "The 2012 Stadium, the ArcelorMittal Orbit, the Aquatics Centre and waterside paths through the park.", suitability: "Wide, flat, way-marked paths — modern and sociable for all paces.", loop: true, path: [[51.5480, -0.0200], [51.5480, -0.0110], [51.5380, -0.0110], [51.5380, -0.0200], [51.5480, -0.0200]] },
@@ -1887,7 +1888,8 @@
   const TYPE_LABELS = { all: "All", park: "Parks", trail: "Trails", canal: "Canals", river: "Rivers", landmark: "Landmarks", disused: "Disused railways" };
   const routeFilter = { type: "all", dist: "all" };
   const distBucket = (k) => { const b = DIST_BUCKETS.find((x) => x.test(k)); return b ? b.key : ""; };
-  const routeMatches = (r) => (routeFilter.type === "all" || r.type === routeFilter.type)
+  const routeMatches = (r) => (NET_MODE === "all" || !r.far) // out-of-London routes ride with the All lines mode
+    && (routeFilter.type === "all" || r.type === routeFilter.type)
     && (routeFilter.dist === "all" || distBucket(routeKm(r)) === routeFilter.dist);
 
   function routeCardHtml(r, i) {
@@ -3306,11 +3308,29 @@
     return `${String(h).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
   }
   function defaultZoom(kind) { return kind === "geo" ? 1.4 : kind === "data" ? 1 : 1.6; }
+  // Network coverage mode: "tube" (default) keeps the site to the TfL network;
+  // "all" adds the National Rail lines and out-of-London routes. The header
+  // toggle persists the choice and reloads, so every surface follows the mode.
+  const NET_MODE = (() => { try { return localStorage.getItem("tuberun_netmode") === "all" ? "all" : "tube"; } catch (_) { return "tube"; } })();
+  function setupNetToggle() {
+    const btns = document.querySelectorAll(".net-toggle [data-n]");
+    btns.forEach((b) => {
+      const on = b.dataset.n === NET_MODE;
+      b.classList.toggle("on", on);
+      b.setAttribute("aria-pressed", String(on));
+      b.addEventListener("click", () => {
+        if (b.dataset.n === NET_MODE) return;
+        try { localStorage.setItem("tuberun_netmode", b.dataset.n); } catch (_) { /* private mode */ }
+        location.reload();
+      });
+    });
+  }
+
   let netPromise = null; // memoise the in-flight fetch so parallel callers share one request
   function loadNetwork() {
     if (!netPromise) {
       netPromise = (async () => {
-        const [nRes, rRes, tRes, wRes] = await Promise.all([fetch("data/tube-network.json"), fetch("data/nr-network.json"), fetch("data/station-toilets.json"), fetch("data/facilities-water.json")]);
+        const [nRes, rRes, tRes, wRes] = await Promise.all([fetch("data/tube-network.json"), NET_MODE === "all" ? fetch("data/nr-network.json") : Promise.resolve({ ok: false }), fetch("data/station-toilets.json"), fetch("data/facilities-water.json")]);
         if (!nRes.ok) throw new Error("network data");
         netData = await nRes.json();
         // National Rail commuter lines join the same network model (marked
@@ -3605,7 +3625,7 @@
   let linesGeo = null;
   async function loadLines() {
     if (linesGeo) return linesGeo;
-    const [res, nrRes] = await Promise.all([fetch("data/tube-lines.geojson"), fetch("data/nr-lines.geojson")]);
+    const [res, nrRes] = await Promise.all([fetch("data/tube-lines.geojson"), NET_MODE === "all" ? fetch("data/nr-lines.geojson") : Promise.resolve({ ok: false })]);
     if (!res.ok) throw new Error("lines geojson");
     linesGeo = await res.json();
     // National Rail geometry rides along, marked `nr` so the map can style it
@@ -4626,7 +4646,7 @@
   // Distance/time summary + the tube-map strip for a routed journey.
   // A→B cap (km, 0 = no limit) from the planner's Max distance slider —
   // over-cap routes get a bail-out suggestion rather than a refusal.
-  let abMaxKm = (() => { try { const v = parseInt(localStorage.getItem("tuberun_abmax"), 10); return v >= 1 && v <= 42 ? v : 0; } catch (_) { return 0; } })();
+  let abMaxKm = (() => { try { const v = parseInt(localStorage.getItem("tuberun_abmax"), 10); return v >= 1 && v <= 100 ? v : 0; } catch (_) { return 0; } })();
 
   function journeyResultHtml(res, segments, graph) {
     const path = res.path, km = res.km, nodes = graph.nodes;
@@ -5013,7 +5033,7 @@
     ["setupPlanner", setupPlanner], ["enrichInterchanges", enrichInterchanges], ["setupBusRunner", setupBusRunner],
     ["setupFollowAlong", setupFollowAlong],
     ["setupJourneyPlanner", setupJourneyPlanner], ["renderLineCollector", renderLineCollector],
-    ["renderTimeMachine", renderTimeMachine],
+    ["renderTimeMachine", renderTimeMachine], ["setupNetToggle", setupNetToggle],
     ["renderGallery", renderGallery], ["wireSocials", wireSocials],
     ["loadWeather", loadWeather], ["setupScrollSpy", setupScrollSpy],
     ["setupUnitToggle", setupUnitToggle], ["setupLiveClock", setupLiveClock],

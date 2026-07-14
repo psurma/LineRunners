@@ -41,6 +41,7 @@ const DISUSED = [
   { id: "northern-heights", vias: [stn("Mill Hill East"), [51.6165, -0.2295], stn("Mill Hill Broadway")] },
   { id: "ebury-way", vias: [stn("Rickmansworth"), [51.6355, -0.4630], [51.6480, -0.4230], stn("Watford High Street")] },
   { id: "surrey-iron-railway", vias: [stn("Wandsworth Town"), stn("Earlsfield"), stn("Colliers Wood"), stn("Mitcham Junction"), stn("West Croydon")] },
+  { id: "longmoor-military", vias: [stn("Liss"), [51.0505, -0.8877], [51.0571, -0.8842]] },
 ];
 
 async function brouter(vias) {
