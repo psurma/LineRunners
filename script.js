@@ -2774,7 +2774,7 @@
     const followWp = netData ? rtStations(netData, name) : null;
     const followBtn = followWp && followWp.length >= 2 ? `<button type="button" class="ls-follow" title="Follow this line live with GPS — next stop, progress and pace">▶ Follow live</button>` : "";
     const ctrlRow = gpx || followBtn ? `<div class="ls-gpx-row">${gpx}${reverseBtn}${followBtn}</div>` : "";
-    detail.innerHTML = `<td colspan="6"><div class="ls-detail-inner"><p class="ls-ends" aria-live="polite"></p>${ctrlRow}<div class="ls-map"></div><div class="ls-elev jr-elev"></div></div></td>`;
+    detail.innerHTML = `<td colspan="6"><div class="ls-detail-inner"><p class="ls-ends" aria-live="polite"></p>${ctrlRow}<div class="ls-map"></div><div class="ls-strip strip"></div><div class="ls-elev jr-elev"></div></div></td>`;
     tr.after(detail);
     lineRouteMap(detail.querySelector(".ls-map"), name, tr);
     const fb = detail.querySelector(".ls-follow");
@@ -2877,6 +2877,13 @@
       routeGrp = r && r.group;
       if (r && r.latlngs.length) map.fitBounds(L.latLngBounds(r.latlngs), { padding: [18, 18] });
       if (opt && opt.wp) setRowStats(tr, waypointsKm(opt.wp) * ROAD_FACTOR, opt.wp.length); // reflect the route in the row
+      // Sign-style station strip under the map, running in the drawn direction.
+      const stripEl = detailInner.querySelector(".ls-strip");
+      if (stripEl && seq && seq.length > 1) {
+        const stripWp = reversed ? seq.slice().reverse() : seq;
+        stripEl.style.setProperty("--line-col", net[id].colour);
+        stripEl.innerHTML = stripMapHtml(null, net[id].colour, name, { wp: stripWp });
+      }
       const elBox = detailInner.querySelector(".ls-elev");
       if (elBox && r && r.latlngs) {
         elBox.innerHTML = `<p class="ls-elev-load">Reading elevation…</p>`;
