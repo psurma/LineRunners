@@ -1522,7 +1522,7 @@
       <div class="lc-badges">${badgeCardsHtml(ROUTE_BADGES, ctx)}</div>`;
   }
   // Real OSM route geometry (data/routes.geojson), keyed by each route's `id` slug.
-  let routesGeo = null;
+  let routesGeo = null, routeStopsMerged = false;
   async function loadRoutes() {
     if (routesGeo) return routesGeo;
     const loaded = {};
@@ -1534,6 +1534,15 @@
         routesGeo = loaded; // only cache success — a transient failure can retry next call
       }
     } catch (_) { /* fall back to the sketched paths */ }
+    // Merge in curated access points for routes without inline stops (the
+    // disused railways keep theirs), so canals, rivers and parks get strips too.
+    if (!routeStopsMerged) {
+      routeStopsMerged = true;
+      try {
+        const sRes = await vfetch("data/route-stops.json");
+        if (sRes.ok) { const stops = await sRes.json(); for (const r of ROUTES) if (!r.stops && stops[r.id]) r.stops = stops[r.id]; }
+      } catch (_) { /* strips just stay hidden for those routes */ }
+    }
     return routesGeo || loaded;
   }
 
