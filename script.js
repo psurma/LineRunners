@@ -3516,11 +3516,24 @@
       e.preventDefault();
       e.stopPropagation();
       if (btn.getAttribute("aria-expanded") !== "true") btn.click();
-      // Scroll only after the detail row has rendered (expanding shifts the
-      // layout mid-scroll otherwise), and pin the line's row to the top so
-      // the whole detail is on screen below it.
+      // Expanding is an accordion: the source row's tall detail collapses
+      // (shifting the target when it sat above) and the new detail's map,
+      // strip and elevation fill in asynchronously — one smooth scroll lands
+      // wrong or gets cancelled by the layout shifts. Instead, re-pin the
+      // line's row just below the header until the layout settles, backing
+      // off the moment the user scrolls themselves.
       const tr = btn.closest("tr");
-      setTimeout(() => tr.scrollIntoView({ behavior: "smooth", block: "start" }), 400);
+      let stop = false, tries = 0;
+      const cancel = () => { stop = true; };
+      ["wheel", "touchstart", "keydown", "pointerdown"].forEach((t) => addEventListener(t, cancel, { once: true, passive: true }));
+      const pin = () => {
+        if (stop) return;
+        const hdr = document.querySelector(".site-header");
+        const dy = tr.getBoundingClientRect().top - ((hdr ? hdr.offsetHeight : 64) + 12);
+        if (Math.abs(dy) > 2) scrollBy({ top: dy, behavior: "instant" });
+        if (++tries < 9) setTimeout(pin, 150);
+      };
+      pin();
     }, true);
   }
 
