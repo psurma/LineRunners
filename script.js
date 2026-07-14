@@ -2920,14 +2920,32 @@
       if (my !== drawSeq || lsMap !== map) return; // a newer draw (variant change / reverse) superseded this one
       routeGrp = r && r.group;
       if (r && r.latlngs.length) map.fitBounds(L.latLngBounds(r.latlngs), { padding: [18, 18] });
-      if (opt && opt.wp) setRowStats(tr, waypointsKm(opt.wp) * ROAD_FACTOR, opt.wp.length); // reflect the route in the row
+      // When the drawn line is real pavement (GPX or a routed branch polyline,
+      // not station hops), project each station onto it so the strip's leg
+      // distances and total are true along-path km rather than estimates.
+      const stripWp = seq && seq.length > 1 ? (reversed ? seq.slice().reverse() : seq) : null;
+      let legKms, totalKm;
+      if (r && r.latlngs && stripWp && r.latlngs.length > stripWp.length + 2) {
+        const path = r.latlngs, cum = pathCumKm(path);
+        const along = [];
+        let okProj = true;
+        for (const p of stripWp) {
+          const pr = projectOnPath(p[1], p[2], path, cum);
+          if (pr.off > 0.4 || (along.length && pr.alongKm < along[along.length - 1] - 0.05)) { okProj = false; break; }
+          along.push(pr.alongKm);
+        }
+        if (okProj) {
+          legKms = along.map((v, i) => (i ? Math.max(0, v - along[i - 1]) : 0));
+          totalKm = cum[cum.length - 1];
+        }
+      }
+      if (opt && opt.wp) setRowStats(tr, totalKm !== undefined ? totalKm : waypointsKm(opt.wp) * ROAD_FACTOR, opt.wp.length); // reflect the route in the row
       // Sign-style station strip under the map, running in the drawn direction.
       // Tapping a station centres and names it on the mini-map above.
       const stripEl = detailInner.querySelector(".ls-strip");
-      if (stripEl && seq && seq.length > 1) {
-        const stripWp = reversed ? seq.slice().reverse() : seq;
+      if (stripEl && stripWp) {
         stripEl.style.setProperty("--line-col", net[id].colour);
-        stripEl.innerHTML = stripMapHtml(null, net[id].colour, name, { wp: stripWp, tap: true });
+        stripEl.innerHTML = stripMapHtml(null, net[id].colour, name, { wp: stripWp, tap: true, legKms, totalKm });
         stripEl.querySelectorAll(".stn").forEach((sEl, si) => sEl.addEventListener("click", () => {
           const p = stripWp[si];
           if (lsMap !== map) return; // panel re-rendered since

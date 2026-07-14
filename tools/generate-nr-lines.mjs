@@ -38,7 +38,11 @@ const NR_LINES = {
   "great-western-railway": { name: "Great Western Railway", colour: "#0A493E", termini: ["London Paddington"] },
   "heathrow-express": { name: "Heathrow Express", colour: "#532E63", termini: ["London Paddington"] },
   "southeastern": { name: "Southeastern", colour: "#00A3A9", termini: ["London Charing Cross", "London Cannon Street", "London Victoria", "London Bridge", "London St Pancras International", "London Blackfriars"] },
-  "southern": { name: "Southern", colour: "#8CC63E", termini: ["London Victoria", "London Bridge"] },
+  // splice: also consider two patterns joined at a shared station even though
+  // terminus-anchored patterns exist — Southern's Victoria arms are short but
+  // the Arun Valley pattern reaches Portsmouth, so the spliced main reads
+  // Victoria to the coast instead of stopping at Tonbridge.
+  "southern": { name: "Southern", colour: "#8CC63E", termini: ["London Victoria", "London Bridge"], splice: true },
   "south-western-railway": { name: "South Western Railway", colour: "#55595C", termini: ["London Waterloo"] },
 };
 
@@ -211,9 +215,9 @@ for (const [id, meta] of Object.entries(NR_LINES)) {
       if (armB.length > 1) candidates.push(armB);
     }
   }
-  if (!candidates.length) {
-    // No pattern reaches the terminus: splice the longest branch with a
-    // terminus-touching one at a shared station (kept terminus-first).
+  if (!candidates.length || meta.splice) {
+    // No pattern reaches the terminus (or the line opts in): splice branches
+    // with a terminus-touching one at a shared station (kept terminus-first).
     for (const base of branches) {
       for (const tb of branches) {
         const ti = tb.findIndex((s) => termini.includes(s.n));

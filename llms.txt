@@ -10,7 +10,7 @@ The site is a static single-page app on GitHub Pages. There is no server API —
 
 - Runs are usually the first Sunday of each month, meeting 09:00 at the start station, plus dated special runs (multi-day adventures, disused-line runs).
 - Free, all paces welcome, no signup — just turn up. Details and escape points are on the Schedule section of the site.
-- The schedule is rendered client-side by `script.js` (a first-Sunday rule plus a specials list in the same file), so fetch the page with JavaScript enabled to read upcoming runs, or read `script.js` directly.
+- Upcoming runs as data: https://psurma.github.io/TubeRun/data/schedule.json — `{ generated, rule, runs: [{ date, days, status: confirmed|suggested, kind, name, line, leg, start, distance, location, routeLink, notes, exits }] }`. Regenerated on every deploy from the same source the site renders.
 
 ## Network data
 

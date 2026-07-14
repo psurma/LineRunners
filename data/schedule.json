@@ -1,0 +1,145 @@
+{
+ "club": "Tube Run",
+ "site": "https://psurma.github.io/TubeRun/",
+ "generated": "2026-07-14",
+ "rule": "Regular runs are the first Sunday of each month, meeting 09:00 at the start station unless stated; dated specials are pinned. Runs beyond the current month are suggestions until confirmed a month out.",
+ "runs": [
+  {
+   "date": "2026-07-04",
+   "days": 2,
+   "status": "confirmed",
+   "kind": "tube",
+   "name": "Metropolitan line",
+   "line": "Metropolitan",
+   "leg": "Chesham → Aldgate",
+   "start": "Chesham Underground Station",
+   "distance": "2 days · ~59 km",
+   "location": "London",
+   "routeLink": "https://www.strava.com/clubs/311876/group_events/3499820905351240354",
+   "notes": "Our big one — the whole Metropolitan line over a weekend, from Chesham out in the Chilterns all the way to Aldgate, split overnight at Wembley Park. All paces: run as much or as little of each day as you like.",
+   "exits": null
+  },
+  {
+   "date": "2026-07-18",
+   "days": 2,
+   "status": "confirmed",
+   "kind": "adventure",
+   "name": "Shipwrights Way",
+   "line": null,
+   "leg": "Bentley Station → Historic Dockyard",
+   "start": "Bentley Station (60 min from Waterloo)",
+   "distance": "46 miles over 2 days",
+   "location": "East Hampshire → Portsmouth",
+   "routeLink": "https://connect.garmin.com/app/course/481185821",
+   "notes": "Phil's birthday adventure across the South Downs to the sea. Bag drop + return supported by Brompton.",
+   "exits": [
+    {
+     "name": "Liss",
+     "at": "14.2 mi"
+    },
+    {
+     "name": "Petersfield",
+     "at": "18 mi"
+    },
+    {
+     "name": "Rowlands Castle",
+     "at": "30 mi"
+    },
+    {
+     "name": "Havant",
+     "at": "34 mi"
+    }
+   ]
+  },
+  {
+   "date": "2026-08-02",
+   "days": 1,
+   "status": "suggested",
+   "kind": "tube",
+   "name": "Victoria line",
+   "line": "Victoria",
+   "leg": "Brixton → Walthamstow Central",
+   "start": "Brixton stn (outside M&S)",
+   "distance": "~13 km",
+   "location": "London",
+   "routeLink": null,
+   "notes": null,
+   "exits": null
+  },
+  {
+   "date": "2026-09-06",
+   "days": 1,
+   "status": "suggested",
+   "kind": "tube",
+   "name": "Bakerloo line",
+   "line": "Bakerloo",
+   "leg": "Elephant & Castle → Harrow & Wealdstone",
+   "start": "Elephant & Castle stn",
+   "distance": "~15 km",
+   "location": "London",
+   "routeLink": null,
+   "notes": null,
+   "exits": null
+  },
+  {
+   "date": "2026-10-04",
+   "days": 1,
+   "status": "suggested",
+   "kind": "canal",
+   "name": "Regent's Canal towpath",
+   "line": null,
+   "leg": "Little Venice → Limehouse Basin",
+   "start": "Warwick Ave stn",
+   "distance": "~14 km",
+   "location": "London",
+   "routeLink": null,
+   "notes": null,
+   "exits": null
+  },
+  {
+   "date": "2026-11-01",
+   "days": 1,
+   "status": "suggested",
+   "kind": "tube",
+   "name": "Central line",
+   "line": "Central",
+   "leg": "Liverpool St → Ealing Broadway",
+   "start": "Liverpool Street stn (main entrance)",
+   "distance": "~14 km",
+   "location": "London",
+   "routeLink": null,
+   "notes": null,
+   "exits": null
+  },
+  {
+   "date": "2026-12-06",
+   "days": 1,
+   "status": "suggested",
+   "kind": "river",
+   "name": "Thames Path",
+   "line": null,
+   "leg": "Putney Bridge → Tower Bridge",
+   "start": "Putney Bridge stn",
+   "distance": "~16 km",
+   "location": "London",
+   "routeLink": null,
+   "notes": null,
+   "exits": null
+  },
+  {
+   "date": "2027-01-03",
+   "days": 1,
+   "status": "suggested",
+   "kind": "bus",
+   "name": "Route 38",
+   "line": null,
+   "leg": "Clapton Pond → Victoria",
+   "start": "Clapton Pond",
+   "distance": "~11 km",
+   "location": "London",
+   "routeLink": null,
+   "notes": null,
+   "exits": null
+  }
+ ]
+}
