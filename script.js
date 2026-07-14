@@ -1605,16 +1605,27 @@
     if (!geom) { el.hidden = true; el.innerHTML = ""; return; }
     const path = (geom.type === "MultiLineString" ? geom.coordinates.flat() : geom.coordinates).map((p) => [p[1], p[0]]);
     const cum = pathCumKm(path);
-    const along = r.stops.map((s) => projectOnPath(s[1], s[2], path, cum).alongKm);
+    // A closed path (ends meet) is a loop regardless of the route's own flag.
+    const isLoop = path.length > 2 && haversineKm([0, path[0][0], path[0][1]], [0, path[path.length - 1][0], path[path.length - 1][1]]) < 0.08;
+    let stops = r.stops;
+    let along = stops.map((s) => projectOnPath(s[1], s[2], path, cum).alongKm);
+    // On a loop the start/seam point can project to ≈0 or ≈full-length, so the
+    // authored order isn't guaranteed monotonic — order the stops by their
+    // position around the loop so every leg reads forward and positive.
+    if (isLoop) {
+      const order = along.map((_, i) => i).sort((a, b) => along[a] - along[b]);
+      stops = order.map((i) => r.stops[i]);
+      along = order.map((i) => along[i]);
+    }
     const legKms = along.map((k, i) => (i ? Math.max(0, k - along[i - 1]) : 0));
     const c = ROUTE_COLOURS[r.type] || "#0019A8";
     el.hidden = false;
     el.classList.add("strip");
     el.style.setProperty("--line-col", c);
-    el.innerHTML = stripMapHtml(null, c, r.name, { wp: r.stops, bannerLabel: `${r.name} — access points`, legKms, totalKm: cum[path.length - 1], tap: true });
+    el.innerHTML = stripMapHtml(null, c, r.name, { wp: stops, bannerLabel: `${r.name} — ${isLoop ? "around the loop" : "access points"}`, legKms, totalKm: cum[path.length - 1], tap: true });
     // Tap an access point to centre it on the route map above.
     el.querySelectorAll(".stn").forEach((sEl, si) => sEl.addEventListener("click", () => {
-      const s = r.stops[si];
+      const s = stops[si];
       if (routeMap.mode === "gl" && routeMap.gl && routeMap.gl.map) {
         const glMap = routeMap.gl.map;
         glMap.easeTo({ center: [s[2], s[1]], zoom: Math.max(glMap.getZoom(), 14.5), duration: 600 });
