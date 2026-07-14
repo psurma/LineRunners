@@ -85,6 +85,13 @@ function dedupeBranches(branches) {
 // branch ends exactly where another starts, join them into the through route
 // real trains run, so the displayed main branch reaches its true terminus.
 function stitchBranches(branches) {
+  // Refuse joins that fold a route back on itself (length >> end-to-end
+  // distance) — chaining Southeastern's fragments end-to-start once produced
+  // a 159 km Queenborough–Gillingham "branch" whose ends are 15 km apart.
+  const toRad = Math.PI / 180;
+  const dKm = (a, b) => 12742 * Math.asin(Math.sqrt(Math.sin((b.lat - a.lat) * toRad / 2) ** 2 + Math.cos(a.lat * toRad) * Math.cos(b.lat * toRad) * Math.sin((b.lon - a.lon) * toRad / 2) ** 2));
+  const runKm = (b) => { let s = 0; for (let i = 1; i < b.length; i++) s += dKm(b[i - 1], b[i]); return s; };
+  const degenerate = (b) => { const l = runKm(b); return l > 25 && dKm(b[0], b[b.length - 1]) < l / 4; };
   const out = branches.map((b) => b.slice());
   for (let joined = true; joined; ) {
     joined = false;
@@ -93,7 +100,9 @@ function stitchBranches(branches) {
         if (i === j) continue;
         const a = out[i], b = out[j];
         if (a[a.length - 1].id === b[0].id) {
-          out[i] = a.concat(b.slice(1));
+          const merged = a.concat(b.slice(1));
+          if (degenerate(merged)) continue;
+          out[i] = merged;
           out.splice(j, 1);
           joined = true;
           break outer;
@@ -167,8 +176,29 @@ for (const [id, meta] of Object.entries(NR_LINES)) {
   let candidates = [];
   if (meta.through) {
     // Through-London line (Thameslink): the terminus sits mid-route, any
-    // pattern passing it qualifies and keeps its own orientation.
+    // pattern passing it qualifies and keeps its own orientation. The API
+    // fragments the long through-runs (Brighton's arm stops at Earlswood),
+    // so also splice pattern pairs at a shared station, keeping results
+    // that still pass through the core.
     candidates = branches.filter((b) => b.some((s) => termini.includes(s.n)));
+    for (const base of branches) {
+      for (const tb of branches) {
+        if (base === tb) continue;
+        for (let bi = 0; bi < base.length; bi++) {
+          const si = tb.findIndex((s) => s.id === base[bi].id);
+          if (si === -1) continue;
+          for (const head of [base.slice(0, bi + 1), base.slice(bi).reverse()]) {
+            for (const tail of [tb.slice(si), tb.slice(0, si + 1).reverse()]) {
+              if (tail.length < 2) continue;
+              const cand = [...head, ...tail.slice(1)];
+              if (new Set(cand.map((s) => s.id)).size !== cand.length) continue;
+              if (!cand.some((s) => termini.includes(s.n))) continue;
+              candidates.push(cand);
+            }
+          }
+        }
+      }
+    }
   } else {
     // Terminus operator: split each terminus-touching pattern at the
     // terminus into arms, each reading terminus-first. This also
