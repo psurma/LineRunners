@@ -356,7 +356,7 @@ section { max-width: var(--max); margin: 0 auto; padding: clamp(48px, 8vw, 88px)
   align-items: center;
   justify-content: center;
   width: 100%;
-  height: 22px;
+  height: 32px; /* room for the leg distance beneath the line, clear of the interchange pills */
 }
 .stn .rail::before {
   content: "";
@@ -405,10 +405,11 @@ section { max-width: var(--max); margin: 0 auto; padding: clamp(48px, 8vw, 88px)
 }
 .stn.active .stn-name { font-weight: 700; }
 .stn:hover .dot { transform: scale(1.35); }
-/* sign-style leg distance, centred on the connector to the previous stop */
+/* sign-style leg distance, centred on the connector to the previous stop —
+   inside the rail band, so it never collides with the interchange pills below */
 .stn .rail .stn-leg {
   position: absolute;
-  top: calc(100% - 2px);
+  bottom: -1px;
   left: -50%;
   width: 100%;
   text-align: center;
@@ -418,10 +419,14 @@ section { max-width: var(--max); margin: 0 auto; padding: clamp(48px, 8vw, 88px)
   pointer-events: none;
   white-space: nowrap;
 }
-.strip-total { margin-top: 12px; font-size: 12.5px; font-weight: 700; color: var(--muted); }
+.strip-total { margin-top: 12px; font-size: 12.5px; font-weight: 700; color: var(--muted); position: sticky; left: 0; width: max-content; }
 /* station strip under each line-by-line mini-map */
-.ls-strip { overflow-x: auto; margin-top: 12px; }
+.ls-strip { overflow-x: auto; margin-top: 12px; padding-bottom: 4px; }
 .ls-strip:empty { display: none; }
+/* keep the scroll affordance visible — long lines continue off to the right */
+.ls-strip::-webkit-scrollbar, .route-strip::-webkit-scrollbar, .line-diagram::-webkit-scrollbar { height: 8px; }
+.ls-strip::-webkit-scrollbar-thumb, .route-strip::-webkit-scrollbar-thumb, .line-diagram::-webkit-scrollbar-thumb { background: #c4cad4; border-radius: 4px; }
+.ls-strip::-webkit-scrollbar-track, .route-strip::-webkit-scrollbar-track, .line-diagram::-webkit-scrollbar-track { background: transparent; }
 
 /* access-point strip under the routes map, styled like the trailside sign */
 .route-strip { margin-top: 14px; overflow-x: auto; background: var(--card); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow); padding: 12px 14px; }
@@ -931,7 +936,9 @@ body.tm-map-active .tm-zoom, body.tm-map-active .tm-scrollhint { display: none; 
 tr.ls-open { background: rgba(0, 25, 168, 0.05); }
 tr.ls-open .ls-caret { transform: rotate(90deg); }
 .ls-detail-row td { padding: 0; }
-.ls-detail-inner { padding: 4px 14px 16px; }
+/* contain: the strip's max-content track must scroll inside the panel, not
+   inflate the table cell (and with it the whole Lines table). */
+.ls-detail-inner { padding: 4px 14px 16px; contain: inline-size; }
 .ls-ends { margin: 2px 0 10px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-weight: 800; font-size: 1.05rem; color: var(--ink); line-height: 1.2; }
 .ls-ends .ls-arrow { color: var(--tfl-blue); font-weight: 700; }
 .ls-ends:empty { display: none; }
