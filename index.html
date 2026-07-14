@@ -28,10 +28,10 @@
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-title" content="Tube Run" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-  <link rel="stylesheet" href="vendor/fonts/fonts.css?v=249" />
+  <link rel="stylesheet" href="vendor/fonts/fonts.css?v=250" />
   <link rel="stylesheet" href="vendor/leaflet/leaflet.css" />
   <script src="vendor/leaflet/leaflet.js" defer></script>
-  <link rel="stylesheet" href="style.css?v=249" />
+  <link rel="stylesheet" href="style.css?v=250" />
 </head>
 <body>
   <header class="site-header">
@@ -54,6 +54,10 @@
       <a href="#clubs">Clubs</a>
       <a href="#join">Come run</a>
     </nav>
+    <div class="hdr-search">
+      <input id="siteSearch" list="siteSearchList" placeholder="Search station, line, route…" autocomplete="off" aria-label="Search stations, lines and routes" />
+      <datalist id="siteSearchList"></datalist>
+    </div>
     <div class="unit-toggle net-toggle" role="group" aria-label="Network coverage" title="Tube keeps it to the TfL network; All lines adds National Rail and routes outside London">
       <button type="button" data-n="tube">Tube</button>
       <button type="button" data-n="all">All lines</button>
@@ -443,6 +447,6 @@
     <p class="fine">Not affiliated with Transport for London. Roundel-inspired branding used with affection, not endorsement.</p>
   </footer>
 
-  <script src="script.js?v=249" defer></script>
+  <script src="script.js?v=250" defer></script>
 </body>
 </html>

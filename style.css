@@ -439,6 +439,21 @@ section { max-width: var(--max); margin: 0 auto; padding: clamp(48px, 8vw, 88px)
   border-radius: 1px;
   background: color-mix(in srgb, var(--line-col, #0019a8) 45%, #d7dae0);
 }
+/* header search */
+.hdr-search { margin-left: auto; }
+.hdr-search input {
+  font: 500 13.5px Inter, sans-serif;
+  color: var(--ink);
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 7px 14px;
+  width: 175px;
+  transition: width 0.15s, border-color 0.15s;
+}
+.hdr-search input:focus { width: 240px; outline: none; border-color: var(--tfl-blue); }
+@media (max-width: 720px) { .hdr-search { margin-left: 0; } .hdr-search input, .hdr-search input:focus { width: 140px; } }
+
 /* A→B max-distance cap: slider + over-cap bail-out note */
 .ab-max { min-width: 190px; }
 .jr-cap { margin: 8px 0 0; padding: 6px 11px; border-radius: 8px; background: #fff4c2; color: #7a5c00; font-size: 13.5px; font-weight: 600; }

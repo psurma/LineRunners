@@ -530,7 +530,7 @@
   let liveNow = null;
   async function loadLiveNow() {
     try {
-      const res = await fetch("data/live.json?t=" + Math.floor(Date.now() / 60000));
+      const res = await vfetch("data/live.json?t=" + Math.floor(Date.now() / 60000));
       liveNow = res.ok ? await res.json() : null;
     } catch (_) { liveNow = null; }
     renderHeroCard();
@@ -1443,11 +1443,16 @@
     { id: "finsbury-park", name: "Finsbury Park", type: "park", leg: "Perimeter loop", start: "Finsbury Park (Victoria/Piccadilly)", distance: "1.6 mi (2.6 km)", highlights: "Busy north London park with a boating lake, an athletics track and the New River on its edge.", suitability: "Flat, central and sociable — links straight onto the Parkland Walk.", loop: true, path: [[51.5740, -0.1020], [51.5740, -0.0940], [51.5690, -0.0940], [51.5690, -0.1020], [51.5740, -0.1020]] },
     { id: "parkland-walk", name: "Parkland Walk", type: "disused", leg: "Finsbury Park → Alexandra Palace (the old GNR branch)", start: "Finsbury Park (Victoria/Piccadilly)", distance: "4.5 mi (7.3 km)", highlights: "London's longest nature reserve along the Edgware, Highgate & Alexandra Palace railway (closed 1954) — old platforms at Crouch End, the Highgate tunnel portals, then over St James Lane viaduct to Ally Pally.", suitability: "Leafy, car-free and gently graded, with one road link over Highgate Hill; train home from Alexandra Palace.", loop: false, path: [[51.5645, -0.1065], [51.5717, -0.1218], [51.5777, -0.1458], [51.5872, -0.1440], [51.5983, -0.1202]],
       stops: [["Finsbury Park", 51.5645, -0.1065], ["Oxford Road", 51.5661, -0.1085], ["Stapleton Hall Road", 51.5691, -0.1152], ["Crouch Hill", 51.5709, -0.118], ["Crouch End Hill (old platforms)", 51.5717, -0.1218], ["Stanhope Road", 51.5737, -0.1307], ["Holmesdale Road", 51.5758, -0.1412], ["Highgate", 51.5777, -0.1458], ["Cranley Gardens", 51.5872, -0.144], ["Muswell Hill viaduct", 51.5901, -0.1398], ["Alexandra Palace", 51.5983, -0.1202]] },
-    { id: "crystal-palace-high-level", name: "Crystal Palace High Level", type: "disused", leg: "Forest Hill → Crystal Palace over the lost High Level branch", start: "Forest Hill (Windrush)", distance: "3.4 mi (5.5 km)", highlights: "Cox's Walk into Sydenham Hill Wood, where the trackbed and tunnel portal of the Crystal Palace High Level railway (closed 1954) hide in the trees; finish beside the Palace terraces.", suitability: "Short but properly lumpy — woodland paths and real hills; muddy after rain.", loop: false, path: [[51.4394, -0.0531], [51.4408, -0.0800], [51.4325, -0.0803], [51.4181, -0.0729]] },
-    { id: "northern-heights", name: "Northern Heights", type: "disused", leg: "Mill Hill East → Mill Hill Broadway (the tube that never was)", start: "Mill Hill East (Northern)", distance: "2.3 mi (3.7 km)", highlights: "The Mill Hill Old Railway nature reserve follows the Edgware branch the Northern line was electrifying when war killed the Northern Heights plan — passenger trains never came back.", suitability: "Short and gentle on a single-track path — run single file, or pair it with a Dollis Valley extension.", loop: false, path: [[51.6082, -0.2103], [51.6165, -0.2295], [51.6127, -0.2489]] },
-    { id: "ebury-way", name: "Ebury Way", type: "disused", leg: "Rickmansworth → Watford High Street rail trail", start: "Rickmansworth (Metropolitan)", distance: "4.7 mi (7.5 km)", highlights: "The 1862 Watford & Rickmansworth Railway, now a flat gravel greenway across the Colne and Gade — aquadrome lakes, watercress country and canal crossings all the way to Watford.", suitability: "Pancake-flat, traffic-free and easy to follow — an ideal winter longer run; Lioness line home.", loop: false, path: [[51.6404, -0.4736], [51.6355, -0.4630], [51.6480, -0.4230], [51.6524, -0.3917]] },
-    { id: "surrey-iron-railway", name: "Surrey Iron Railway", type: "disused", leg: "Wandsworth → West Croydon down the Wandle", start: "Wandsworth Town (rail)", distance: "8.5 mi (13.6 km)", highlights: "Trace the world's first public railway — 1803, horse-drawn — along the Wandle Trail: mills, wetlands and Morden Hall Park on the way to Croydon.", suitability: "A proper point-to-point long run — flat, mostly riverside path, splittable at Colliers Wood or Mitcham.", loop: false, path: [[51.4610, -0.1881], [51.4424, -0.1875], [51.4180, -0.1778], [51.3898, -0.1578], [51.3784, -0.0999]] },
-    { id: "longmoor-military", name: "Longmoor Military Railway", type: "disused", far: true, leg: "Liss → Liss Forest on the old army railway", start: "Liss (South Western)", distance: "1.2 mi (2.0 km)", highlights: "The Riverside Railway Walk follows the Army's own railway (1903–1969) out of Liss beside the Rother — the line that trained generations of military railwaymen at Longmoor.", suitability: "Short, flat and out-of-town — an out-and-back leg-stretcher on the Shipwrights Way; the camp beyond is still MOD land.", loop: false, path: [[51.0447, -0.8927], [51.0505, -0.8877], [51.0571, -0.8842]] },
+    { id: "crystal-palace-high-level", name: "Crystal Palace High Level", type: "disused", leg: "Forest Hill → Crystal Palace over the lost High Level branch", start: "Forest Hill (Windrush)", distance: "3.4 mi (5.5 km)", highlights: "Cox's Walk into Sydenham Hill Wood, where the trackbed and tunnel portal of the Crystal Palace High Level railway (closed 1954) hide in the trees; finish beside the Palace terraces.", suitability: "Short but properly lumpy — woodland paths and real hills; muddy after rain.", loop: false, path: [[51.4394, -0.0531], [51.4408, -0.0800], [51.4325, -0.0803], [51.4181, -0.0729]],
+      stops: [["Forest Hill", 51.4394, -0.0531], ["Cox's Walk", 51.4425, -0.0728], ["Sydenham Hill Wood", 51.439, -0.0795], ["Sydenham Hill", 51.4325, -0.0803], ["Crystal Palace Parade", 51.4235, -0.0784], ["Crystal Palace", 51.4181, -0.0729]] },
+    { id: "northern-heights", name: "Northern Heights", type: "disused", leg: "Mill Hill East → Mill Hill Broadway (the tube that never was)", start: "Mill Hill East (Northern)", distance: "2.3 mi (3.7 km)", highlights: "The Mill Hill Old Railway nature reserve follows the Edgware branch the Northern line was electrifying when war killed the Northern Heights plan — passenger trains never came back.", suitability: "Short and gentle on a single-track path — run single file, or pair it with a Dollis Valley extension.", loop: false, path: [[51.6082, -0.2103], [51.6165, -0.2295], [51.6127, -0.2489]],
+      stops: [["Mill Hill East", 51.6082, -0.2103], ["Bittacy Hill", 51.613, -0.22], ["Old Railway reserve", 51.6165, -0.2295], ["Copthall fields", 51.614, -0.238], ["Mill Hill Broadway", 51.6127, -0.2489]] },
+    { id: "ebury-way", name: "Ebury Way", type: "disused", leg: "Rickmansworth → Watford High Street rail trail", start: "Rickmansworth (Metropolitan)", distance: "4.7 mi (7.5 km)", highlights: "The 1862 Watford & Rickmansworth Railway, now a flat gravel greenway across the Colne and Gade — aquadrome lakes, watercress country and canal crossings all the way to Watford.", suitability: "Pancake-flat, traffic-free and easy to follow — an ideal winter longer run; Lioness line home.", loop: false, path: [[51.6404, -0.4736], [51.6355, -0.4630], [51.6480, -0.4230], [51.6524, -0.3917]],
+      stops: [["Rickmansworth", 51.6404, -0.4736], ["Aquadrome", 51.6355, -0.463], ["Colne crossing", 51.642, -0.44], ["Croxley Common Moor", 51.648, -0.423], ["Watford High Street", 51.6524, -0.3917]] },
+    { id: "surrey-iron-railway", name: "Surrey Iron Railway", type: "disused", leg: "Wandsworth → West Croydon down the Wandle", start: "Wandsworth Town (rail)", distance: "8.5 mi (13.6 km)", highlights: "Trace the world's first public railway — 1803, horse-drawn — along the Wandle Trail: mills, wetlands and Morden Hall Park on the way to Croydon.", suitability: "A proper point-to-point long run — flat, mostly riverside path, splittable at Colliers Wood or Mitcham.", loop: false, path: [[51.4610, -0.1881], [51.4424, -0.1875], [51.4180, -0.1778], [51.3898, -0.1578], [51.3784, -0.0999]],
+      stops: [["Wandsworth Town", 51.461, -0.1881], ["Earlsfield", 51.4424, -0.1875], ["Plough Lane", 51.431, -0.187], ["Colliers Wood", 51.418, -0.1778], ["Morden Hall Park", 51.4023, -0.1875], ["Mitcham Junction", 51.3898, -0.1578], ["West Croydon", 51.3784, -0.0999]] },
+    { id: "longmoor-military", name: "Longmoor Military Railway", type: "disused", far: true, leg: "Liss → Liss Forest on the old army railway", start: "Liss (South Western)", distance: "1.2 mi (2.0 km)", highlights: "The Riverside Railway Walk follows the Army's own railway (1903–1969) out of Liss beside the Rother — the line that trained generations of military railwaymen at Longmoor.", suitability: "Short, flat and out-of-town — an out-and-back leg-stretcher on the Shipwrights Way; the camp beyond is still MOD land.", loop: false, path: [[51.0447, -0.8927], [51.0505, -0.8877], [51.0571, -0.8842]],
+      stops: [["Liss", 51.0447, -0.8927], ["Rother bridge", 51.0505, -0.8877], ["Liss Forest", 51.0571, -0.8842]] },
     { id: "grand-union-paddington", name: "Grand Union Canal (Paddington Arm)", type: "canal", leg: "Little Venice → Alperton", start: "Warwick Avenue (Bakerloo)", distance: "6.1 mi (9.8 km)", highlights: "Flat, quiet towpath out of Little Venice past Kensal Green and Wembley's edge — narrowboats all the way.", suitability: "Flat and easy underfoot — a calm long run away from the traffic.", loop: false, path: [[51.5225, -0.1830], [51.5270, -0.2200], [51.5330, -0.2550], [51.5400, -0.2990]] },
     { id: "lea-navigation", name: "Lea Navigation", type: "canal", leg: "Limehouse → Hackney Marshes", start: "Limehouse (DLR)", distance: "5.0 mi (8 km)", highlights: "Towpath from the Thames up past the Olympic Park and out to the wide-open Hackney Marshes.", suitability: "Flat, traffic-free and splittable — a favourite east London long run.", loop: false, path: [[51.5122, -0.0395], [51.5250, -0.0380], [51.5400, -0.0360], [51.5560, -0.0300]] },
     { id: "olympic-park", name: "Queen Elizabeth Olympic Park", type: "landmark", leg: "Stadium, Orbit & waterways loop", start: "Stratford / Hackney Wick", distance: "2.6 mi (4.2 km)", highlights: "The 2012 Stadium, the ArcelorMittal Orbit, the Aquatics Centre and waterside paths through the park.", suitability: "Wide, flat, way-marked paths — modern and sociable for all paces.", loop: true, path: [[51.5480, -0.0200], [51.5480, -0.0110], [51.5380, -0.0110], [51.5380, -0.0200], [51.5480, -0.0200]] },
@@ -1512,7 +1517,7 @@
     if (routesGeo) return routesGeo;
     const loaded = {};
     try {
-      const res = await fetch("data/routes.geojson");
+      const res = await vfetch("data/routes.geojson");
       if (res.ok) {
         const gj = await res.json();
         for (const f of gj.features) loaded[f.properties.id] = f.geometry;
@@ -1638,7 +1643,7 @@
   let routePubsPromise = null;
   function loadRoutePubs() {
     if (!routePubsPromise) {
-      routePubsPromise = fetch("data/route-pubs.json").then((r) => (r.ok ? r.json() : {})).catch(() => ({}));
+      routePubsPromise = vfetch("data/route-pubs.json").then((r) => (r.ok ? r.json() : {})).catch(() => ({}));
     }
     return routePubsPromise;
   }
@@ -1647,7 +1652,7 @@
   // oddities worth a detour (data/secrets.json, hand-curated).
   let secretsPromise = null;
   function loadSecrets() {
-    if (!secretsPromise) secretsPromise = fetch("data/secrets.json").then((r) => (r.ok ? r.json() : [])).catch(() => []);
+    if (!secretsPromise) secretsPromise = vfetch("data/secrets.json").then((r) => (r.ok ? r.json() : [])).catch(() => []);
     return secretsPromise;
   }
 
@@ -2127,7 +2132,7 @@
 
   // Populate the route-number datalist from the cached list of TfL bus routes.
   function loadBusList() {
-    fetch("data/bus-routes.json").then((r) => r.ok ? r.json() : []).then((ids) => {
+    vfetch("data/bus-routes.json").then((r) => r.ok ? r.json() : []).then((ids) => {
 
       const dl = document.getElementById("busList");
       if (dl) dl.innerHTML = ids.map((id) => `<option value="${escapeHtml(id)}"></option>`).join("");
@@ -2682,7 +2687,7 @@
   function loadVariantRoutes() {
     if (variantRoutesCache) return Promise.resolve(variantRoutesCache);
     if (!variantRoutesPromise) {
-      variantRoutesPromise = fetch("data/variant-routes.json")
+      variantRoutesPromise = vfetch("data/variant-routes.json")
         .then((r) => (r.ok ? r.json() : {}))
         .then((j) => { variantRoutesCache = j || {}; return variantRoutesCache; })
         .catch(() => { variantRoutesPromise = null; return {}; }); // allow a later retry
@@ -2860,7 +2865,7 @@
         gpxLink.setAttribute("download", `TubeRun-${slug}.gpx`);
         return;
       }
-      if (gpxText === null) { try { gpxText = await (await fetch(`routes/${slug}.gpx`)).text(); } catch (_) { gpxText = ""; } }
+      if (gpxText === null) { try { gpxText = await (await vfetch(`routes/${slug}.gpx`)).text(); } catch (_) { gpxText = ""; } }
       if (!gpxText) return;
       if (revUrl) URL.revokeObjectURL(revUrl);
       revUrl = URL.createObjectURL(new Blob([reverseGpxText(gpxText)], { type: "application/gpx+xml" }));
@@ -3053,7 +3058,7 @@
   // its own) against build-time tagging in data/boroughs.json.
   let boroughsPromise = null;
   function loadBoroughs() {
-    if (!boroughsPromise) boroughsPromise = fetch("data/boroughs.json").then((r) => (r.ok ? r.json() : null)).catch(() => null);
+    if (!boroughsPromise) boroughsPromise = vfetch("data/boroughs.json").then((r) => (r.ok ? r.json() : null)).catch(() => null);
     return boroughsPromise;
   }
   async function renderBoroughBagger() {
@@ -3088,7 +3093,7 @@
     if (!el) return;
     let items = GALLERY;
     try {
-      const res = await fetch("data/gallery.json", { cache: "no-cache" });
+      const res = await vfetch("data/gallery.json", { cache: "no-cache" });
       if (res.ok) { const j = await res.json(); if (Array.isArray(j)) items = j; }
     } catch (_) { /* fall back to placeholder below */ }
     // Only same-site relative image paths — gallery.json shouldn't be able to point elsewhere.
@@ -3308,6 +3313,16 @@
     return `${String(h).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
   }
   function defaultZoom(kind) { return kind === "geo" ? 1.4 : kind === "data" ? 1 : 1.6; }
+  // Data fetches carry the deploy version (from our own script tag's ?v=N),
+  // so the service worker's stale-while-revalidate can never pair new code
+  // with a previous deploy's data — the URL changes with every release.
+  const ASSET_V = (() => {
+    const s = document.querySelector('script[src*="script.js"]');
+    const m = s && /[?&]v=(\d+)/.exec(s.src);
+    return m ? m[1] : "0";
+  })();
+  const vfetch = (url, opts) => fetch(url + (url.includes("?") ? "&" : "?") + "v=" + ASSET_V, opts);
+
   // Network coverage mode: "tube" (default) keeps the site to the TfL network;
   // "all" adds the National Rail lines and out-of-London routes. The header
   // toggle persists the choice and reloads, so every surface follows the mode.
@@ -3326,11 +3341,64 @@
     });
   }
 
+  // Header search: stations, lines and curated routes in one box. Picking a
+  // line expands its Lines row, a route selects its card, a station centres
+  // the geographic map on it. The index respects the Tube / All lines mode.
+  function setupSiteSearch() {
+    const input = document.getElementById("siteSearch"), dl = document.getElementById("siteSearchList");
+    if (!input || !dl) return;
+    input.addEventListener("focus", async () => {
+      const net = await loadNetwork().catch(() => null);
+      if (!net || dl.childElementCount) return;
+      const opts = [];
+      for (const id in net) opts.push(`${net[id].name} (line)`);
+      const seen = new Set();
+      for (const id in net) for (const sid in net[id].stations) {
+        const n = net[id].stations[sid].n, k = norm(n);
+        if (!seen.has(k)) { seen.add(k); opts.push(`${n} (station)`); }
+      }
+      ROUTES.forEach((r) => { if (NET_MODE === "all" || !r.far) opts.push(`${r.name} (route)`); });
+      opts.sort((a, b) => a.localeCompare(b));
+      dl.innerHTML = opts.map((o) => `<option value="${escapeHtml(o)}"></option>`).join("");
+    }, { once: true });
+    const go = async () => {
+      const m = /^(.+) \((line|station|route)\)$/.exec(input.value.trim());
+      if (!m) return;
+      const [, name, kind] = m;
+      input.value = "";
+      input.blur();
+      if (kind === "route") {
+        const card = [...document.querySelectorAll("#routeList .route-card")].find((c) => c.querySelector("h3").textContent === name);
+        if (card) { card.scrollIntoView({ behavior: "smooth", block: "center" }); card.click(); }
+        return;
+      }
+      if (kind === "line") {
+        document.getElementById("stats").scrollIntoView({ behavior: "smooth" });
+        const btn = [...document.querySelectorAll(".ls-row-btn")].find((b) => (b.closest("tr") || {}).dataset && b.closest("tr").dataset.line === name);
+        if (btn && btn.getAttribute("aria-expanded") !== "true") btn.click();
+        return;
+      }
+      const net = await loadNetwork().catch(() => null);
+      let st = null;
+      if (net) outer: for (const id in net) for (const sid in net[id].stations) {
+        if (norm(net[id].stations[sid].n) === norm(name)) { st = net[id].stations[sid]; break outer; }
+      }
+      document.getElementById("network").scrollIntoView({ behavior: "smooth" });
+      if (st && tmMap.map) {
+        tmMap.map.setView([st.lat, st.lon], Math.max(tmMap.map.getZoom(), 14), { animate: true });
+        L.popup({ autoPan: false }).setLatLng([st.lat, st.lon])
+          .setContent(`<b>${escapeHtml(st.n)}</b>` + interchangeTags(st.n, "search")).openOn(tmMap.map);
+      }
+    };
+    input.addEventListener("change", go);
+    input.addEventListener("keydown", (e) => { if (e.key === "Enter") go(); });
+  }
+
   let netPromise = null; // memoise the in-flight fetch so parallel callers share one request
   function loadNetwork() {
     if (!netPromise) {
       netPromise = (async () => {
-        const [nRes, rRes, tRes, wRes] = await Promise.all([fetch("data/tube-network.json"), NET_MODE === "all" ? fetch("data/nr-network.json") : Promise.resolve({ ok: false }), fetch("data/station-toilets.json"), fetch("data/facilities-water.json")]);
+        const [nRes, rRes, tRes, wRes] = await Promise.all([vfetch("data/tube-network.json"), NET_MODE === "all" ? vfetch("data/nr-network.json") : Promise.resolve({ ok: false }), vfetch("data/station-toilets.json"), vfetch("data/facilities-water.json")]);
         if (!nRes.ok) throw new Error("network data");
         netData = await nRes.json();
         // National Rail commuter lines join the same network model (marked
@@ -3528,7 +3596,7 @@
   function wtSaveZoom() { if (curMap !== "walking") return; try { localStorage.setItem("tuberun_tmzoom", String(curZoom)); } catch (_) { /* private mode */ } }
   async function loadWalkTimes() {
     if (wtData) return wtData;
-    const res = await fetch("data/walk-times.json", { cache: "no-cache" });
+    const res = await vfetch("data/walk-times.json", { cache: "no-cache" });
     if (!res.ok) throw new Error("walk times");
     const raw = await res.json();
     // Zero-trust: coerce every numeric field and drop malformed markers, so
@@ -3625,7 +3693,7 @@
   let linesGeo = null;
   async function loadLines() {
     if (linesGeo) return linesGeo;
-    const [res, nrRes] = await Promise.all([fetch("data/tube-lines.geojson"), NET_MODE === "all" ? fetch("data/nr-lines.geojson") : Promise.resolve({ ok: false })]);
+    const [res, nrRes] = await Promise.all([vfetch("data/tube-lines.geojson"), NET_MODE === "all" ? vfetch("data/nr-lines.geojson") : Promise.resolve({ ok: false })]);
     if (!res.ok) throw new Error("lines geojson");
     linesGeo = await res.json();
     // National Rail geometry rides along, marked `nr` so the map can style it
@@ -3646,7 +3714,7 @@
     if (!GPX_LINES.has(slug)) return null; // no file for this line — skip the 404 round-trip
     if (routeGpxCache[slug] !== undefined) return routeGpxCache[slug];
     try {
-      const res = await fetch(`routes/${slug}.gpx`);
+      const res = await vfetch(`routes/${slug}.gpx`);
       if (!res.ok) throw new Error("gpx " + res.status);
       const doc = new DOMParser().parseFromString(await res.text(), "application/xml");
       const segs = [...doc.getElementsByTagName("trkseg")]
@@ -4501,14 +4569,24 @@
     if (!best || bestScore >= 0.4 || best.ia === best.ib) return [A, B];
     return best.ia < best.ib ? best.track.slice(best.ia, best.ib + 1) : best.track.slice(best.ib, best.ia + 1).reverse();
   }
-  // Stitch a leg's real pavement hop by hop from the line's branch tracks.
+  // Pavement geometry for National Rail's secondary branches (the mains live
+  // in routes/<id>.gpx) — so journey legs off the main line trace real streets.
+  let nrBranchPromise = null;
+  function loadNrBranches() {
+    if (!nrBranchPromise) nrBranchPromise = vfetch("data/nr-branch-routes.json").then((r) => (r.ok ? r.json() : {})).catch(() => ({}));
+    return nrBranchPromise;
+  }
+  // Stitch a leg's real pavement hop by hop from every track we hold for the
+  // line: its main-route GPX, its routed NR branches, and its tube variants.
   async function segmentPavement(segNodes, slug, nodes) {
     const coords = segNodes.map((k) => [nodes[k].lat, nodes[k].lon]);
     const segs = GPX_LINES.has(slug) ? await loadRouteGpx(slug) : null;
-    if (!segs || !segs.length) return coords;
+    const [branches, variants] = await Promise.all([loadNrBranches(), loadVariantRoutes()]);
+    const tracks = [...(segs || []), ...(branches[slug] || []), ...((variants[slug] || []).filter((v) => v && v.length > 1))];
+    if (!tracks.length) return coords;
     const out = [];
     for (let i = 0; i < coords.length - 1; i++) {
-      const hop = hopPavement(segs, coords[i], coords[i + 1]);
+      const hop = hopPavement(tracks, coords[i], coords[i + 1]);
       for (let j = out.length ? 1 : 0; j < hop.length; j++) out.push(hop[j]);
     }
     return out.length > 1 ? out : coords;
@@ -5033,7 +5111,7 @@
     ["setupPlanner", setupPlanner], ["enrichInterchanges", enrichInterchanges], ["setupBusRunner", setupBusRunner],
     ["setupFollowAlong", setupFollowAlong],
     ["setupJourneyPlanner", setupJourneyPlanner], ["renderLineCollector", renderLineCollector],
-    ["renderTimeMachine", renderTimeMachine], ["setupNetToggle", setupNetToggle],
+    ["renderTimeMachine", renderTimeMachine], ["setupNetToggle", setupNetToggle], ["setupSiteSearch", setupSiteSearch],
     ["renderGallery", renderGallery], ["wireSocials", wireSocials],
     ["loadWeather", loadWeather], ["setupScrollSpy", setupScrollSpy],
     ["setupUnitToggle", setupUnitToggle], ["setupLiveClock", setupLiveClock],
