@@ -1586,7 +1586,18 @@
     el.hidden = false;
     el.classList.add("strip");
     el.style.setProperty("--line-col", c);
-    el.innerHTML = stripMapHtml(null, c, r.name, { wp: r.stops, bannerLabel: `${r.name} — access points`, legKms, totalKm: cum[path.length - 1] });
+    el.innerHTML = stripMapHtml(null, c, r.name, { wp: r.stops, bannerLabel: `${r.name} — access points`, legKms, totalKm: cum[path.length - 1], tap: true });
+    // Tap an access point to centre it on the route map above.
+    el.querySelectorAll(".stn").forEach((sEl, si) => sEl.addEventListener("click", () => {
+      const s = r.stops[si];
+      if (routeMap.mode === "gl" && routeMap.gl && routeMap.gl.map) {
+        const glMap = routeMap.gl.map;
+        glMap.easeTo({ center: [s[2], s[1]], zoom: Math.max(glMap.getZoom(), 14.5), duration: 600 });
+        new maplibregl.Popup({ offset: 10 }).setLngLat([s[2], s[1]]).setText(s[0]).addTo(glMap);
+      } else if (routeMap.map) {
+        routeMap.map.setView([s[1], s[2]], Math.max(routeMap.map.getZoom(), 15), { animate: true });
+      }
+    }));
   }
 
   function drawRoute(i) {
@@ -2878,11 +2889,19 @@
       if (r && r.latlngs.length) map.fitBounds(L.latLngBounds(r.latlngs), { padding: [18, 18] });
       if (opt && opt.wp) setRowStats(tr, waypointsKm(opt.wp) * ROAD_FACTOR, opt.wp.length); // reflect the route in the row
       // Sign-style station strip under the map, running in the drawn direction.
+      // Tapping a station centres and names it on the mini-map above.
       const stripEl = detailInner.querySelector(".ls-strip");
       if (stripEl && seq && seq.length > 1) {
         const stripWp = reversed ? seq.slice().reverse() : seq;
         stripEl.style.setProperty("--line-col", net[id].colour);
-        stripEl.innerHTML = stripMapHtml(null, net[id].colour, name, { wp: stripWp });
+        stripEl.innerHTML = stripMapHtml(null, net[id].colour, name, { wp: stripWp, tap: true });
+        stripEl.querySelectorAll(".stn").forEach((sEl, si) => sEl.addEventListener("click", () => {
+          const p = stripWp[si];
+          if (lsMap !== map) return; // panel re-rendered since
+          map.setView([p[1], p[2]], Math.max(map.getZoom(), 15), { animate: true });
+          L.popup({ offset: [0, -2], autoPan: false }).setLatLng([p[1], p[2]])
+            .setContent(`<b>${escapeHtml(p[0])}</b>` + interchangeTags(p[0], name)).openOn(map);
+        }));
       }
       const elBox = detailInner.querySelector(".ls-elev");
       if (elBox && r && r.latlngs) {

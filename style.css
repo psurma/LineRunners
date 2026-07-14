@@ -346,7 +346,7 @@ section { max-width: var(--max); margin: 0 auto; padding: clamp(48px, 8vw, 88px)
   display: flex;
   flex-direction: column;
   align-items: center;
-  width: 88px;
+  flex: 1 0 88px; /* short lines stretch end-to-end; long ones scroll at 88px per stop */
   padding: 0;
 }
 /* the rail row keeps the connecting line and the dot on the same centre line */
