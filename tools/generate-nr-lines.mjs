@@ -75,6 +75,30 @@ function dedupeBranches(branches) {
       (other.size > sets[i].size || j < i) && [...sets[i]].every((id) => other.has(id))));
 }
 
+// TfL splits some routes into chained patterns (Great Northern arrives as
+// "Hertford North → Finsbury Park" plus "Finsbury Park → Moorgate"). Where one
+// branch ends exactly where another starts, join them into the through route
+// real trains run, so the displayed main branch reaches its true terminus.
+function stitchBranches(branches) {
+  const out = branches.map((b) => b.slice());
+  for (let joined = true; joined; ) {
+    joined = false;
+    outer: for (let i = 0; i < out.length; i++) {
+      for (let j = 0; j < out.length; j++) {
+        if (i === j) continue;
+        const a = out[i], b = out[j];
+        if (a[a.length - 1].id === b[0].id) {
+          out[i] = a.concat(b.slice(1));
+          out.splice(j, 1);
+          joined = true;
+          break outer;
+        }
+      }
+    }
+  }
+  return out;
+}
+
 // Iterative Douglas-Peucker (same tolerance approach as the variant builder).
 function perp(p, a, b) {
   const dy = b[1] - a[1], dx = b[0] - a[0];
@@ -117,7 +141,7 @@ for (const [id, meta] of Object.entries(NR_LINES)) {
   const rawBranches = (seq.stopPointSequences || []).map((sp) =>
     (sp.stopPoint || []).map((s) => ({ id: s.id, n: cleanName(s.name), lat: r5(s.lat), lon: r5(s.lon) })));
   const clipped = rawBranches.map(clipRun).filter((b) => b.length >= 2);
-  const branches = dedupeBranches(clipped);
+  const branches = dedupeBranches(stitchBranches(dedupeBranches(clipped)));
 
   const stations = {};
   for (const b of branches) for (const s of b) stations[s.id] = { n: s.n, lat: s.lat, lon: s.lon };

@@ -3213,6 +3213,7 @@
     },
     district: { 1932: ["Upney", "Becontree", "Dagenham Heathway"], 1935: ["Elm Park"] },
     windrush: { 1999: ["Canada Water"], 2010: ["Shoreditch High Street", "Hoxton", "Haggerston", "Dalston Junction"] },
+    "great-northern": { 1904: ["Drayton Park", "Essex Road", "Old Street", "Moorgate", "Highbury & Islington"] }, // the Northern City line
     weaver: { 1870: ["St James Street"], 1873: ["Wood Street", "Highams Park", "Chingford"], 1891: ["Southbury", "Turkey Street", "Theobalds Grove"] },
     mildmay: { 1853: ["Acton Central"], 1869: ["Kew Gardens", "Gunnersbury", "Richmond"], 1880: ["South Acton"] },
   };
