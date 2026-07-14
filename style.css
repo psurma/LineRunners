@@ -475,6 +475,9 @@ section { max-width: var(--max); margin: 0 auto; padding: clamp(48px, 8vw, 88px)
 .ls-strip::-webkit-scrollbar, .route-strip::-webkit-scrollbar, .line-diagram::-webkit-scrollbar { height: 8px; }
 .ls-strip::-webkit-scrollbar-thumb, .route-strip::-webkit-scrollbar-thumb, .line-diagram::-webkit-scrollbar-thumb { background: #c4cad4; border-radius: 4px; }
 .ls-strip::-webkit-scrollbar-track, .route-strip::-webkit-scrollbar-track, .line-diagram::-webkit-scrollbar-track { background: transparent; }
+.ls-strip, .route-strip, .line-diagram { cursor: grab; }
+.strip-dragging { cursor: grabbing; user-select: none; }
+.stn-tag { cursor: pointer; }
 
 /* access-point strip under the routes map, styled like the trailside sign */
 .route-strip { margin-top: 14px; overflow-x: auto; background: var(--card); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow); padding: 12px 14px; }

@@ -3464,6 +3464,53 @@
     if (pending) loadNetwork().catch(() => null).then(() => setTimeout(() => go(pending), 900));
   }
 
+  // Every horizontal strip map can be grabbed with the mouse and dragged to
+  // scroll. A 5px threshold keeps plain clicks working (station picks,
+  // interchange pills); once a real drag happened the click it generates is
+  // swallowed. Interchange pills double as links to that line's row in the
+  // Line by line table. Touch scrolling is native and stays untouched.
+  function setupStripInteractions() {
+    const SCROLLERS = ".line-diagram, .ls-strip, .route-strip";
+    let el = null, startX = 0, startLeft = 0, dragged = false, justDragged = false;
+    document.addEventListener("pointerdown", (e) => {
+      if (e.pointerType !== "mouse" || e.button !== 0) return;
+      el = e.target.closest(SCROLLERS);
+      if (!el || el.scrollWidth <= el.clientWidth) { el = null; return; }
+      startX = e.clientX; startLeft = el.scrollLeft; dragged = false;
+    });
+    document.addEventListener("pointermove", (e) => {
+      if (!el) return;
+      const dx = e.clientX - startX;
+      if (!dragged && Math.abs(dx) < 5) return;
+      dragged = true;
+      el.classList.add("strip-dragging");
+      el.scrollLeft = startLeft - dx;
+    });
+    const end = () => {
+      if (!el) return;
+      el.classList.remove("strip-dragging");
+      el = null;
+      if (dragged) { justDragged = true; setTimeout(() => { justDragged = false; }, 80); }
+    };
+    document.addEventListener("pointerup", end);
+    document.addEventListener("pointercancel", end);
+    document.addEventListener("selectstart", (e) => { if (el && dragged) e.preventDefault(); });
+    document.addEventListener("click", (e) => {
+      if (justDragged) { e.stopPropagation(); e.preventDefault(); return; }
+      const tag = e.target.closest(".stn-tag");
+      if (!tag) return;
+      const btn = [...document.querySelectorAll(".ls-row-btn")].find((b) => {
+        const tr = b.closest("tr");
+        return tr && tr.dataset.line === tag.textContent;
+      });
+      if (!btn) return; // pill names something without a Lines row (e.g. Tramlink)
+      e.preventDefault();
+      e.stopPropagation();
+      if (btn.getAttribute("aria-expanded") !== "true") btn.click();
+      btn.closest("tr").scrollIntoView({ behavior: "smooth", block: "center" });
+    }, true);
+  }
+
   let netPromise = null; // memoise the in-flight fetch so parallel callers share one request
   function loadNetwork() {
     if (!netPromise) {
@@ -5182,6 +5229,7 @@
     ["setupFollowAlong", setupFollowAlong],
     ["setupJourneyPlanner", setupJourneyPlanner], ["renderLineCollector", renderLineCollector],
     ["renderTimeMachine", renderTimeMachine], ["setupNetToggle", setupNetToggle], ["setupSiteSearch", setupSiteSearch],
+    ["setupStripInteractions", setupStripInteractions],
     ["renderGallery", renderGallery], ["wireSocials", wireSocials],
     ["loadWeather", loadWeather], ["setupScrollSpy", setupScrollSpy],
     ["setupUnitToggle", setupUnitToggle], ["setupLiveClock", setupLiveClock],
