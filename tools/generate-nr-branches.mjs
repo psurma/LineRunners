@@ -79,9 +79,10 @@ let done = 0;
 for (const id in NET) {
   const ln = NET[id];
   const mainKey = (ln.route || []).join("|");
+  const mainKeyRev = [...(ln.route || [])].reverse().join("|");
   out[id] = [];
   for (const b of ln.branches || []) {
-    if (b.join("|") === mainKey || b.length < 2) continue;
+    if (b.join("|") === mainKey || b.join("|") === mainKeyRev || b.length < 2) continue;
     const st = b.map((sid) => ln.stations[sid]).filter(Boolean);
     if (st.length < 2) continue;
     const raw = await routeStations(st);

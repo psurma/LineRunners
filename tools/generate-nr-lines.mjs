@@ -27,17 +27,19 @@ const BBOX = { minLat: 50.75, maxLat: 51.95, minLon: -1.15, maxLon: 0.75 };
 
 // Display names + line colours (brand-inspired, adjusted for distinctness
 // against the existing 18 tube/Overground colours — tweak freely).
+// termini: the operator's London terminus station names (post-cleanName) —
+// the displayed main route must be anchored at one so strips read London-out.
 const NR_LINES = {
-  "chiltern-railways": { name: "Chiltern Railways", colour: "#00BFFF" },
-  "thameslink": { name: "Thameslink", colour: "#E9438D" },
-  "c2c": { name: "c2c", colour: "#B7007C" },
-  "great-northern": { name: "Great Northern", colour: "#0072BC" },
-  "greater-anglia": { name: "Greater Anglia", colour: "#8B1E3F" },
-  "great-western-railway": { name: "Great Western Railway", colour: "#0A493E" },
-  "heathrow-express": { name: "Heathrow Express", colour: "#532E63" },
-  "southeastern": { name: "Southeastern", colour: "#00A3A9" },
-  "southern": { name: "Southern", colour: "#8CC63E" },
-  "south-western-railway": { name: "South Western Railway", colour: "#55595C" },
+  "chiltern-railways": { name: "Chiltern Railways", colour: "#00BFFF", termini: ["London Marylebone"] },
+  "thameslink": { name: "Thameslink", colour: "#E9438D", termini: ["London St Pancras International", "London Blackfriars"], through: true },
+  "c2c": { name: "c2c", colour: "#B7007C", termini: ["London Fenchurch Street"] },
+  "great-northern": { name: "Great Northern", colour: "#0072BC", termini: ["Moorgate", "London King's Cross"] },
+  "greater-anglia": { name: "Greater Anglia", colour: "#8B1E3F", termini: ["London Liverpool Street"] },
+  "great-western-railway": { name: "Great Western Railway", colour: "#0A493E", termini: ["London Paddington"] },
+  "heathrow-express": { name: "Heathrow Express", colour: "#532E63", termini: ["London Paddington"] },
+  "southeastern": { name: "Southeastern", colour: "#00A3A9", termini: ["London Charing Cross", "London Cannon Street", "London Victoria", "London Bridge", "London St Pancras International", "London Blackfriars"] },
+  "southern": { name: "Southern", colour: "#8CC63E", termini: ["London Victoria", "London Bridge"] },
+  "south-western-railway": { name: "South Western Railway", colour: "#55595C", termini: ["London Waterloo"] },
 };
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -150,12 +152,56 @@ for (const [id, meta] of Object.entries(NR_LINES)) {
   for (const b of branches) for (const s of b) stations[s.id] = { n: s.n, lat: s.lat, lon: s.lon };
   if (Object.keys(stations).length < 2) { summary.push({ line: id, stations: 0, note: "skipped — nothing inside bbox" }); continue; }
 
-  // The line's displayed main route: its longest branch by distance (a
-  // fast pattern to the coast beats a stop-heavy suburban one).
+  // The line's displayed main route: the longest run anchored at the
+  // operator's London terminus, so a fast pattern to the coast beats a
+  // stop-heavy suburban one but a stray non-London pattern (SWR's
+  // Portsmouth–Byfleet fragment, GWR's North Downs line) can't win.
+  // Candidates are terminus-containing branches plus single splices — a
+  // non-terminus branch joined to a terminus branch at a shared station,
+  // for operators whose full main line never appears as one pattern.
+  // The result is oriented London-first so strips read out of town.
   const toRad = Math.PI / 180;
   const brKm = (b) => { let km = 0; for (let i = 1; i < b.length; i++) { const a = b[i - 1], c = b[i];
     km += 12742 * Math.asin(Math.sqrt(Math.sin((c.lat - a.lat) * toRad / 2) ** 2 + Math.cos(a.lat * toRad) * Math.cos(c.lat * toRad) * Math.sin((c.lon - a.lon) * toRad / 2) ** 2)); } return km; };
-  const main = branches.reduce((a, b) => (brKm(b) > brKm(a) ? b : a), branches[0]);
+  const termini = meta.termini || [];
+  let candidates = [];
+  if (meta.through) {
+    // Through-London line (Thameslink): the terminus sits mid-route, any
+    // pattern passing it qualifies and keeps its own orientation.
+    candidates = branches.filter((b) => b.some((s) => termini.includes(s.n)));
+  } else {
+    // Terminus operator: split each terminus-touching pattern at the
+    // terminus into arms, each reading terminus-first. This also
+    // dismembers degenerate stitched loops that only pass through London.
+    for (const b of branches) {
+      const ti = b.findIndex((s) => termini.includes(s.n));
+      if (ti === -1) continue;
+      const armA = b.slice(0, ti + 1).reverse(), armB = b.slice(ti);
+      if (armA.length > 1) candidates.push(armA);
+      if (armB.length > 1) candidates.push(armB);
+    }
+  }
+  if (!candidates.length) {
+    // No pattern reaches the terminus: splice the longest branch with a
+    // terminus-touching one at a shared station (kept terminus-first).
+    for (const base of branches) {
+      for (const tb of branches) {
+        const ti = tb.findIndex((s) => termini.includes(s.n));
+        if (ti === -1) continue;
+        for (let bi = 0; bi < base.length; bi++) {
+          const si = tb.findIndex((s) => s.id === base[bi].id);
+          if (si === -1) continue;
+          const tail = si <= ti ? tb.slice(si, ti + 1) : tb.slice(ti, si + 1).reverse();
+          for (const head of [base.slice(0, bi + 1), base.slice(bi).reverse()]) {
+            const cand = [...head, ...tail.slice(1)].reverse();
+            if (new Set(cand.map((s) => s.id)).size === cand.length) candidates.push(cand);
+          }
+        }
+      }
+    }
+  }
+  if (!candidates.length) candidates = branches;
+  const main = candidates.reduce((a, b) => (brKm(b) > brKm(a) ? b : a), candidates[0]);
 
   network[id] = { name: meta.name, colour: meta.colour, stations, branches: branches.map((b) => b.map((s) => s.id)), route: main.map((s) => s.id) };
 
