@@ -17,6 +17,14 @@ within sections is roughly impact-per-effort.
 3. **GPS auto-ticking + LifeMap** (steal: [CityStrides](https://citystrides.com/)) — Follow Live
    already tracks GPS: auto-tick stations you pass (25 m node radius, optional Hard Mode),
    per-line completion %, and a personal "everywhere you've run" heatmap layer on the map.
+4. **Future Time Machine** (Pete's idea) — run the Time Machine *past today* into proposed and
+   under-construction expansion. The map already animates the network year by year; add forward
+   years driven by a proposals dataset (station list + proposed/target year + status). Seed with
+   TfL's own schemes: the Bakerloo line extension (Elephant & Castle → Old Kent Road → New Cross
+   Gate → Lewisham, then on to Hayes / Beckenham Junction over the existing NR lines), DLR to
+   Thamesmead, further Elizabeth-line phases, safeguarded Crossrail 2, the Sutton tram. Style by
+   status (dotted = proposed, dashed = planned/funded) with an "alignments indicative" note.
+   Pete has TfL's own Bakerloo-extension map to trace from.
 
 ## From tuberun.app (leftovers not yet stolen)
 
@@ -66,3 +74,9 @@ within sections is roughly impact-per-effort.
   tab's picker still shows one entry per NR line (would add ~90 entries — needs grouping).
 - **Greater Anglia stopping-pattern main** — the current main has a real but ugly 25 km
   Stratford - Shenfield fast hop; a stopping pattern would read better on the strip.
+- **Import the running-routes guidebook** — Pete has a PDF guidebook of London running routes
+  (e.g. an Epping Forest ~15 mi "Northeast Hotspots" loop). None are in the site yet — the Route
+  ideas library is just 7 hand-curated central routes. Re-share the PDF to extract them all into
+  `ROUTES`, carrying the book's Length / Surface / Terrain / Weather metadata, and trace each on
+  pavements as GPX like the lines. Would roughly triple the Route ideas and add proper out-of-town
+  trail runs (Epping Forest, Richmond Park, etc.).
