@@ -1392,6 +1392,22 @@
 </TrainingCenterDatabase>`;
   }
 
+  // Build a minimal GPX track from a route's points ([lat, lon, ele?]) — the same
+  // geometry the site draws — so a runner can export the exact variant they pick on
+  // the map, not just the line's whole-line file.
+  function gpxFromPoints(points, name) {
+    const pts = points.filter((p) => Number.isFinite(p[0]) && Number.isFinite(p[1]));
+    if (pts.length < 2) return null;
+    const trkpts = pts.map((p) => {
+      const ele = Number.isFinite(p[2]) ? `<ele>${p[2].toFixed(1)}</ele>` : "";
+      return `<trkpt lat="${p[0]}" lon="${p[1]}">${ele}</trkpt>`;
+    }).join("");
+    return `<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="TubeRun" xmlns="http://www.topografix.com/GPX/1/1">
+ <trk><name>${escapeHtml(name)}</name><trkseg>${trkpts}</trkseg></trk>
+</gpx>`;
+  }
+
   // One delegated handler covers every "⌚ TCX" link the templates emit
   // (journey board, plan, line-by-line, geo map picker).
   document.addEventListener("click", async (e) => {
@@ -2939,8 +2955,9 @@
   // Entries for the network map's route picker: this month's run (when it's a Tube
   // line, drawn from its pavement GPX) followed by every branching line's routes,
   // grouped by line. Each carries the line id + waypoints so any can be highlighted.
-  function mapRouteEntries(net, hiId) {
+  async function mapRouteEntries(net, hiId) {
     const entries = [];
+    const vroutes = await loadVariantRoutes(); // per-variant pavement polylines (aligned to LINE_VARIANTS)
     if (hiId && net[hiId]) {
       const base = rtStations(net, net[hiId].name);
       const ends = base && base.length > 1 ? ` · ${base[0][0]} → ${base[base.length - 1][0]}` : "";
@@ -2948,18 +2965,18 @@
     }
     for (const id of Object.keys(LINE_VARIANTS)) {
       if (!net[id]) continue;
-      const opts = buildVariantOptions(net, id);
+      const opts = buildVariantOptions(net, id, vroutes[id]);
       if (!opts) continue;
-      // A GPX line's pavement route (routes/<id>.gpx, track 0) traces its main
-      // end-to-end branch. Draw the main variant (either direction) from that GPX
-      // so it follows the streets; branch variants stay station hops.
+      // Every variant carries its own pre-routed pavement polyline (variant-routes.json,
+      // aligned to LINE_VARIANTS[id]) so it follows real streets; the main end-to-end
+      // variant falls back to the whole-line GPX if that geometry is ever missing.
       const main = GPX_LINES.has(id) ? rtStations(net, net[id].name) : null;
       const mainA = main && main.length > 1 ? main[0][0] : null;
       const mainB = main && main.length > 1 ? main[main.length - 1][0] : null;
       for (const o of opts) {
         const a = o.wp[0][0], b = o.wp[o.wp.length - 1][0];
         const isMain = mainA && ((a === mainA && b === mainB) || (a === mainB && b === mainA));
-        entries.push({ id, wp: o.wp, group: net[id].name, label: o.label, gpx: !!isMain });
+        entries.push({ id, wp: o.wp, route: o.route, group: net[id].name, label: o.label, gpx: !!isMain });
       }
     }
     // Every remaining line gets its single end-to-end route too — linear Tube
@@ -4424,17 +4441,51 @@
       // GPX + TCX downloads for the selected line, kept in sync as the choice changes.
       const gpx = L.DomUtil.create("a", "gpx-dl geo-gpx", row);
       gpx.textContent = "↓ GPX";
-      const tcx = L.DomUtil.create("a", "gpx-dl tcx-dl geo-gpx", row);
+      // No tcx-dl class: the picker builds TCX from the picked variant's points via
+      // its own handler below (the delegated .tcx-dl handler only knows the main variant).
+      const tcx = L.DomUtil.create("a", "gpx-dl geo-gpx geo-tcx", row);
       tcx.textContent = "⌚ TCX";
       tcx.href = "#";
       tcx.title = "Download as a Garmin TCX course — Virtual Partner pacing at your site pace";
       // Distance / stops / running time of the selected route, under the picker.
       const stats = L.DomUtil.create("div", "geo-stats", div);
+      let curIdx = selectedIdx, gpxBlob = null;
+      const slugify = (s) => String(s).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+      // A picked variant exports its own pavement polyline (variant-routes.json — the
+      // geometry the map draws); whole-line entries keep their static GPX file.
       const syncGpx = (i) => {
-        const id = entries[i] && entries[i].id;
-        if (id && GPX_LINES.has(id)) { gpx.href = `routes/${id}.gpx`; gpx.download = `TubeRun-${id}.gpx`; gpx.title = "Download this line's pavement route as a GPX file for your watch"; gpx.style.display = ""; tcx.dataset.slug = id; tcx.style.display = ""; }
-        else { gpx.removeAttribute("href"); gpx.style.display = "none"; delete tcx.dataset.slug; tcx.style.display = "none"; }
+        const e = entries[i];
+        if (gpxBlob) { URL.revokeObjectURL(gpxBlob); gpxBlob = null; }
+        if (e && e.route && e.route.length > 1) {
+          const text = gpxFromPoints(e.route, `TubeRun ${e.label}`);
+          if (text) {
+            gpxBlob = URL.createObjectURL(new Blob([text], { type: "application/gpx+xml" }));
+            gpx.href = gpxBlob; gpx.download = `TubeRun-${e.id}-${slugify(e.label)}.gpx`;
+            gpx.title = "Download this exact route as a GPX file for your watch";
+            gpx.style.display = ""; tcx.style.display = ""; return;
+          }
+        }
+        if (e && GPX_LINES.has(e.id)) {
+          gpx.href = `routes/${e.id}.gpx`; gpx.download = `TubeRun-${e.id}.gpx`;
+          gpx.title = "Download this line's pavement route as a GPX file for your watch";
+          gpx.style.display = ""; tcx.style.display = "";
+        } else { gpx.removeAttribute("href"); gpx.style.display = "none"; tcx.style.display = "none"; }
       };
+      L.DomEvent.on(tcx, "click", async (ev) => {
+        L.DomEvent.preventDefault(ev);
+        const e = entries[curIdx];
+        let pts = e && e.route && e.route.length > 1 ? e.route : null;
+        if (!pts && e && GPX_LINES.has(e.id)) {
+          const vr = await loadVariantRoutes();
+          pts = (vr[e.id] && vr[e.id][0]) || ((await loadRouteGpx(e.id)) || [])[0] || null;
+        }
+        const doc = pts && pts.length > 1 ? tcxFromPoints(pts, `TubeRun ${e.label}`, false) : null;
+        if (!doc) { const was = tcx.textContent; tcx.textContent = "TCX unavailable"; setTimeout(() => { tcx.textContent = was; }, 1800); return; }
+        const url = URL.createObjectURL(new Blob([doc], { type: "application/vnd.garmin.tcx+xml" }));
+        const a = document.createElement("a"); a.href = url; a.download = `TubeRun-${e.id}-${slugify(e.label)}.tcx`;
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 4000);
+      });
       const syncStats = (i) => {
         const wp = entries[i] && entries[i].wp;
         if (!wp || wp.length < 2) { stats.style.display = "none"; return; }
@@ -4442,7 +4493,7 @@
         stats.style.display = "";
         stats.textContent = `${geoDistStr(km)} · ${wp.length} stops · 🏃 ${fmtTime(km * rtPace)}`;
       };
-      const sync = (i) => { syncGpx(i); syncStats(i); };
+      const sync = (i) => { curIdx = i; syncGpx(i); syncStats(i); };
       sync(selectedIdx);
       L.DomEvent.disableClickPropagation(div);
       L.DomEvent.disableScrollPropagation(div);
@@ -4735,7 +4786,7 @@
     async function drawMapRoute(entry) {
       if (hiRouteGrp) { hiRouteGrp.remove(); hiRouteGrp = null; }
       curEntry = entry;
-      const r = await drawRunRoute(map, net, entry.id, { waypoints: entry.wp, gpx: entry.gpx, stale });
+      const r = await drawRunRoute(map, net, entry.id, { waypoints: entry.wp, routeLine: entry.route, gpx: entry.gpx, stale });
       hiRouteGrp = r && r.group;
       // After the first render, switching route re-lights the chosen line: its
       // track goes bold (others dim) and its per-stop labels are recomputed and
@@ -4751,7 +4802,7 @@
     }
     // The picker honours the time machine: only lines whose corridor existed
     // in the chosen year are offered (before 1836 there's nothing to run).
-    const allRouteEntries = mapRouteEntries(net, hi);
+    const allRouteEntries = await mapRouteEntries(net, hi);
     const entriesForYear = () => (tmYear >= 9999 ? allRouteEntries : allRouteEntries.filter((e) => lineYear(e.id) <= tmYear));
     let variantCtl = null;
     function buildPicker(entries, selectedIdx) {
