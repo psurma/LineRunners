@@ -992,6 +992,10 @@ body.tm-map-active .tm-zoom, body.tm-map-active .tm-scrollhint { display: none; 
 .route-layout { display: grid; gap: 20px; }
 .route-map { width: 100%; height: 440px; border-radius: 16px; overflow: hidden; border: 1px solid var(--line); box-shadow: var(--shadow); background: #eef1f4; }
 .route-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; }
+.routes-toggle-row { display: flex; justify-content: center; margin-top: 20px; }
+.routes-toggle { font: inherit; font-weight: 700; cursor: pointer; padding: 11px 26px; border-radius: 999px; border: 1px solid var(--line); background: var(--card); color: var(--tfl-blue); box-shadow: var(--shadow); transition: background 0.15s, color 0.15s, border-color 0.15s; }
+.routes-toggle:hover { background: var(--tfl-blue); color: #fff; border-color: var(--tfl-blue); }
+.routes-toggle:focus-visible { outline: 2px solid var(--tfl-blue); outline-offset: 2px; }
 /* Desktop: cards on the left, map pinned in view on the right so clicking a card never scrolls it off-screen. */
 @media (min-width: 861px) {
   .route-layout { grid-template-columns: minmax(0, 1fr) minmax(340px, 460px); align-items: start; }

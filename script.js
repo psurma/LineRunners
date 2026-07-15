@@ -2081,6 +2081,8 @@
   ];
   const TYPE_LABELS = { all: "All", park: "Parks", trail: "Trails", canal: "Canals", river: "Rivers", landmark: "Landmarks", disused: "Disused railways", race: "Races" };
   const routeFilter = { type: "all", dist: "all" };
+  const ROUTE_CARD_LIMIT = 6; // route cards shown before the "Show all" toggle (the library is long)
+  let routesExpanded = false;
   const distBucket = (k) => { const b = DIST_BUCKETS.find((x) => x.test(k)); return b ? b.key : ""; };
   const routeMatches = (r) => (NET_MODE === "all" || !r.far) // out-of-London routes ride with the All lines mode
     && (routeFilter.type === "all" || r.type === routeFilter.type)
@@ -2110,6 +2112,16 @@
     btn.textContent = ran ? "✓ Ran this route" : "＋ Mark as run";
   }
 
+  // The "Show all / Show fewer" control under the (long) route library.
+  function setRoutesToggle(total) {
+    const btn = document.getElementById("routesToggle");
+    if (!btn) return;
+    if (total <= ROUTE_CARD_LIMIT) { btn.hidden = true; return; }
+    btn.hidden = false;
+    btn.textContent = routesExpanded ? "Show fewer routes" : `Show all ${total} routes`;
+    btn.setAttribute("aria-expanded", routesExpanded ? "true" : "false");
+  }
+
   // Rebuild the (filtered) card list; returns the original index of the first visible route.
   function renderRouteCards() {
     const el = document.getElementById("routeList");
@@ -2117,9 +2129,21 @@
     const visible = ROUTES.map((r, i) => ({ r, i })).filter((x) => routeMatches(x.r));
     if (!visible.length) {
       el.innerHTML = `<p class="routes-empty">No routes match that filter — try a wider distance or another type.</p>`;
+      setRoutesToggle(0);
       return -1;
     }
-    el.innerHTML = visible.map((x) => routeCardHtml(x.r, x.i)).join("");
+    // Collapse the long library to a few cards by default so the section is quick to
+    // scroll past; the toggle reveals the rest. When collapsed, still append the
+    // selected route's card (a deep link / share may point past the fold) so it stays
+    // visible and highlighted without expanding the whole list.
+    const collapsed = !routesExpanded && visible.length > ROUTE_CARD_LIMIT;
+    let shown = collapsed ? visible.slice(0, ROUTE_CARD_LIMIT) : visible;
+    if (collapsed) {
+      const selPos = visible.findIndex((x) => x.i === routeMap.current);
+      if (selPos >= ROUTE_CARD_LIMIT) shown = shown.concat([visible[selPos]]);
+    }
+    el.innerHTML = shown.map((x) => routeCardHtml(x.r, x.i)).join("");
+    setRoutesToggle(visible.length);
     el.querySelectorAll(".route-card").forEach((card) => {
       const i = parseInt(card.dataset.i, 10);
       card.addEventListener("click", () => selectRoute(i, true));
@@ -2223,6 +2247,15 @@
     const el = document.getElementById("routeList");
     if (!el) return;
     renderFilters();
+    const toggle = document.getElementById("routesToggle");
+    if (toggle && !toggle.dataset.wired) {
+      toggle.dataset.wired = "1";
+      toggle.addEventListener("click", () => {
+        routesExpanded = !routesExpanded;
+        renderRouteCards();
+        if (!routesExpanded) document.getElementById("routes")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    }
     // Honour a #routes/<id> deep link: pre-select that route (initRoutesMap's
     // first draw uses routeMap.current) before the cards render their state.
     const linked = routeIndexFromHash();
@@ -3412,7 +3445,7 @@
   let netData = null;         // data/tube-network.json, lazy-loaded
   let toiletSet = null;       // Set of station ids with confirmed toilets
   let waterPts = null;        // [[lat,lon],...] drinking-water points (OSM)
-  let geoTimeMode = "run";    // run | walk | off — badge mode on the highlighted line
+  let geoTimeMode = "run";    // run | walk | names | off — stop-label mode on the highlighted line
   let geoShowToilets = true;  // toilet pins on the geographic map
   let geoShowWater = false;   // drinking-water pins on the geographic map
   let tmYear = 9999;          // time-machine year on the geo map — 9999 = today
@@ -4693,8 +4726,9 @@
 
   function geoCaption(cap, net, hi, redraw, applyYear) {
     if (!cap) return;
-    const modes = hi ? `<span class="geo-modes">Times: ${["run", "walk", "off"].map((m) =>
-      `<button type="button" class="geo-mode" data-mode="${m}"${geoTimeMode === m ? ' data-on="1"' : ""}>${m === "off" ? "Off" : m[0].toUpperCase() + m.slice(1)}</button>`).join("")}</span>` : "";
+    const modeLabels = { run: "Run", walk: "Walk", names: "Names", off: "Off" };
+    const modes = hi ? `<span class="geo-modes">Labels: ${["run", "walk", "names", "off"].map((m) =>
+      `<button type="button" class="geo-mode" data-mode="${m}"${geoTimeMode === m ? ' data-on="1"' : ""}>${modeLabels[m]}</button>`).join("")}</span>` : "";
     const wcBtn = `<button type="button" class="geo-mode geo-wc-btn" data-wc="1"${geoShowToilets ? ' data-on="1"' : ""}>🚻 Toilets</button>`;
     const waterBtn = `<button type="button" class="geo-mode geo-water-btn" data-water="1"${geoShowWater ? ' data-on="1"' : ""}>💧 Water</button>`;
     const tmOn = tmYear < 9999;
@@ -4991,13 +5025,17 @@
           fillOpacity: 1, opacity: dim ? 0.55 : 1,
         });
         const mins = km[sid] * perKm;
-        if (onHi && (!dense || inter)) {
+        // run/walk badge a time; "names" shows the name only; "off" hides the
+        // permanent labels entirely (names still appear on hover/tap) for a clean
+        // map when zoomed out.
+        const timed = geoTimeMode === "run" || geoTimeMode === "walk";
+        if (onHi && geoTimeMode !== "off" && (!dense || inter)) {
           const eta = showEta ? `<br><b class="tm-eta">🕒 ${etaWindow(km[sid], perKm)}</b>` : "";
-          const time = geoTimeMode !== "off" ? `<span>${fmtTime(mins)} · ${geoDistStr(km[sid])}${eta}</span>` : "";
+          const time = timed ? `<span>${fmtTime(mins)} · ${geoDistStr(km[sid])}${eta}</span>` : "";
           m.bindTooltip(`<b>${escapeHtml(s.n)}</b>${time}`, { permanent: true, direction: "right", className: "tm-run-label", offset: [7, 0] });
         } else {
           const eta = showEta ? ` · group here ~${etaWindow(km[sid], perKm)}` : "";
-          const t = onHi && geoTimeMode !== "off" ? `${escapeHtml(s.n)} · ${fmtTime(mins)} · ${geoDistStr(km[sid])}${eta}` : escapeHtml(s.n);
+          const t = onHi && timed ? `${escapeHtml(s.n)} · ${fmtTime(mins)} · ${geoDistStr(km[sid])}${eta}` : escapeHtml(s.n);
           m.bindTooltip(t, { direction: "top", className: "tm-hover-label" });
         }
         m.on("click", () => {
