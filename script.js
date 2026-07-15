@@ -3358,37 +3358,40 @@
     }
     return grp;
   }
+  // [year, story, target?] — the optional target makes the panel entry a
+  // clickable zoom: {station}, {line}, {at:[lat,lon,zoom]} or {ext:index}.
+  // Abstract milestones (the roundel, Johnston type, the Blitz) carry none.
   const TM_MILESTONES = [
-    [1836, "London's first railway opens — London Bridge to Deptford."],
-    [1838, "Brunel's Great Western steams out of Paddington."],
-    [1863, "The Metropolitan Railway opens — the world's first underground."],
-    [1868, "The District line begins at Westminster."],
-    [1869, "Brunel's Thames Tunnel carries its first trains — today's Windrush line."],
-    [1884, "The Circle is finally completed."],
-    [1890, "City & South London Railway — the first deep-level electric Tube."],
-    [1900, "The Central London Railway opens — the Twopenny Tube."],
-    [1906, "Bakerloo and Piccadilly tubes open within months of each other."],
+    [1836, "London's first railway opens — London Bridge to Deptford.", { station: "London Bridge" }],
+    [1838, "Brunel's Great Western steams out of Paddington.", { station: "Paddington" }],
+    [1863, "The Metropolitan Railway opens — the world's first underground.", { station: "Baker Street" }],
+    [1868, "The District line begins at Westminster.", { station: "Westminster" }],
+    [1869, "Brunel's Thames Tunnel carries its first trains — today's Windrush line.", { station: "Wapping" }],
+    [1884, "The Circle is finally completed.", { line: "circle" }],
+    [1890, "City & South London Railway — the first deep-level electric Tube.", { station: "Stockwell" }],
+    [1900, "The Central London Railway opens — the Twopenny Tube.", { station: "Bank" }],
+    [1906, "Bakerloo and Piccadilly tubes open within months of each other.", { station: "Piccadilly Circus" }],
     [1908, "The bar-and-circle roundel first appears on platforms."],
-    [1911, "London's first escalator spirals into Earls Court."],
+    [1911, "London's first escalator spirals into Earls Court.", { station: "Earl's Court" }],
     [1916, "Edward Johnston's lettering starts spreading across the network."],
-    [1926, "The Morden extension completes the Northern line's southern end."],
+    [1926, "The Morden extension completes the Northern line's southern end.", { station: "Morden" }],
     [1933, "Harry Beck's diagram map debuts as London Transport is formed."],
     [1940, "Platforms shelter thousands each night through the Blitz."],
     [1952, "London's last tram runs — for now."],
-    [1961, "Steam finally ends on the Metropolitan."],
-    [1968, "The Victoria line arrives, with automatic trains."],
-    [1977, "Heathrow becomes the world's first airport on a metro."],
-    [1979, "The Jubilee line opens, silver for the Silver Jubilee."],
-    [1988, "Thameslink reopens the Snow Hill tunnel through the City."],
-    [1994, "Aldwych closes, and the Epping–Ongar shuttle makes its last run."],
-    [1998, "Heathrow Express speeds airport runs from Paddington."],
-    [2000, "Trams return, in Croydon."],
+    [1961, "Steam finally ends on the Metropolitan.", { station: "Amersham" }],
+    [1968, "The Victoria line arrives, with automatic trains.", { line: "victoria" }],
+    [1977, "Heathrow becomes the world's first airport on a metro.", { station: "Heathrow Terminals 2 & 3" }],
+    [1979, "The Jubilee line opens, silver for the Silver Jubilee.", { line: "jubilee" }],
+    [1988, "Thameslink reopens the Snow Hill tunnel through the City.", { station: "Farringdon" }],
+    [1994, "Aldwych closes, and the Epping–Ongar shuttle makes its last run.", { station: "Epping" }],
+    [1998, "Heathrow Express speeds airport runs from Paddington.", { station: "Heathrow Terminals 2 & 3" }],
+    [2000, "Trams return, in Croydon.", { at: [51.3762, -0.0982, 13] }],
     [2003, "The Oyster card arrives."],
-    [2007, "TfL takes over the North London lines — the Overground is born."],
+    [2007, "TfL takes over the North London lines — the Overground is born.", { line: "mildmay" }],
     [2016, "The Night Tube begins."],
-    [2022, "The Elizabeth line opens at last."],
+    [2022, "The Elizabeth line opens at last.", { line: "elizabeth" }],
     [2024, "The Overground's six lines get their own names."],
-    [2035, "Proposed: the Bakerloo line extension reaches Lewisham, via two new stations on the Old Kent Road."],
+    [2035, "Proposed: the Bakerloo line extension reaches Lewisham, via two new stations on the Old Kent Road.", { ext: 0 }],
   ];
   // Proposed / under-construction expansion, so the Time Machine can run past
   // today. Coordinates are indicative — TfL's own consultation stresses the
@@ -3429,6 +3432,41 @@
       }
     }
     return grp;
+  }
+  // --- Time Machine: click a panel entry to fly the map to its subject --------
+  // Coordinates of the first station matching a name, anywhere in the network.
+  function stationCoordByName(net, name) {
+    const k = norm(name);
+    for (const id in net) for (const sid in net[id].stations) { const s = net[id].stations[sid]; if (norm(s.n) === k) return s; }
+    return null;
+  }
+  // Bounds of a line's stations that had opened by `year` (all of them for a
+  // future year), so clicking a line entry frames exactly what's drawn.
+  function lineEraBounds(net, id, year) {
+    const ln = net[id];
+    if (!ln) return null;
+    const b = L.latLngBounds([]);
+    for (const sid in ln.stations) { const s = ln.stations[sid]; if (stationYear(id, s.n) <= year) b.extend([s.lat, s.lon]); }
+    return b.isValid() ? b : null;
+  }
+  // Bounds of a proposed extension: its stations plus the station it grows from.
+  function extBounds(net, ext) {
+    if (!ext) return null;
+    const b = L.latLngBounds([]);
+    const ln = net[ext.line];
+    if (ln) for (const sid in ln.stations) { if (norm(ln.stations[sid].n) === norm(ext.from)) { b.extend([ln.stations[sid].lat, ln.stations[sid].lon]); break; } }
+    for (const s of ext.stations) b.extend([s[1], s[2]]);
+    return b.isValid() ? b : null;
+  }
+  // Turn a milestone/line target into the attributes that make a panel entry a
+  // clickable zoom control (empty string when there's nothing to point at).
+  function tmzAttr(t) {
+    if (!t) return "";
+    const d = t.station ? `data-tmz-station="${escapeHtml(t.station)}"`
+      : t.line ? `data-tmz-line="${escapeHtml(t.line)}"`
+      : t.ext != null ? `data-tmz-ext="${t.ext}"`
+      : t.at ? `data-tmz-at="${t.at.join(",")}"` : "";
+    return d ? ` ${d} role="button" tabindex="0" title="Zoom the map to this"` : "";
   }
   function geoDistStr(km) { return fmtKm(km, 1); } // follows the site-wide unit toggle
   // Compass bearing (deg, 0 = north) from waypoint a to b — for direction arrows.
@@ -4263,7 +4301,7 @@
       for (const sid in ln.stations) { total++; if (stationYear(id, ln.stations[sid].n) <= year) { stns++; openSids.add(sid); } }
       const br = ln.route || (ln.branches || []).reduce((a, b) => (b.length > a.length ? b : a), (ln.branches || [])[0] || []);
       const ob = br.map((sid) => ln.stations[sid]).filter((s) => s && stationYear(id, s.n) <= year);
-      open.push({ n: ln.name, c: ln.colour, y: y0, stns, total, from: ob[0] && ob[0].n, to: ob.length > 1 ? ob[ob.length - 1].n : null, building: lineMaxYear(id) > year });
+      open.push({ id, n: ln.name, c: ln.colour, y: y0, stns, total, from: ob[0] && ob[0].n, to: ob.length > 1 ? ob[ob.length - 1].n : null, building: lineMaxYear(id) > year });
     }
     open.sort((a, b) => a.y - b.y || a.n.localeCompare(b.n));
     soon.sort((a, b) => a.y - b.y);
@@ -4274,21 +4312,21 @@
     const futSoon = year >= 2024 ? FUTURE_EXTENSIONS.filter((e) => e.year > year) : [];
     const futureHtml = futBuilt.length || futSoon.length ? `
       <h3 class="tm2-h">On the horizon</h3>
-      ${futBuilt.map((e) => `<div class="tm2-line tm2-future"><i style="background:${(net[e.line] || {}).colour || "#0019A8"}"></i><div>
+      ${futBuilt.map((e) => `<div class="tm2-line tm2-future tmz" data-tmz-ext="${FUTURE_EXTENSIONS.indexOf(e)}" role="button" tabindex="0" title="Zoom the map to this"><i style="background:${(net[e.line] || {}).colour || "#0019A8"}"></i><div>
         <b>${escapeHtml(e.name)}</b> <span class="tm2-yr">proposed · ${e.year}</span>
         <span class="tm2-ext">${escapeHtml(e.note)}</span></div></div>`).join("")}
       ${futSoon.length ? `<p class="tm2-soon"><b>Still on the drawing board:</b> ${futSoon.map((e) => `${escapeHtml(e.name)} (proposed ${e.year})`).join(" · ")}</p>` : ""}` : "";
     return `
       <h3 class="tm2-h">${year} · ${open.length} line${open.length === 1 ? "" : "s"} · ${openSids.size} stations open</h3>
       <div class="tm2-lines">${open.map((l) => `
-        <div class="tm2-line"><i style="background:${l.c}"></i><div>
+        <div class="tm2-line tmz" data-tmz-line="${escapeHtml(l.id)}" role="button" tabindex="0" title="Zoom the map to this line"><i style="background:${l.c}"></i><div>
           <b>${escapeHtml(l.n)}</b> <span class="tm2-yr">opened ${l.y}${l.building ? " · still growing" : ""}</span>
           ${l.from && l.to ? `<span class="tm2-ext">${escapeHtml(l.from)} → ${escapeHtml(l.to)} · ${l.stns}/${l.total} of today's stations</span>` : ""}
         </div></div>`).join("")}</div>
       ${soon.length ? `<p class="tm2-soon"><b>Not yet built:</b> ${soon.map((s) => `${escapeHtml(s.n)} (${s.y})`).join(" · ")}</p>` : ""}
       ${futureHtml}
       <h3 class="tm2-h">The story so far</h3>
-      <ul class="tm2-events">${events.map(([y, t]) => `<li><b>${y}</b> ${escapeHtml(t)}</li>`).join("")}</ul>`;
+      <ul class="tm2-events">${events.map(([y, t, tgt]) => `<li${tgt ? " class=\"tmz\"" : ""}${tmzAttr(tgt)}><b>${y}</b> ${escapeHtml(t)}</li>`).join("")}</ul>`;
   }
 
   function renderTimeMachine() {
@@ -4368,6 +4406,17 @@
         clearTimeout(deb);
         deb = setTimeout(redraw, 120);
       });
+      // Click (or keyboard-activate) a panel entry to fly the map to its subject.
+      const tmzZoom = (el) => {
+        if (el.dataset.tmzStation) { const s = stationCoordByName(net, el.dataset.tmzStation); if (s) map.setView([s.lat, s.lon], 14, { animate: true }); else return; }
+        else if (el.dataset.tmzLine) { const b = lineEraBounds(net, el.dataset.tmzLine, year); if (b) map.fitBounds(b, { padding: [28, 28] }); else return; }
+        else if (el.dataset.tmzExt != null) { const b = extBounds(net, FUTURE_EXTENSIONS[+el.dataset.tmzExt]); if (b) map.fitBounds(b, { padding: [40, 40] }); else return; }
+        else if (el.dataset.tmzAt) { const [la, lo, z] = el.dataset.tmzAt.split(",").map(Number); map.setView([la, lo], z || 13, { animate: true }); }
+        else return;
+        mapEl.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      };
+      panel.addEventListener("click", (e) => { const el = e.target.closest(".tmz"); if (el) tmzZoom(el); });
+      panel.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.closest(".tmz")) { e.preventDefault(); tmzZoom(e.target.closest(".tmz")); } });
       redraw();
     };
     if ("IntersectionObserver" in window) {

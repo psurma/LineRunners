@@ -916,6 +916,10 @@ body.tm-map-active .tm-zoom, body.tm-map-active .tm-scrollhint { display: none; 
    dotted map markers) and the year picked out. */
 .tm2-future i { box-shadow: inset 0 0 0 2px #fff; }
 .tm2-future .tm2-yr { font-weight: 700; color: var(--tfl-blue); }
+/* Panel entries that fly the map to their subject when clicked/activated. */
+.tmz { cursor: pointer; border-radius: 7px; padding: 3px 6px; margin: 0 -6px; transition: background 0.12s; }
+.tmz:hover, .tmz:focus-visible { background: rgba(0, 25, 168, 0.08); outline: none; }
+.tm2-events .tmz:hover b, .tm2-events .tmz:focus-visible b { text-decoration: underline; }
 .tm2-events { list-style: none; padding: 0; margin: 0; display: grid; gap: 7px; font-size: 12.5px; color: #2b3140; }
 .tm2-events b { color: var(--tfl-blue); margin-right: 4px; }
 
