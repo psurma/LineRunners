@@ -912,6 +912,10 @@ body.tm-map-active .tm-zoom, body.tm-map-active .tm-scrollhint { display: none; 
 .tm2-yr { color: var(--muted); margin-left: 4px; font-size: 12.5px; }
 .tm2-ext { display: block; color: var(--muted); font-size: 12px; }
 .tm2-soon { font-size: 12.5px; color: var(--muted); margin: 0 0 14px; }
+/* Proposed extensions read as "not yet real": a hollow swatch (matching the
+   dotted map markers) and the year picked out. */
+.tm2-future i { box-shadow: inset 0 0 0 2px #fff; }
+.tm2-future .tm2-yr { font-weight: 700; color: var(--tfl-blue); }
 .tm2-events { list-style: none; padding: 0; margin: 0; display: grid; gap: 7px; font-size: 12.5px; color: #2b3140; }
 .tm2-events b { color: var(--tfl-blue); margin-right: 4px; }
 

@@ -3388,7 +3388,48 @@
     [2016, "The Night Tube begins."],
     [2022, "The Elizabeth line opens at last."],
     [2024, "The Overground's six lines get their own names."],
+    [2035, "Proposed: the Bakerloo line extension reaches Lewisham, via two new stations on the Old Kent Road."],
   ];
+  // Proposed / under-construction expansion, so the Time Machine can run past
+  // today. Coordinates are indicative — TfL's own consultation stresses the
+  // Old Kent Road alignments and station sites aren't fixed. The stations the
+  // line would also call at already exist (New Cross Gate, Lewisham) and keep
+  // their real coords; the two brand-new Old Kent Road stations sit at their
+  // consultation locations. `from` is the existing station it grows out of.
+  const FUTURE_EXTENSIONS = [
+    {
+      line: "bakerloo", name: "Bakerloo line extension", year: 2035, status: "proposed",
+      note: "Elephant & Castle to Lewisham beneath the Old Kent Road, with two new stations. A later phase would take over the National Rail line on to Hayes.",
+      from: "Elephant & Castle",
+      stations: [
+        ["Old Kent Road 1", 51.4874, -0.0731],
+        ["Old Kent Road 2", 51.4806, -0.0627],
+        ["New Cross Gate", 51.47513, -0.0404],
+        ["Lewisham", 51.46467, -0.01287],
+      ],
+    },
+  ];
+  // Draw every proposed extension whose indicative year has arrived: dotted in
+  // its line's colour, growing out of the `from` station, with hollow
+  // "proposed" station rings. The forward-looking counterpart of eraLayerFor.
+  function futureLayerFor(net, year) {
+    const grp = L.layerGroup();
+    for (const ext of FUTURE_EXTENSIONS) {
+      if (year < ext.year) continue;
+      const ln = net[ext.line];
+      const colour = (ln && ln.colour) || "#0019A8";
+      let anchor = null;
+      if (ln) for (const sid in ln.stations) { if (norm(ln.stations[sid].n) === norm(ext.from)) { anchor = ln.stations[sid]; break; } }
+      const pts = anchor ? [[anchor.lat, anchor.lon]] : [];
+      for (const s of ext.stations) pts.push([s[1], s[2]]);
+      if (pts.length > 1) L.polyline(pts, { color: colour, weight: 4, opacity: 0.85, dashArray: "2 7", lineCap: "round", lineJoin: "round" }).addTo(grp);
+      for (const s of ext.stations) {
+        L.circleMarker([s[1], s[2]], { radius: 3.6, weight: 2, color: colour, fillColor: "#fff", fillOpacity: 1, dashArray: "2 2" })
+          .bindTooltip(`${escapeHtml(s[0])} · proposed ${ext.year}`, { direction: "top" }).addTo(grp);
+      }
+    }
+    return grp;
+  }
   function geoDistStr(km) { return fmtKm(km, 1); } // follows the site-wide unit toggle
   // Compass bearing (deg, 0 = north) from waypoint a to b — for direction arrows.
   function bearingDeg(a, b) {
@@ -4227,6 +4268,16 @@
     open.sort((a, b) => a.y - b.y || a.n.localeCompare(b.n));
     soon.sort((a, b) => a.y - b.y);
     const events = TM_MILESTONES.filter(([y]) => y <= year).slice(-7).reverse();
+    // Proposed expansion only makes sense once we're near the present — keep the
+    // deep-history views purely historical.
+    const futBuilt = year >= 2024 ? FUTURE_EXTENSIONS.filter((e) => e.year <= year) : [];
+    const futSoon = year >= 2024 ? FUTURE_EXTENSIONS.filter((e) => e.year > year) : [];
+    const futureHtml = futBuilt.length || futSoon.length ? `
+      <h3 class="tm2-h">On the horizon</h3>
+      ${futBuilt.map((e) => `<div class="tm2-line tm2-future"><i style="background:${(net[e.line] || {}).colour || "#0019A8"}"></i><div>
+        <b>${escapeHtml(e.name)}</b> <span class="tm2-yr">proposed · ${e.year}</span>
+        <span class="tm2-ext">${escapeHtml(e.note)}</span></div></div>`).join("")}
+      ${futSoon.length ? `<p class="tm2-soon"><b>Still on the drawing board:</b> ${futSoon.map((e) => `${escapeHtml(e.name)} (proposed ${e.year})`).join(" · ")}</p>` : ""}` : "";
     return `
       <h3 class="tm2-h">${year} · ${open.length} line${open.length === 1 ? "" : "s"} · ${openSids.size} stations open</h3>
       <div class="tm2-lines">${open.map((l) => `
@@ -4235,6 +4286,7 @@
           ${l.from && l.to ? `<span class="tm2-ext">${escapeHtml(l.from)} → ${escapeHtml(l.to)} · ${l.stns}/${l.total} of today's stations</span>` : ""}
         </div></div>`).join("")}</div>
       ${soon.length ? `<p class="tm2-soon"><b>Not yet built:</b> ${soon.map((s) => `${escapeHtml(s.n)} (${s.y})`).join(" · ")}</p>` : ""}
+      ${futureHtml}
       <h3 class="tm2-h">The story so far</h3>
       <ul class="tm2-events">${events.map(([y, t]) => `<li><b>${y}</b> ${escapeHtml(t)}</li>`).join("")}</ul>`;
   }
@@ -4275,11 +4327,13 @@
 
       // Open-station dots (tooltip names the opening year); NR platforms on a
       // same-named TfL station are skipped like the geo map's markers.
-      let eraGrp = null, stnGrp = null;
+      let eraGrp = null, stnGrp = null, futureGrp = null;
       const redraw = () => {
         lineLayer.setStyle(style);
         if (eraGrp) map.removeLayer(eraGrp);
         eraGrp = eraLayerFor(net, year).addTo(map);
+        if (futureGrp) map.removeLayer(futureGrp);
+        futureGrp = futureLayerFor(net, year).addTo(map);
         if (stnGrp) map.removeLayer(stnGrp);
         stnGrp = L.layerGroup();
         const tflByName = {}, chosen = {};
