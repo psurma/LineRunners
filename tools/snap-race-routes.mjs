@@ -38,8 +38,11 @@ async function brouterRaw(points, profile) {
   const permanent = /island|not mapped|not routable|unreachable|too far/i.test(text);
   throw Object.assign(new Error(text.slice(0, 90)), { kind: permanent ? "island" : "net" });
 }
-async function brouterTry(points) {
-  for (const [profile, tries] of [[PROFILE, 3], ["shortest", 2]]) {
+// `profiles` is an ordered [profile, retries] list: try each in turn, retrying
+// only transient (network) failures. A road race prefers "shortest" (tracks the
+// carriageway); a foot/park route prefers "hiking-beta".
+async function brouterTry(points, profiles) {
+  for (const [profile, tries] of profiles) {
     for (let a = 0; a < tries; a++) {
       try { return await brouterRaw(points, profile); }
       catch (e) { if (e.kind === "island" || e.kind === "route") break; await sleep(800 * (a + 1)); }
@@ -47,12 +50,12 @@ async function brouterTry(points) {
   }
   return null;
 }
-async function routeThrough(pts) {
-  const full = await brouterTry(pts);
+async function routeThrough(pts, profiles) {
+  const full = await brouterTry(pts, profiles);
   if (full) return full;
   const out = []; let cur = pts[0];
   for (let k = 1; k < pts.length; k++) {
-    const seg = await brouterTry([cur, pts[k]]);
+    const seg = await brouterTry([cur, pts[k]], profiles);
     await sleep(200);
     if (seg && seg.length >= 2) { out.push(...(out.length ? seg.slice(1) : seg)); cur = pts[k]; }
     else if (out.length === 0) cur = pts[k];
@@ -112,6 +115,37 @@ const RACES = [
       ["St Paul's", 51.5138, -0.0975], ["Bank", 51.5133, -0.0886], ["Buckingham Palace", 51.5010, -0.1330],
     ],
   },
+  {
+    // The full 26.2-mile course: Blackheath start, east to the Woolwich turn,
+    // back to the Cutty Sark, round Rotherhithe, over Tower Bridge, the Isle of
+    // Dogs loop (down Westferry Rd, round Island Gardens, up Manchester Rd,
+    // through Canary Wharf), back to the Tower, then the Embankment to Westminster
+    // and the Mall finish. Uses the "shortest" profile — it's an on-road race, so
+    // tracking the carriageway beats hiking-beta's pavement detours (45.6 vs 47 km).
+    id: "london-marathon", km: 42.2, profile: "shortest",
+    path: [
+      [51.4690, 0.0120], [51.4735, 0.0330], [51.4800, 0.0510], [51.4865, 0.0645], [51.4888, 0.0655],
+      [51.4900, 0.0450], [51.4880, 0.0230], [51.4840, 0.0030], [51.4808, -0.0075], [51.4820, -0.0096],
+      [51.4815, -0.0230], [51.4855, -0.0335], [51.4915, -0.0455], [51.4975, -0.0510], [51.5012, -0.0520],
+      [51.5015, -0.0445], [51.4988, -0.0575], [51.4990, -0.0670], [51.5015, -0.0740],
+      [51.5033, -0.0754], [51.5079, -0.0760],
+      [51.5083, -0.0616], [51.5095, -0.0470], [51.5108, -0.0355],
+      [51.5075, -0.0255], [51.5000, -0.0245], [51.4930, -0.0250], [51.4880, -0.0180], [51.4872, -0.0110],
+      [51.4905, -0.0078], [51.4970, -0.0075], [51.5025, -0.0095],
+      [51.5050, -0.0170], [51.5045, -0.0220], [51.5072, -0.0245], [51.5098, -0.0300],
+      [51.5100, -0.0430], [51.5085, -0.0616], [51.5079, -0.0760],
+      [51.5095, -0.0800], [51.5090, -0.0870], [51.5100, -0.0960], [51.5110, -0.1035],
+      [51.5098, -0.1120], [51.5072, -0.1205], [51.5045, -0.1235], [51.5012, -0.1243],
+      [51.5003, -0.1295], [51.5008, -0.1352], [51.5010, -0.1412], [51.5024, -0.1400], [51.5040, -0.1345],
+    ],
+    // One stop per landmark, each passed once, in running order (so the strip's
+    // authored order stays monotonic on this point-to-point course).
+    stops: [
+      ["Blackheath", 51.4690, 0.0120], ["Woolwich", 51.4888, 0.0655], ["Cutty Sark", 51.4820, -0.0096],
+      ["Rotherhithe", 51.5012, -0.0520], ["Tower Bridge", 51.5033, -0.0754], ["Canary Wharf", 51.5045, -0.0220],
+      ["Embankment", 51.5072, -0.1205], ["Westminster", 51.5012, -0.1243], ["The Mall", 51.5040, -0.1345],
+    ],
+  },
 ];
 
 const gj = JSON.parse(readFileSync(GEOJSON, "utf8"));
@@ -119,15 +153,18 @@ const stopsOut = JSON.parse(readFileSync(STOPS, "utf8"));
 
 for (const race of RACES) {
   process.stdout.write(`tracing ${race.id} (${race.path.length} waypoints)... `);
-  const coords = await routeThrough(race.path); // [lon,lat]
+  const profiles = race.profile === "shortest"
+    ? [["shortest", 3], ["hiking-beta", 2]]
+    : [["hiking-beta", 3], ["shortest", 2]];
+  const coords = await routeThrough(race.path, profiles); // [lon,lat]
   if (!coords) { console.log("FAILED — left unchanged"); continue; }
   const simplified = simplify(coords, 0.00010).map((p) => [r5(p[0]), r5(p[1])]);
   const km = lineKm(simplified);
-  const feat = gj.features.find((f) => f.properties.id === race.id);
-  if (!feat) { console.log(`no geojson feature for ${race.id}!`); continue; }
-  feat.geometry.coordinates = simplified;
+  let feat = gj.features.find((f) => f.properties.id === race.id);
+  if (!feat) { feat = { type: "Feature", properties: { id: race.id }, geometry: { type: "LineString", coordinates: [] } }; gj.features.push(feat); }
+  feat.geometry = { type: "LineString", coordinates: simplified };
   stopsOut[race.id] = race.stops.map((s) => [s[0], s[1], s[2]]);
-  console.log(`${simplified.length} pts, ${km.toFixed(2)} km (book ${race.km} km, ${Math.round((km / race.km) * 100)}%)`);
+  console.log(`${simplified.length} pts, ${km.toFixed(2)} km (target ${race.km} km, ${Math.round((km / race.km) * 100)}%)`);
 }
 
 writeFileSync(GEOJSON, JSON.stringify(gj));
