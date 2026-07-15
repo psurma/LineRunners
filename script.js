@@ -2950,7 +2950,17 @@
       if (!net[id]) continue;
       const opts = buildVariantOptions(net, id);
       if (!opts) continue;
-      for (const o of opts) entries.push({ id, wp: o.wp, group: net[id].name, label: o.label });
+      // A GPX line's pavement route (routes/<id>.gpx, track 0) traces its main
+      // end-to-end branch. Draw the main variant (either direction) from that GPX
+      // so it follows the streets; branch variants stay station hops.
+      const main = GPX_LINES.has(id) ? rtStations(net, net[id].name) : null;
+      const mainA = main && main.length > 1 ? main[0][0] : null;
+      const mainB = main && main.length > 1 ? main[main.length - 1][0] : null;
+      for (const o of opts) {
+        const a = o.wp[0][0], b = o.wp[o.wp.length - 1][0];
+        const isMain = mainA && ((a === mainA && b === mainB) || (a === mainB && b === mainA));
+        entries.push({ id, wp: o.wp, group: net[id].name, label: o.label, gpx: !!isMain });
+      }
     }
     // Every remaining line gets its single end-to-end route too — linear Tube
     // and Overground lines (with their pavement GPX) and the National Rail
@@ -4218,14 +4228,24 @@
     const wl = wp.map((s) => [s[1], s[2]]);
     // Explicit variant waypoints draw as station-to-station hops; the default
     // whole-line route prefers the real pavement GPX (track 0, the main route).
-    const gpxSegs = (opts.waypoints || opts.routeLine) ? null : await loadRouteGpx(id);
+    // GPX loads for the whole-line default, and for an explicit main-route variant
+    // (opts.gpx) so it follows the streets; branch variants stay station hops.
+    const gpxSegs = (opts.routeLine || (opts.waypoints && !opts.gpx)) ? null : await loadRouteGpx(id);
     if (opts.stale && opts.stale()) return null;
     const gpxLine = gpxSegs && gpxSegs[0];
     // A pre-routed variant line (routeLine) wins; else the line's pavement GPX; else straight station hops.
     let routeLine;
     if (opts.routeLine && opts.routeLine.length > 1) routeLine = opts.reverse ? [...opts.routeLine].reverse() : opts.routeLine;
-    else if (gpxLine && gpxLine.length > 1) routeLine = opts.reverse ? [...gpxLine].reverse() : gpxLine;
-    else routeLine = wl;
+    else if (gpxLine && gpxLine.length > 1) {
+      routeLine = opts.reverse ? [...gpxLine].reverse() : gpxLine;
+      // A variant drawn from the whole-line GPX may need flipping so the pavement
+      // line runs the chosen start → finish (the GPX is stored one way only).
+      if (opts.gpx && wl.length > 1) {
+        const d0 = haversineKm([0, routeLine[0][0], routeLine[0][1]], [0, wl[0][0], wl[0][1]]);
+        const dN = haversineKm([0, routeLine[0][0], routeLine[0][1]], [0, wl[wl.length - 1][0], wl[wl.length - 1][1]]);
+        if (dN < d0) routeLine = [...routeLine].reverse();
+      }
+    } else routeLine = wl;
     const grp = L.layerGroup().addTo(map);
     addFlowLine(grp, routeLine, line.colour);
     L.circleMarker(wl[0], { radius: 6, color: "#fff", weight: 2, fillColor: line.colour, fillOpacity: 1 })
@@ -4715,7 +4735,7 @@
     async function drawMapRoute(entry) {
       if (hiRouteGrp) { hiRouteGrp.remove(); hiRouteGrp = null; }
       curEntry = entry;
-      const r = await drawRunRoute(map, net, entry.id, entry.gpx ? { stale } : { waypoints: entry.wp, stale });
+      const r = await drawRunRoute(map, net, entry.id, { waypoints: entry.wp, gpx: entry.gpx, stale });
       hiRouteGrp = r && r.group;
       // After the first render, switching route re-lights the chosen line: its
       // track goes bold (others dim) and its per-stop labels are recomputed and
@@ -5156,11 +5176,12 @@
     const distS = allDistances(graph, s, allowed);
     const sLat = nodes[s].lat, sLon = nodes[s].lon;
     const within = (k) => !radiusKm || haversineKm([0, sLat, sLon], [0, nodes[k].lat, nodes[k].lon]) <= radiusKm;
-    // Turnarounds ~40–58% of the target out (the return is usually a touch longer,
-    // so aim the out-leg a little under half), and inside the radius if one is set.
+    // Turnarounds ~30–54% of the ceiling out (the return is usually a touch longer,
+    // so aim the out-leg under half to keep the round trip within the max), and
+    // inside the radius if one is set.
     const pick = (lo, hi) => Object.keys(distS).filter((k) => k !== s && distS[k] >= targetKm * lo && distS[k] <= targetKm * hi && within(k));
-    let cands = pick(0.35, 0.62);
-    if (cands.length < 6) cands = pick(0.28, 0.72); // relax when options are few (short target / tight radius)
+    let cands = pick(0.3, 0.54);
+    if (cands.length < 6) cands = pick(0.22, 0.6); // relax when options are few (short target / tight radius)
     if (!cands.length) return null;
     for (let i = cands.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [cands[i], cands[j]] = [cands[j], cands[i]]; }
     cands = cands.slice(0, 40);
@@ -5175,7 +5196,10 @@
       for (let i = 0; i < out.path.length - 1; i++) avoid.add(graph.ekey(out.path[i], out.path[i + 1]));
       let bestForT = null;
       const consider = (path, km, retrace) => {
-        const score = Math.abs(km - targetKm) / targetKm + retrace * 0.6;
+        // Distance is a ceiling: overshooting the max is penalised ~4× harder than
+        // coming in under, so the best loop is the longest that still fits.
+        const miss = km > targetKm ? (km - targetKm) / targetKm * 4 : (targetKm - km) / targetKm;
+        const score = miss + retrace * 0.6;
         if (!bestForT || score < bestForT.score) bestForT = { path, km, retrace, score, turnaround: nodes[t].name };
       };
       const back = pathAvoiding(graph, t, s, avoid, allowed);
@@ -5188,12 +5212,13 @@
       if (bestForT) options.push(bestForT);
     }
     if (!options.length) return null;
-    // Keep everything that lands roughly near the target (a rough guide, not exact),
-    // then pick RANDOMLY among the best handful so repeat "Generate loop" clicks
-    // give genuinely different routes rather than the same one each time.
-    const near = options.filter((o) => o.km >= targetKm * 0.7 && o.km <= targetKm * 1.5);
-    const pool = (near.length ? near : options).sort((a, b) => a.score - b.score);
-    const p = pool[Math.floor(Math.random() * Math.min(10, pool.length))];
+    // Distance is a ceiling: keep the loops that fit under it (a hair of tolerance
+    // for rounding), preferring the longer ones, then pick RANDOMLY among the best
+    // handful so repeat "Generate loop" clicks give genuinely different routes.
+    const under = options.filter((o) => o.km <= targetKm + 0.05).sort((a, b) => a.score - b.score);
+    const p = under.length
+      ? under[Math.floor(Math.random() * Math.min(10, under.length))]
+      : options.sort((a, b) => a.km - b.km)[0]; // nothing fits under the max — give the shortest we found
     return { path: p.path, km: p.km, loop: true, retrace: p.retrace, turnaround: p.turnaround };
   }
   // Nearest graph station to a lat/lon (for "use my location").
