@@ -81,9 +81,12 @@ within sections is roughly impact-per-effort.
   tab's picker still shows one entry per NR line (would add ~90 entries — needs grouping).
 - **Greater Anglia stopping-pattern main** — the current main has a real but ugly 25 km
   Stratford - Shenfield fast hop; a stopping pattern would read better on the strip.
-- **Import the running-routes guidebook** — Pete has a PDF guidebook of London running routes
-  (e.g. an Epping Forest ~15 mi "Northeast Hotspots" loop). None are in the site yet — the Route
-  ideas library is just 7 hand-curated central routes. Re-share the PDF to extract them all into
-  `ROUTES`, carrying the book's Length / Surface / Terrain / Weather metadata, and trace each on
-  pavements as GPX like the lines. Would roughly triple the Route ideas and add proper out-of-town
-  trail runs (Epping Forest, Richmond Park, etc.).
+- ~~**Import the running-routes guidebook**~~ — SHIPPED: extracted all 120+ runs from the
+  *Runner's Guide to London* (2015) PDF, deduped against the existing routes, and added the 83 new
+  ones (Route ideas 35 → 118) — Epping Forest, the Downs/commons of the south-west, the Green Chain,
+  the Thames Path stages, the Lea Valley and out-of-town trails. Each was geocoded from the book's
+  mile-by-mile waypoints and traced on real pavements via BRouter (tools/curate-book-routes.mjs +
+  build-book-routes.mjs; raw extractions in data/book-src/). Lines are indicative — the book's own
+  maps aren't geodata. Possible follow-ups: verify/retune the ~15 routes traced at 1.5–1.8× the
+  book distance; add the book's Surface/Toilets metadata to the cards; add the Cranleigh line /
+  Downs Link (Bramley &amp; Wonersh) as a disused route.
