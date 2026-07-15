@@ -3991,6 +3991,11 @@
     };
     if (cap) cap.innerHTML = CAPTIONS[cfg.key] || "";
     if (zoom) zoom.style.visibility = cfg.kind === "data" ? "hidden" : "visible";
+    // The "drag to pan · scroll to zoom · +/−" hint only applies to the schematic
+    // image/SVG maps that use holder pan-zoom. The table (data) has nothing to
+    // pan, and the geo map is a Leaflet surface with its own in-map hint.
+    const scrollHint = document.querySelector(".tm-scrollhint");
+    if (scrollHint) scrollHint.style.display = (cfg.kind === "img" || cfg.kind === "svg") ? "" : "none";
     holder.style.cursor = cfg.kind === "data" ? "auto" : "grab";
     holder.innerHTML = `<p class="tm-loading">Loading…</p>`;
 
