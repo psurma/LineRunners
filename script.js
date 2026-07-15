@@ -1425,7 +1425,7 @@
   }
 
   // --- Route ideas library (adapted from a runners' guide to London) -----
-  const ROUTE_COLOURS = { river: "#0E7C90", canal: "#237A49", park: "#2C7D45", landmark: "#9B0056", trail: "#4E6E22", disused: "#7A5230" };
+  const ROUTE_COLOURS = { river: "#0E7C90", canal: "#237A49", park: "#2C7D45", landmark: "#9B0056", trail: "#4E6E22", disused: "#7A5230", race: "#E8600F" };
   // Each route carries an indicative `path` of [lat,lon] waypoints tracing the described
   // course (an overview line, not a turn-by-turn GPX); `loop` closes the trace visually.
   const ROUTES = [
@@ -1468,6 +1468,8 @@
     { id: "olympic-park", name: "Queen Elizabeth Olympic Park", type: "landmark", leg: "Stadium, Orbit & waterways loop", start: "Stratford / Hackney Wick", distance: "2.6 mi (4.2 km)", highlights: "The 2012 Stadium, the ArcelorMittal Orbit, the Aquatics Centre and waterside paths through the park.", suitability: "Wide, flat, way-marked paths — modern and sociable for all paces.", loop: true, path: [[51.5480, -0.0200], [51.5480, -0.0110], [51.5380, -0.0110], [51.5380, -0.0200], [51.5480, -0.0200]] },
     { id: "thames-putney-richmond", name: "Thames Path: Putney → Richmond", type: "river", leg: "Boat Race course to Richmond", start: "Putney Bridge (District)", distance: "6.0 mi (9.7 km)", highlights: "The Championship Course along the river past Barnes and Kew Gardens to riverside Richmond.", suitability: "Flat riverside miles — scenic and easy to follow; can be muddy in patches.", loop: false, path: [[51.4670, -0.2160], [51.4750, -0.2450], [51.4700, -0.2800], [51.4610, -0.3080]] },
     { id: "thames-barrier", name: "Thames Barrier Path", type: "river", leg: "Greenwich → the Thames Barrier", start: "Cutty Sark (DLR)", distance: "4.4 mi (7.1 km)", highlights: "Downriver from Greenwich past the O2 to the silver hoods of the Thames Barrier.", suitability: "Flat, open and breezy — a straightforward point-to-point along the river.", loop: false, path: [[51.4830, -0.0090], [51.4880, 0.0080], [51.4930, 0.0230], [51.4975, 0.0360]] },
+    { id: "big-half", name: "The Big Half", type: "race", leg: "Tower Bridge → Canary Wharf → Greenwich", start: "Tower Gateway (DLR)", distance: "13.1 mi (21.1 km)", highlights: "London's great half-marathon route: east along The Highway past Wapping to loop Canary Wharf, back over Tower Bridge, then the south bank through Bermondsey, Rotherhithe and Deptford to finish at the Cutty Sark.", suitability: "A full half-marathon on flat, iconic riverside roads; point-to-point with the DLR home from Greenwich. Indicative line traced from the 2022 course map.", loop: false, path: [[51.5095, -0.0740], [51.5085, -0.0620], [51.5085, -0.0455], [51.5090, -0.0270], [51.5072, -0.0205], [51.5085, -0.0090], [51.5040, -0.0205], [51.5085, -0.0400], [51.5045, -0.0555], [51.5055, -0.0730], [51.5030, -0.0754], [51.4990, -0.0670], [51.5008, -0.0520], [51.4990, -0.0455], [51.4935, -0.0480], [51.4880, -0.0475], [51.4835, -0.0330], [51.4818, -0.0210], [51.4827, -0.0098]] },
+    { id: "vitality-10k", name: "Vitality London 10,000", type: "race", leg: "The Mall → City of London loop → The Mall", start: "St James's Park (District/Circle)", distance: "6.2 mi (10 km)", highlights: "The classic central-London 10K: down The Mall past Trafalgar Square, along the Strand and Fleet Street into the City past St Paul's and Bank, then back to finish by Buckingham Palace.", suitability: "Fast, flat and landmark-packed; starts and finishes by the Palace. Indicative line traced from the course map.", loop: true, path: [[51.5045, -0.1330], [51.5065, -0.1290], [51.5079, -0.1281], [51.5104, -0.1200], [51.5113, -0.1105], [51.5140, -0.1110], [51.5155, -0.0975], [51.5138, -0.0932], [51.5133, -0.0886], [51.5122, -0.0910], [51.5115, -0.0975], [51.5110, -0.1080], [51.5100, -0.1200], [51.5079, -0.1281], [51.5065, -0.1245], [51.5030, -0.1265], [51.5010, -0.1330]] },
   ];
 
   const routeMap = { map: null, layer: null, current: -1, reversed: false, mode: null, gl: null };
@@ -1923,7 +1925,7 @@
     { key: "medium", label: "Medium · 5–10k", test: (k) => k >= 5 && k <= 10 },
     { key: "long", label: "Long · 10k+", test: (k) => k > 10 },
   ];
-  const TYPE_LABELS = { all: "All", park: "Parks", trail: "Trails", canal: "Canals", river: "Rivers", landmark: "Landmarks", disused: "Disused railways" };
+  const TYPE_LABELS = { all: "All", park: "Parks", trail: "Trails", canal: "Canals", river: "Rivers", landmark: "Landmarks", disused: "Disused railways", race: "Races" };
   const routeFilter = { type: "all", dist: "all" };
   const distBucket = (k) => { const b = DIST_BUCKETS.find((x) => x.test(k)); return b ? b.key : ""; };
   const routeMatches = (r) => (NET_MODE === "all" || !r.far) // out-of-London routes ride with the All lines mode
