@@ -1622,7 +1622,10 @@
     el.hidden = false;
     el.classList.add("strip");
     el.style.setProperty("--line-col", c);
-    el.innerHTML = stripMapHtml(null, c, r.name, { wp: stops, bannerLabel: `${r.name} — ${isLoop ? "around the loop" : "access points"}`, legKms, totalKm: cum[path.length - 1], tap: true });
+    // Access points are place names, not stations, so match interchanges by
+    // proximity (like the bus strips) — e.g. Little Venice sits ~110 m from
+    // Warwick Avenue, so the canal towpath surfaces the Bakerloo there.
+    el.innerHTML = stripMapHtml(null, c, r.name, { wp: stops, bannerLabel: `${r.name} — ${isLoop ? "around the loop" : "access points"}`, legKms, totalKm: cum[path.length - 1], tap: true, geoInterchange: true });
     // Tap an access point to centre it on the route map above.
     el.querySelectorAll(".stn").forEach((sEl, si) => sEl.addEventListener("click", () => {
       const s = stops[si];
