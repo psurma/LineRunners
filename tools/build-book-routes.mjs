@@ -30,8 +30,9 @@ const CACHE = join(ROOT, "data/geocode-cache.json");
 const BROUTER = "https://brouter.de/brouter";
 const NOMINATIM = "https://nominatim.openstreetmap.org/search";
 const UA = "TubeRun/1.0 (book route tracing; https://psurma.github.io/TubeRun)";
-// Greater London + a margin for Epping Forest, Richmond, Hampton Court.
-const VIEWBOX = "-0.62,51.72,0.40,51.24"; // left,top,right,bottom
+// Greater London + a margin for Epping Forest, Richmond, Hampton Court, and the
+// Surrey Downs Link (Guildford–Cranleigh) to the south-west.
+const VIEWBOX = "-0.70,51.72,0.40,51.08"; // left,top,right,bottom
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const args = process.argv.slice(2);
@@ -93,27 +94,54 @@ async function geocodeNear(name, { postcode, area, anchor, radius }) {
   return null;
 }
 
-// --- BRouter routing (reused shape from generate-dlr-branches.mjs) -------------
+// --- BRouter routing ----------------------------------------------------------
 const PROFILE = "hiking-beta"; // foot-friendly: prefers footpaths/park trails over fast roads
-async function brouter(points) {
+async function brouterRaw(points, profile) {
   const lonlats = points.map((p) => `${p[1]},${p[0]}`).join("|");
-  const res = await fetch(`${BROUTER}?lonlats=${lonlats}&profile=${PROFILE}&alternativeidx=0&format=geojson`, { headers: { "User-Agent": UA } });
+  const res = await fetch(`${BROUTER}?lonlats=${lonlats}&profile=${profile}&alternativeidx=0&format=geojson`, { headers: { "User-Agent": UA } });
   const text = await res.text();
-  let gj; try { gj = JSON.parse(text); } catch { throw new Error(`non-JSON (${res.status})`); }
-  if (!gj.features || !gj.features[0]) throw new Error("no route");
-  return gj.features[0].geometry.coordinates; // [lon,lat]
-}
-async function routeThrough(pts) {
-  try { return await brouter(pts); } catch { /* per-leg fallback */ }
-  const out = [];
-  for (let i = 0; i < pts.length - 1; i++) {
-    let seg;
-    try { seg = await brouter([pts[i], pts[i + 1]]); }
-    catch { seg = [[pts[i][1], pts[i][0]], [pts[i + 1][1], pts[i + 1][0]]]; }
-    out.push(...(out.length ? seg.slice(1) : seg));
-    await sleep(300);
+  if (text[0] === "{") {
+    const gj = JSON.parse(text);
+    if (gj.features && gj.features[0]) return gj.features[0].geometry.coordinates; // [lon,lat]
+    throw Object.assign(new Error("no route"), { kind: "route" });
   }
-  return out;
+  // BRouter emits plain-text errors like "target island detected for section 0"
+  const permanent = /island|not mapped|not routable|unreachable|too far/i.test(text);
+  throw Object.assign(new Error(text.slice(0, 90)), { kind: permanent ? "island" : "net" });
+}
+// Coords or null. Retry transient (network) failures; if a point islands under the
+// foot profile, retry the leg on the denser "shortest" graph before giving up.
+async function brouterTry(points) {
+  for (const [profile, tries] of [[PROFILE, 3], ["shortest", 2]]) {
+    for (let a = 0; a < tries; a++) {
+      try { return await brouterRaw(points, profile); }
+      catch (e) {
+        if (e.kind === "island" || e.kind === "route") break; // permanent — try next profile
+        await sleep(800 * (a + 1)); // transient — back off
+      }
+    }
+  }
+  return null;
+}
+// Route through the waypoints on real paths. Try all at once; on failure, greedily
+// connect the routable waypoints, SKIPPING any BRouter can't snap (an "island") —
+// never draw a straight-line chord. Returns [lon,lat] coords, or null.
+async function routeThrough(pts) {
+  const full = await brouterTry(pts);
+  if (full) { routeThrough.lastSkipped = 0; return full; }
+  // Always route from `cur` — the last successfully-placed point — so skipping an
+  // unroutable waypoint never leaves a straight-line jump; the path stays continuous.
+  const out = [];
+  let skipped = 0, cur = pts[0];
+  for (let k = 1; k < pts.length; k++) {
+    const seg = await brouterTry([cur, pts[k]]);
+    await sleep(200);
+    if (seg && seg.length >= 2) { out.push(...(out.length ? seg.slice(1) : seg)); cur = pts[k]; }
+    else if (out.length === 0) { cur = pts[k]; skipped++; } // seed itself islanded — reseed
+    else skipped++; // cur is known-good, so pts[k] is the island — skip it, keep cur
+  }
+  routeThrough.lastSkipped = skipped;
+  return out.length >= 2 ? out : null;
 }
 
 const toR = Math.PI / 180;
@@ -184,26 +212,36 @@ for (const r of routes) {
   // A loop's waypoints cluster near its centroid (~perimeter×0.6 covers elongated
   // loops); a point-to-point legitimately reaches ~its full length from the start.
   const radius = r.loop ? Math.max(3, (r.bookKm || 5) * 0.6) : Math.max(5, (r.bookKm || 8) * 1.3);
-  let pts = [];
+  let hits = [];
   let missed = [];
-  for (const w of wps) { const p = await geocodeNear(w, { postcode: r.postcode, area: r.area, anchor, radius }); if (p) pts.push(p); else missed.push(w); }
+  for (const w of wps) { const p = await geocodeNear(w, { postcode: r.postcode, area: r.area, anchor, radius }); if (p) hits.push({ name: w, ll: p }); else missed.push(w); }
   // If the anchor was itself mis-geocoded it rejects every real waypoint; retry
   // unanchored (any London hit) so the route still traces.
-  if (pts.length < 2 && anchor) {
-    pts = []; missed = [];
-    for (const w of wps) { const p = await geocodeNear(w, { postcode: r.postcode, area: r.area, anchor: null, radius }); if (p) pts.push(p); else missed.push(w); }
+  if (hits.length < 2 && anchor) {
+    hits = []; missed = [];
+    for (const w of wps) { const p = await geocodeNear(w, { postcode: r.postcode, area: r.area, anchor: null, radius }); if (p) hits.push({ name: w, ll: p }); else missed.push(w); }
   }
+  // Named access points for the route strip — geocoded waypoints, in order.
+  const stopLabel = (w) => w.replace(/\bstation\b/i, "Station").replace(/,.*$/, "").trim();
+  const stops = hits.map((h) => [stopLabel(h.name), r5(h.ll[0]), r5(h.ll[1])]);
+  let pts = hits.map((h) => h.ll);
   if (pts.length < 2) { report.push(`SKIP ${r.id}: geocoded ${pts.length}/${wps.length} (missed: ${missed.join("; ")})`); continue; }
   if (r.loop && pts.length > 2) pts.push(pts[0]); // close the loop
   if (DRY) { report.push(`DRY ${r.id}: ${pts.length}/${wps.length} geocoded${missed.length ? " (missed: " + missed.join("; ") + ")" : ""}`); continue; }
   // Route through the geocoded points on pavements.
   const raw = await routeThrough(pts); // [lon,lat]
+  if (!raw || raw.length < 2) { report.push(`SKIP ${r.id}: no routable path (all waypoints islanded)`); continue; }
+  const skipped = routeThrough.lastSkipped || 0;
   const latlon = raw.map((c) => [r5(c[1]), r5(c[0])]);
   // deSpur removes out-and-back detours but treats a loop's start==end closure as
   // one giant spur and eats the whole ring — so only de-spur open (point-to-point) lines.
   const fineLatLon = simplify(r.loop ? latlon : deSpur(latlon), 0.00010);
   if (fineLatLon.length < 2) { report.push(`SKIP ${r.id}: BRouter returned <2 pts`); continue; }
   const km = lineKm(fineLatLon);
+  // Largest gap between consecutive vertices — a big one means a straight-line
+  // artifact slipped through (path-followed lines stay dense, ~13 m apart).
+  let maxGap = 0;
+  for (let i = 1; i < fineLatLon.length; i++) maxGap = Math.max(maxGap, distM(fineLatLon[i - 1], fineLatLon[i]));
   // Merge fine line into routes.geojson as [lon,lat].
   const coords = fineLatLon.map((p) => [p[1], p[0]]);
   const feat = { type: "Feature", properties: { id: r.id }, geometry: { type: "LineString", coordinates: coords } };
@@ -214,10 +252,10 @@ for (const r of routes) {
   let sk = fineLatLon;
   if (r.loop && sk.length > 2 && distM(sk[0], sk[sk.length - 1]) < 20) sk = sk.slice(0, -1);
   const sketch = decimate(sk).map((p) => [r5(p[0]), r5(p[1])]);
-  const rec = { ...r, path: sketch, tracedKm: Math.round(km * 10) / 10, missed };
+  const rec = { ...r, path: sketch, stops, tracedKm: Math.round(km * 10) / 10, missed, maxGapM: Math.round(maxGap), skipped };
   if (genById.has(r.id)) generated[genById.get(r.id)] = rec;
   else { genById.set(r.id, generated.length); generated.push(rec); }
-  report.push(`OK   ${r.id}: ${fineLatLon.length} pts, ${km.toFixed(1)} km${missed.length ? " (missed: " + missed.join("; ") + ")" : ""}`);
+  report.push(`OK   ${r.id}: ${fineLatLon.length} pts, ${km.toFixed(1)} km, gap ${Math.round(maxGap)}m${skipped ? ", skipped " + skipped : ""}${missed.length ? " (missed: " + missed.join("; ") + ")" : ""}`);
   // Flush incrementally so a long run's progress survives interruption.
   writeFileSync(GEOJSON, JSON.stringify(gj));
   writeFileSync(OUT, JSON.stringify(generated, null, 2));

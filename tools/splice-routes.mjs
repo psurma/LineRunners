@@ -19,15 +19,19 @@ const entry = (r) => {
   return `    { id: ${s(r.id)}, name: ${s(r.name)}, type: ${s(r.type)}, leg: ${s(r.leg)}, start: ${s(r.start)}, distance: ${s(r.distance)}, highlights: ${s(r.highlights)}, suitability: ${s(r.suitability)}, loop: ${r.loop}, path: ${path} },`;
 };
 
-let src = readFileSync(SCRIPT, "utf8");
-const firstId = gen[0].id;
-if (src.includes(`id: "${firstId}"`)) { console.error(`"${firstId}" already spliced; aborting`); process.exit(1); }
-
+const src = readFileSync(SCRIPT, "utf8");
 const lines = src.split("\n");
-const idx = lines.findIndex((l) => l.includes('id: "vitality-10k"'));
-if (idx < 0) { console.error("anchor line (vitality-10k) not found"); process.exit(1); }
+// Anchor on the last hand-written ROUTES entry; the book routes live between it
+// and the array's closing "];". Replacing that whole region is idempotent — it
+// updates paths/types and adds new routes without duplicating on re-runs.
+const anchor = lines.findIndex((l) => l.includes('id: "vitality-10k"'));
+if (anchor < 0) { console.error("anchor line (vitality-10k) not found"); process.exit(1); }
+let close = -1;
+for (let i = anchor + 1; i < lines.length; i++) { if (/^\s*\];\s*$/.test(lines[i])) { close = i; break; } }
+if (close < 0) { console.error("ROUTES closing ]; not found"); process.exit(1); }
 
 const block = gen.map(entry);
-lines.splice(idx + 1, 0, ...block);
+const replaced = close - (anchor + 1);
+lines.splice(anchor + 1, replaced, ...block);
 writeFileSync(SCRIPT, lines.join("\n"));
-console.log(`spliced ${gen.length} routes after line ${idx + 1}`);
+console.log(`spliced ${gen.length} routes (replaced ${replaced} existing lines) after the vitality-10k anchor`);

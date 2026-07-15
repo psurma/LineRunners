@@ -1499,7 +1499,7 @@
   {
     "id": "greenway-path",
     "name": "Greenway Path",
-    "type": "river",
+    "type": "trail",
     "region": "northeast",
     "area": "Stratford to Beckton",
     "postcode": "E15",
@@ -1859,6 +1859,28 @@
       "Woolwich Arsenal",
       "Thamesmead",
       "Erith"
+    ]
+  },
+  {
+    "id": "cranleigh-line",
+    "name": "Cranleigh Line (Downs Link)",
+    "type": "disused",
+    "region": "surrey",
+    "area": "Guildford",
+    "postcode": "GU1",
+    "start": "Guildford Station",
+    "leg": "Guildford → Bramley & Wonersh → Cranleigh",
+    "distance": "7.0 mi (11 km)",
+    "bookKm": 11,
+    "loop": false,
+    "highlights": "The disused Guildford-to-Horsham railway, closed in the 1965 Beeching cuts and now the Downs Link path: a flat, traffic-free run south through Shalford and the restored platforms of Bramley & Wonersh to Cranleigh.",
+    "suitability": "Flat, well-surfaced former trackbed and bridleway, entirely traffic-free. Point-to-point; no train back (the line is closed) so return by bus or run it out-and-back.",
+    "waypoints": [
+      "Guildford Station, Surrey",
+      "Shalford, Surrey",
+      "Bramley, Surrey",
+      "Run Common, Cranleigh, Surrey",
+      "Cranleigh, Surrey"
     ]
   }
 ]
