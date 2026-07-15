@@ -26,6 +26,13 @@ within sections is roughly impact-per-effort.
    status (dotted = proposed, dashed = planned/funded) with an "alignments indicative" note.
    Pete has TfL's own Bakerloo-extension map to trace from.
 
+5. **Vote for the next run** (Pete's idea) — a poll that lets the group pick the next route from
+   a shortlist, on the site and/or piped through WhatsApp. Feeds a popularity leaderboard: most-
+   and least-run routes, votes over time, "you've done 8 of the top 10." The poll + tallies need
+   a lightweight backend or hosted form (vote storage) — the rest (shortlist, results UI, stats)
+   is client-side over our own route data. WhatsApp hookup could be a group poll whose results are
+   pasted/imported, or a bot if we ever run one.
+
 ## From tuberun.app (leftovers not yet stolen)
 
 - **Dark mode** — light/dark toggle; we are light-only. High visibility, pure CSS.
