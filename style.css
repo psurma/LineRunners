@@ -768,6 +768,45 @@ body.strip-drag { user-select: none; -webkit-user-select: none; }
 }
 .live-btns a:hover { background: #fff2f2; }
 
+/* ---------- Featured shout-out banner ---------- */
+.feature-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  padding: 12px clamp(16px, 4vw, 40px);
+  background: #6950a1; /* Elizabeth line purple */
+  color: #fff;
+  font-weight: 600;
+}
+.feature-banner[hidden] { display: none; }
+.feat-text strong { text-transform: uppercase; letter-spacing: 1px; margin-right: 2px; }
+.feat-actions { display: flex; align-items: center; gap: 10px; margin-left: auto; }
+.feat-cta {
+  background: #fff;
+  color: #6950a1;
+  font-weight: 700;
+  font-size: 14px;
+  padding: 7px 16px;
+  border-radius: 30px;
+  white-space: nowrap;
+}
+.feat-cta:hover { background: #f3eefc; }
+.feat-close {
+  background: transparent;
+  border: 0;
+  color: #fff;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 4px;
+  opacity: 0.85;
+}
+.feat-close:hover { opacity: 1; }
+
+/* ---------- Footer page-version tag ---------- */
+.page-version { font-variant-numeric: tabular-nums; letter-spacing: 0.3px; opacity: 0.85; }
+
 /* ---------- New here ---------- */
 .nh-grid { display: grid; grid-template-columns: 1fr 1fr; gap: clamp(20px, 4vw, 44px); }
 .nh-col h3 { font-size: 20px; font-weight: 800; margin-bottom: 14px; }

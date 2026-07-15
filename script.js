@@ -32,6 +32,20 @@
     strava: "",                   // e.g. https://www.strava.com/beacon/...
   };
 
+  // --- FEATURED SHOUT-OUT ------------------------------------------------
+  // A one-off promo banner under the nav (e.g. a member's fundraiser). Shows
+  // until `until` (inclusive, that day still shows) then hides itself; also
+  // dismissible per-visitor. Set to null to remove. Preview with ?feature.
+  const FEATURE = {
+    id: "ray-elizabeth-2026",     // localStorage dismiss key — bump for a new promo
+    until: "2026-07-17",          // last day shown (the run day)
+    kicker: "This Friday",
+    title: "Ray's Elizabeth line run",
+    detail: "Reading → Shenfield, the whole Elizabeth line, for The Royal Marsden Cancer Charity",
+    cta: "Cheer Ray on",
+    url: "https://www.justgiving.com/fundraising/Ray4Cancer",
+  };
+
   // --- LINE COLLECTOR ----------------------------------------------------
   // Direction matters: running a line one way is a different run from running
   // it back, so every line has TWO collectible directions.
@@ -128,7 +142,7 @@
     { type: "tube", line: "Victoria", leg: "Brixton → Walthamstow Central", start: "Brixton stn (outside M&S)", distance: "~13 km" },
     {
       type: "adventure", name: "Shipwrights Way", colour: "#5A7D2A",
-      date: "2026-07-18", location: "East Hampshire → Portsmouth",
+      date: "2026-07-11", location: "East Hampshire → Portsmouth",
       leg: "Bentley Station → Historic Dockyard", start: "Bentley Station (60 min from Waterloo)",
       distance: "46 miles over 2 days",
       routeLink: "https://connect.garmin.com/app/course/481185821",
@@ -1424,6 +1438,43 @@
       <span class="live-btns">${btns.join("")}</span>`;
   }
 
+  // --- Render: Featured shout-out banner --------------------------------
+  function renderFeature() {
+    const el = document.getElementById("featureBanner");
+    if (!el || !FEATURE) { if (el) el.hidden = true; return; }
+    const preview = new URLSearchParams(location.search).has("feature");
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    let dismissed = false;
+    try { dismissed = localStorage.getItem("tuberun_feat_" + FEATURE.id) === "1"; } catch (_) { /* private mode */ }
+    // Hide once the day has passed, or if this visitor dismissed it (?feature overrides both).
+    if (!preview && (dismissed || today > parseISO(FEATURE.until))) { el.hidden = true; return; }
+    el.hidden = false;
+    el.innerHTML = `
+      <span class="feat-text"><strong>${escapeHtml(FEATURE.kicker)}</strong> — ${escapeHtml(FEATURE.title)}: ${escapeHtml(FEATURE.detail)}</span>
+      <span class="feat-actions">
+        <a class="feat-cta" href="${escapeAttr(FEATURE.url)}" target="_blank" rel="noopener">${escapeHtml(FEATURE.cta)} ↗</a>
+        <button type="button" class="feat-close" aria-label="Dismiss this notice">×</button>
+      </span>`;
+    const close = el.querySelector(".feat-close");
+    if (close) {
+      close.addEventListener("click", () => {
+        el.hidden = true;
+        try { localStorage.setItem("tuberun_feat_" + FEATURE.id, "1"); } catch (_) { /* private mode */ }
+      });
+    }
+  }
+
+  // --- Page version -----------------------------------------------------
+  // Surface the deployed cache-buster (script.js?v=N, bumped every commit by the
+  // pre-commit hook) in the footer, so it's clear which build is on screen.
+  function showPageVersion() {
+    const el = document.getElementById("pageVersion");
+    if (!el) return;
+    const tag = document.querySelector('script[src*="script.js"]');
+    const m = tag && (tag.getAttribute("src") || "").match(/[?&]v=(\d+)/);
+    el.textContent = m ? `Version ${m[1]}` : "";
+  }
+
   // --- Route ideas library (adapted from a runners' guide to London) -----
   const ROUTE_COLOURS = { river: "#0E7C90", canal: "#237A49", park: "#2C7D45", landmark: "#9B0056", trail: "#4E6E22", disused: "#7A5230", race: "#E8600F" };
   // Each route carries an indicative `path` of [lat,lon] waypoints tracing the described
@@ -1691,8 +1742,10 @@
     if (!geom) { el.hidden = true; el.innerHTML = ""; return; }
     const path = (geom.type === "MultiLineString" ? geom.coordinates.flat() : geom.coordinates).map((p) => [p[1], p[0]]);
     const cum = pathCumKm(path);
-    // A closed path (ends meet) is a loop regardless of the route's own flag.
-    const isLoop = path.length > 2 && haversineKm([0, path[0][0], path[0][1]], [0, path[path.length - 1][0], path[path.length - 1][1]]) < 0.08;
+    // A loop if the route says so, or its traced ends meet. Honour the flag too:
+    // a circuit whose start/finish sit a few hundred metres apart (e.g. a race
+    // starting on The Mall and finishing by the Palace) still needs loop ordering.
+    const isLoop = !!r.loop || (path.length > 2 && haversineKm([0, path[0][0], path[0][1]], [0, path[path.length - 1][0], path[path.length - 1][1]]) < 0.08);
     let stops = r.stops;
     let along = stops.map((s) => projectOnPath(s[1], s[2], path, cum).alongKm);
     // On a loop the start/seam point can project to ≈0 or ≈full-length, so the
@@ -5693,6 +5746,7 @@
   // that one feature instead of aborting bootstrap and blanking the page.
   [
     ["themeSections", themeSections], ["renderLive", renderLive],
+    ["renderFeature", renderFeature], ["showPageVersion", showPageVersion],
     ["renderTubeMap", renderTubeMap], ["renderLineStats", renderLineStats],
     ["renderNext", renderNext], ["renderHeroCard", renderHeroCard],
     ["renderJourneyBoard", renderJourneyBoard], ["renderList", renderList],
