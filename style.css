@@ -1353,6 +1353,27 @@ body {
 }
 .nav a:hover { color: var(--tfl-blue); background: rgba(0, 25, 168, 0.07); }
 
+/* Tablets (iPad et al.): between the phone breakpoint and the desktop, the
+   inline nav can't fit beside the brand, search and toggles, so its 13 links
+   wrap into a tall stack that swallows the whole viewport. Drop the nav onto
+   its own full-width, horizontally-scrollable row below that top row — the
+   same treatment the phone layout uses below 720px. */
+@media (min-width: 721px) and (max-width: 1200px) {
+  .site-header { flex-wrap: wrap; }
+  .nav {
+    order: 10;
+    width: 100%;
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    overflow-x: auto;
+    gap: 4px;
+    padding: 6px 0 2px;
+    scrollbar-width: none;
+  }
+  .nav::-webkit-scrollbar { display: none; }
+  .nav a { white-space: nowrap; padding: 6px 12px; border-radius: 999px; }
+}
+
 /* ---------- Hero ---------- */
 .hero {
   /* Night-lines design: dark tunnel radial, keeps the classic red base rule */
