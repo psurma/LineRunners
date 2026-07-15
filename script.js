@@ -4604,6 +4604,17 @@
     return out;
   }
 
+  // The map's intro sentence, describing whichever line is currently lit. The next
+  // run gets the full "lit up for the next run … arrival window" copy; a route the
+  // visitor picked to explore gets plainer running-time/distance wording.
+  function geoIntroHtml(net, id, isNextRun) {
+    if (!id || !net[id]) return "Our own live map — real streets, parks and the Thames, with every tube line on top. ";
+    const name = `<strong style="color:${lineTextColour(net[id].colour)}">${escapeHtml(net[id].name)} line</strong>`;
+    return isNextRun
+      ? `${name} lit up for the next run — arrows show the direction of travel, with running time, distance and the group's expected arrival window (from a ${MEET_TIME} start) at each stop. Every stop is a bail-out — hop the train back — and the black-ringed interchanges get you onto other lines. `
+      : `${name} traced on the map — running time and distance at each stop from its start. Every stop is a bail-out; black-ringed interchanges get you onto other lines. `;
+  }
+
   function geoCaption(cap, net, hi, redraw, applyYear) {
     if (!cap) return;
     const modes = hi ? `<span class="geo-modes">Times: ${["run", "walk", "off"].map((m) =>
@@ -4613,9 +4624,7 @@
     const tmOn = tmYear < 9999;
     const tmBtn = `<button type="button" class="geo-mode geo-tm-btn"${tmOn ? ' data-on="1"' : ""}>🕰 Time machine</button>`;
     const tmRowHtml = `<span class="tm-year-row"${tmOn ? "" : " hidden"}><input type="range" class="tm-year" min="1830" max="2026" step="1" value="${tmOn ? tmYear : 2026}" aria-label="Show the network as it was in this year" /><b class="tm-year-lbl"></b><span class="tm-year-note"></span></span>`;
-    cap.innerHTML = (hi
-      ? `<strong style="color:${lineTextColour(net[hi].colour)}">${escapeHtml(net[hi].name)} line</strong> lit up for the next run — arrows show the direction of travel, with running time, distance and the group's expected arrival window (from a ${MEET_TIME} start) at each stop. Every stop is a bail-out — hop the train back — and the black-ringed interchanges get you onto other lines. `
-      : `Our own live map — real streets, parks and the Thames, with every tube line on top. `) + modes + " " + wcBtn + " " + waterBtn + " " + tmBtn + tmRowHtml;
+    cap.innerHTML = `<span class="geo-intro">${geoIntroHtml(net, hi, true)}</span>` + modes + " " + wcBtn + " " + waterBtn + " " + tmBtn + tmRowHtml;
     cap.querySelectorAll(".geo-mode[data-on]").forEach((b) => b.classList.add("on"));
     cap.querySelectorAll(".geo-mode[data-mode]").forEach((b) => b.addEventListener("click", () => {
       geoTimeMode = b.dataset.mode;
@@ -4656,6 +4665,10 @@
     const [net, geo] = await Promise.all([loadNetwork(), loadLines()]);
     if (stale && stale()) return; // user switched tabs while the data was in flight
     const hi = geoHighlightId(net);
+    // The line currently lit up on the map. Starts as the next run (hi) but then
+    // follows the route picker, so choosing another route re-lights that line's
+    // track and stop labels instead of stacking on top of the old highlight.
+    let curHi = hi;
     document.body.classList.add("tm-map-active");
     holder.innerHTML = `<div id="tmMap"></div>`;
     if (tmMap.map) { tmMap.map.remove(); tmMap.map = null; }
@@ -4667,12 +4680,12 @@
     // NR cartography — so the TfL network stays the hero of the map. Lines the
     // time machine says don't exist yet linger as faint ghosts.
     const lineStyle = (f) => {
-      const on = hi && f.properties.line === hi, nr = f.properties.nr;
+      const on = curHi && f.properties.line === curHi, nr = f.properties.nr;
       if (lineYear(f.properties.line) > tmYear) return { color: f.properties.colour, weight: 1, opacity: 0.07, dashArray: "2 6", lineJoin: "round", lineCap: "round" };
       // Partially built in this year: hide the modern geometry — the era layer
       // below draws only the extent that had actually opened.
       if (tmYear < 9999 && lineMaxYear(f.properties.line) > tmYear) return { color: f.properties.colour, weight: 0, opacity: 0 };
-      return { color: f.properties.colour, weight: on ? 5 : (nr ? 2 : 3), opacity: on ? 1 : (hi ? 0.3 : (nr ? 0.6 : 0.9)), dashArray: nr ? "6 5" : null, lineJoin: "round", lineCap: "round" };
+      return { color: f.properties.colour, weight: on ? 5 : (nr ? 2 : 3), opacity: on ? 1 : (curHi ? 0.3 : (nr ? 0.6 : 0.9)), dashArray: nr ? "6 5" : null, lineJoin: "round", lineCap: "round" };
     };
     const lineLayer = L.geoJSON(geo, { style: lineStyle }).addTo(map);
 
@@ -4693,13 +4706,23 @@
     // so any route can be explored on the map. drawMapRoute swaps the highlight:
     // a soft base + animated flow line with start/finish markers and arrows, and
     // brings the chosen line's track to the front.
-    let hiRouteGrp = null, curEntry = null;
+    let hiRouteGrp = null, curEntry = null, mapReady = false;
     async function drawMapRoute(entry) {
       if (hiRouteGrp) { hiRouteGrp.remove(); hiRouteGrp = null; }
       curEntry = entry;
       const r = await drawRunRoute(map, net, entry.id, entry.gpx ? { stale } : { waypoints: entry.wp, stale });
       hiRouteGrp = r && r.group;
+      // After the first render, switching route re-lights the chosen line: its
+      // track goes bold (others dim) and its per-stop labels are recomputed and
+      // redrawn — so the previous route's line and time/distance labels clear
+      // instead of lingering underneath the new one.
+      if (mapReady) {
+        curHi = entry.id; km = tmComputeKm(net, curHi); lineLayer.setStyle(lineStyle);
+        const intro = cap && cap.querySelector(".geo-intro");
+        if (intro) intro.innerHTML = geoIntroHtml(net, curHi, curHi === hi);
+      }
       lineLayer.eachLayer((l) => { if (l.feature.properties.line === entry.id) l.bringToFront(); });
+      if (mapReady) draw();
     }
     // The picker honours the time machine: only lines whose corridor existed
     // in the chosen year are offered (before 1836 there's nothing to run).
@@ -4728,7 +4751,7 @@
       if (twin && Math.abs(twin.lat - st[sid].lat) < 0.004 && Math.abs(twin.lon - st[sid].lon) < 0.006) continue;
       count[sid] = (count[sid] || 0) + 1; markYear(sid, id, st[sid].n);
       if (!coordById[sid]) { coordById[sid] = st[sid]; colourById[sid] = net[id].colour; } } }
-    const km = tmComputeKm(net, hi);
+    let km = tmComputeKm(net, curHi);
     // Per-day ETA table so multi-day runs count each day's windows from that day's
     // own start clock (matching the journey board) instead of one 09:00 origin.
     const etaWp = hi && nextRun ? WAYPOINTS[nextRun.key] : null;
@@ -4881,8 +4904,9 @@
       if (toiletGrp) map.removeLayer(toiletGrp);
       const perKm = geoTimeMode === "walk" ? WALK_MIN_PER_KM : rtPace;
       const dense = map.getZoom() < 12; // thin the permanent labels when zoomed out to avoid overlap
+      const showEta = curHi === hi; // the group's arrival window only applies to the actual next run
       stationGrp = L.layerGroup();
-      for (const sid in coordById) { const s = coordById[sid], inter = count[sid] > 1, onHi = km[sid] !== undefined, dim = hi && !onHi;
+      for (const sid in coordById) { const s = coordById[sid], inter = count[sid] > 1, onHi = km[sid] !== undefined, dim = curHi && !onHi;
         if ((sidYear[sid] || 0) > tmYear) continue; // station's every line post-dates the time machine year
         const m = L.circleMarker([s.lat, s.lon], {
           radius: inter ? (onHi ? 6 : 4.5) : 3, weight: inter ? 1.5 : 1,
@@ -4892,10 +4916,12 @@
         });
         const mins = km[sid] * perKm;
         if (onHi && (!dense || inter)) {
-          const time = geoTimeMode !== "off" ? `<span>${fmtTime(mins)} · ${geoDistStr(km[sid])}<br><b class="tm-eta">🕒 ${etaWindow(km[sid], perKm)}</b></span>` : "";
+          const eta = showEta ? `<br><b class="tm-eta">🕒 ${etaWindow(km[sid], perKm)}</b>` : "";
+          const time = geoTimeMode !== "off" ? `<span>${fmtTime(mins)} · ${geoDistStr(km[sid])}${eta}</span>` : "";
           m.bindTooltip(`<b>${escapeHtml(s.n)}</b>${time}`, { permanent: true, direction: "right", className: "tm-run-label", offset: [7, 0] });
         } else {
-          const t = onHi && geoTimeMode !== "off" ? `${escapeHtml(s.n)} · ${fmtTime(mins)} · ${geoDistStr(km[sid])} · group here ~${etaWindow(km[sid], perKm)}` : escapeHtml(s.n);
+          const eta = showEta ? ` · group here ~${etaWindow(km[sid], perKm)}` : "";
+          const t = onHi && geoTimeMode !== "off" ? `${escapeHtml(s.n)} · ${fmtTime(mins)} · ${geoDistStr(km[sid])}${eta}` : escapeHtml(s.n);
           m.bindTooltip(t, { direction: "top", className: "tm-hover-label" });
         }
         m.on("click", () => {
@@ -4919,6 +4945,7 @@
       waterGrp.addTo(map);
     }
     draw();
+    mapReady = true; // from here, route-picker changes re-light the chosen line
     // Year change: restyle lines and stations live, then (debounced, so slider
     // drags stay smooth) refresh the route picker to the lines of that era —
     // swapping the drawn route out if its line hasn't been built yet.
