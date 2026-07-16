@@ -205,6 +205,8 @@ const RACES = [
       ["Hoxton", 51.5320, -0.0787],
     ],
   },
+  // The Run Shoreditch 10K (2025 course) is built street-exact from OSM geometry
+  // by tools/build-shoreditch-10k.mjs — not BRouter-traced. Do not re-add it here.
   {
     // HOKA Hackney Half (May, Hackney Moves festival): starts and finishes at the
     // Hackney Marshes festival village. Official narrative order: south-west
