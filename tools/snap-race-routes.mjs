@@ -110,12 +110,70 @@ const RACES = [
       ["Embankment", 51.5072, -0.1205], ["Westminster", 51.5012, -0.1243], ["The Mall", 51.5040, -0.1345],
     ],
   },
+  {
+    // Saucony London 10K (the ex-ASICS/British 10K, July): Piccadilly start, the
+    // Regent Street out-and-back (1k viewing), Trafalgar Square (3k), Strand and
+    // Aldwych down to the Victoria Embankment past Somerset House (5k), a
+    // Blackfriars turnaround, back west along the Embankment (7k), a Westminster
+    // Bridge out-and-back past Big Ben, then up Whitehall to the finish.
+    id: "saucony-london-10k", km: 10.0, profile: "shortest",
+    path: [
+      [51.5065, -0.1444], [51.5074, -0.1416], [51.5089, -0.1367], [51.5101, -0.1340],
+      [51.5125, -0.1394], [51.5152, -0.1418],
+      [51.5125, -0.1394], [51.5101, -0.1340],
+      [51.5085, -0.1322], [51.5074, -0.1310], [51.5079, -0.1281],
+      [51.5104, -0.1200], [51.5130, -0.1163], [51.5136, -0.1112],
+      [51.5115, -0.1173], [51.5107, -0.1155],
+      [51.5111, -0.1080], [51.5110, -0.1044],
+      [51.5100, -0.1170], [51.5073, -0.1223], [51.5030, -0.1236],
+      [51.5008, -0.1220], [51.5006, -0.1188],
+      [51.5008, -0.1240], [51.5007, -0.1262],
+      [51.5033, -0.1263], [51.5049, -0.1260],
+    ],
+    stops: [
+      ["Green Park", 51.5065, -0.1444], ["Piccadilly Circus", 51.5101, -0.1340], ["Trafalgar Square", 51.5079, -0.1281],
+      ["Temple", 51.5111, -0.1080], ["Embankment", 51.5073, -0.1223], ["Westminster", 51.5010, -0.1240],
+      ["Whitehall", 51.5049, -0.1260],
+    ],
+  },
+  {
+    // London Winter Run 10K (Cancer Research UK, February): Trafalgar Square north
+    // terrace start, Strand and Aldwych, up Kingsway and east along Holborn (its
+    // closure set names Kingsway/High Holborn/Fetter Lane), down to Fleet Street
+    // and Ludgate Hill past St Paul's, Cheapside to Bank and a short City loop
+    // (Threadneedle/Old Broad/Lothbury), Cannon Street and Queen Victoria Street
+    // to Blackfriars, then the Victoria Embankment to Westminster and the
+    // Whitehall finish by Downing Street.
+    id: "london-winter-run", km: 10.0, profile: "shortest",
+    path: [
+      [51.5086, -0.1280], [51.5090, -0.1250], [51.5104, -0.1200], [51.5130, -0.1163],
+      [51.5152, -0.1190], [51.5175, -0.1120], [51.5178, -0.1090],
+      [51.5152, -0.1078], [51.5142, -0.1070],
+      [51.5138, -0.1040], [51.5139, -0.1005], [51.5138, -0.0984],
+      [51.5136, -0.0930], [51.5133, -0.0900], [51.5133, -0.0886],
+      [51.5140, -0.0866], [51.5152, -0.0846], [51.5155, -0.0870], [51.5150, -0.0890], [51.5140, -0.0895],
+      [51.5133, -0.0886], [51.5127, -0.0880], [51.5115, -0.0940], [51.5120, -0.0965],
+      [51.5117, -0.1000], [51.5112, -0.1030], [51.5105, -0.1043],
+      [51.5112, -0.1105], [51.5100, -0.1170], [51.5073, -0.1223], [51.5030, -0.1236],
+      [51.5010, -0.1240], [51.5007, -0.1262], [51.5040, -0.1262],
+    ],
+    stops: [
+      ["Trafalgar Square", 51.5086, -0.1280], ["Holborn", 51.5175, -0.1120], ["St Paul's", 51.5138, -0.0984],
+      ["Bank", 51.5133, -0.0886], ["Blackfriars", 51.5105, -0.1043], ["Embankment", 51.5073, -0.1223],
+      ["Whitehall", 51.5040, -0.1262],
+    ],
+  },
 ];
 
 const gj = JSON.parse(readFileSync(GEOJSON, "utf8"));
 const stopsOut = JSON.parse(readFileSync(STOPS, "utf8"));
 
-for (const race of RACES) {
+// Optional id filter (node tools/snap-race-routes.mjs saucony-london-10k …) so a
+// new course can be traced without re-hitting BRouter for the verified ones.
+const only = process.argv.slice(2);
+const races = only.length ? RACES.filter((r) => only.includes(r.id)) : RACES;
+
+for (const race of races) {
   process.stdout.write(`tracing ${race.id} (${race.path.length} waypoints)... `);
   const profiles = race.profile === "shortest"
     ? [["shortest", 3], ["hiking-beta", 2]]
