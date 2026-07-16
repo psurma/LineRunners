@@ -114,10 +114,24 @@ try {
       ["nr-branch-routes.json", J("nr-branch-routes.json"), nrNet],
       ["tube-branch-routes.json", J("tube-branch-routes.json"), tube],
     ];
-    let branches = 0, alignedLines = 0, bad = false;
+    let branches = 0, alignedLines = 0, spurs = 0, bad = false;
     for (const [file, stored, net] of sets) {
       for (const [id, arr] of Object.entries(stored)) {
         if (!net[id]) { fail(`${file}: ${id} is not in its network file`); bad = true; continue; }
+        // Lines with curated LINE_VARIANTS never reach buildBranchOptions (variants
+        // win), so their entries here feed only segmentPavement, which spreads all
+        // polylines order-free — the positional count contract doesn't apply. Just
+        // sanity-check each polyline (e.g. district/piccadilly/elizabeth spur arms).
+        if (LINE_VARIANTS[id]) {
+          for (const [i, line] of arr.entries()) {
+            if (!Array.isArray(line) || line.length < 2 || line.some((p) => !Array.isArray(p) || !isFinite(p[0]) || !isFinite(p[1]))) {
+              fail(`${file}: ${id} spur ${i} is not a valid polyline`);
+              bad = true;
+            }
+          }
+          spurs += arr.length;
+          continue;
+        }
         const want = branchCount(net, id);
         if (arr.length !== want) {
           fail(`${file}: ${id} stores ${arr.length} geometries but the branch skip rule yields ${want} — branch options would mis-pair; a regeneration is needed (re-run the ${file.startsWith("nr") ? "generate-nr-branches" : "generate-dlr-branches"} tool)`);
@@ -129,7 +143,7 @@ try {
       }
     }
     for (const id of Object.keys(nrNet)) if (!(id in sets[0][1])) { fail(`nr-branch-routes.json: line ${id} missing entirely — re-run tools/generate-nr-branches.mjs`); bad = true; }
-    if (!bad) ok(`branch routes: ${branches} geometries across ${alignedLines} lines match the skip-rule counts`);
+    if (!bad) ok(`branch routes: ${branches} geometries across ${alignedLines} lines match the skip-rule counts${spurs ? ` (+${spurs} order-free spur polylines on variant lines)` : ""}`);
   }
 
   // --- c. referential integrity: ROUTES / geojson / stops / GPX ----------------

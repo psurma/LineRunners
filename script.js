@@ -5396,8 +5396,10 @@
     return nrBranchPromise;
   }
   // Pavement geometry for tube-network lines whose secondary branches need it —
-  // currently the DLR's Beckton/Woolwich arms and Bank/Tower Gateway spurs (its
-  // main branch lives in routes/dlr.gpx). Same shape as the NR branch file.
+  // the DLR's Beckton/Woolwich arms and Bank/Tower Gateway spurs (its main branch
+  // lives in routes/dlr.gpx), plus short spur arms that no curated variant covers
+  // (District's Kensington Olympia, the Piccadilly and Elizabeth Heathrow T4 legs)
+  // so journey legs over them trace real streets. Same shape as the NR branch file.
   let tubeBranchPromise = null;
   function loadTubeBranches() {
     if (!tubeBranchPromise) {
