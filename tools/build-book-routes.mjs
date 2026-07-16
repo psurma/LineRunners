@@ -21,13 +21,13 @@
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { routeThrough } from "./lib/brouter.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const IN = join(ROOT, "data/book-routes-input.json");
 const GEOJSON = join(ROOT, "data/routes.geojson");
 const OUT = join(ROOT, "data/book-routes-generated.json");
 const CACHE = join(ROOT, "data/geocode-cache.json");
-const BROUTER = "https://brouter.de/brouter";
 const NOMINATIM = "https://nominatim.openstreetmap.org/search";
 const UA = "TubeRun/1.0 (book route tracing; https://psurma.github.io/TubeRun)";
 // Greater London + a margin for Epping Forest, Richmond, Hampton Court, and the
@@ -94,55 +94,10 @@ async function geocodeNear(name, { postcode, area, anchor, radius }) {
   return null;
 }
 
-// --- BRouter routing ----------------------------------------------------------
-const PROFILE = "hiking-beta"; // foot-friendly: prefers footpaths/park trails over fast roads
-async function brouterRaw(points, profile) {
-  const lonlats = points.map((p) => `${p[1]},${p[0]}`).join("|");
-  const res = await fetch(`${BROUTER}?lonlats=${lonlats}&profile=${profile}&alternativeidx=0&format=geojson`, { headers: { "User-Agent": UA } });
-  const text = await res.text();
-  if (text[0] === "{") {
-    const gj = JSON.parse(text);
-    if (gj.features && gj.features[0]) return gj.features[0].geometry.coordinates; // [lon,lat]
-    throw Object.assign(new Error("no route"), { kind: "route" });
-  }
-  // BRouter emits plain-text errors like "target island detected for section 0"
-  const permanent = /island|not mapped|not routable|unreachable|too far/i.test(text);
-  throw Object.assign(new Error(text.slice(0, 90)), { kind: permanent ? "island" : "net" });
-}
-// Coords or null. Retry transient (network) failures; if a point islands under the
-// foot profile, retry the leg on the denser "shortest" graph before giving up.
-async function brouterTry(points) {
-  for (const [profile, tries] of [[PROFILE, 3], ["shortest", 2]]) {
-    for (let a = 0; a < tries; a++) {
-      try { return await brouterRaw(points, profile); }
-      catch (e) {
-        if (e.kind === "island" || e.kind === "route") break; // permanent — try next profile
-        await sleep(800 * (a + 1)); // transient — back off
-      }
-    }
-  }
-  return null;
-}
-// Route through the waypoints on real paths. Try all at once; on failure, greedily
-// connect the routable waypoints, SKIPPING any BRouter can't snap (an "island") —
-// never draw a straight-line chord. Returns [lon,lat] coords, or null.
-async function routeThrough(pts) {
-  const full = await brouterTry(pts);
-  if (full) { routeThrough.lastSkipped = 0; return full; }
-  // Always route from `cur` — the last successfully-placed point — so skipping an
-  // unroutable waypoint never leaves a straight-line jump; the path stays continuous.
-  const out = [];
-  let skipped = 0, cur = pts[0];
-  for (let k = 1; k < pts.length; k++) {
-    const seg = await brouterTry([cur, pts[k]]);
-    await sleep(200);
-    if (seg && seg.length >= 2) { out.push(...(out.length ? seg.slice(1) : seg)); cur = pts[k]; }
-    else if (out.length === 0) { cur = pts[k]; skipped++; } // seed itself islanded — reseed
-    else skipped++; // cur is known-good, so pts[k] is the island — skip it, keep cur
-  }
-  routeThrough.lastSkipped = skipped;
-  return out.length >= 2 ? out : null;
-}
+// --- BRouter routing (shared client in lib/brouter.mjs) ------------------------
+// Foot-friendly profile first (prefers footpaths/park trails over fast roads);
+// if a point islands under it, retry the leg on the denser "shortest" graph.
+const PROFILES = [["hiking-beta", 3], ["shortest", 2]];
 
 const toR = Math.PI / 180;
 const distM = (a, b) => 12742000 * Math.asin(Math.sqrt(Math.sin((b[0] - a[0]) * toR / 2) ** 2 + Math.cos(a[0] * toR) * Math.cos(b[0] * toR) * Math.sin((b[1] - a[1]) * toR / 2) ** 2));
@@ -229,7 +184,7 @@ for (const r of routes) {
   if (r.loop && pts.length > 2) pts.push(pts[0]); // close the loop
   if (DRY) { report.push(`DRY ${r.id}: ${pts.length}/${wps.length} geocoded${missed.length ? " (missed: " + missed.join("; ") + ")" : ""}`); continue; }
   // Route through the geocoded points on pavements.
-  const raw = await routeThrough(pts); // [lon,lat]
+  const raw = await routeThrough(pts, PROFILES, { userAgent: UA }); // [lon,lat]
   if (!raw || raw.length < 2) { report.push(`SKIP ${r.id}: no routable path (all waypoints islanded)`); continue; }
   const skipped = routeThrough.lastSkipped || 0;
   const latlon = raw.map((c) => [r5(c[1]), r5(c[0])]);

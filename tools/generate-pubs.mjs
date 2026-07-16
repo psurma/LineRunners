@@ -12,7 +12,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import vm from "node:vm";
+import { extractLiteral } from "./lib/extract.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const FSA = "https://api.ratings.food.gov.uk/Establishments";
@@ -20,23 +20,7 @@ const PUB_TYPE = 7843; // FSA business type: Pub/bar/nightclub
 const MAX_M = 700, MIN_RATING = 4, PER_END = 6;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-// Pull the ROUTES array literal out of script.js (same trick as the variant
-// builder uses for LINE_VARIANTS, but bracket-balanced for an array).
-function loadRoutesLiteral() {
-  const s = readFileSync(join(ROOT, "script.js"), "utf8");
-  const i = s.indexOf("const ROUTES = [");
-  if (i < 0) throw new Error("ROUTES not found in script.js");
-  const start = s.indexOf("[", i);
-  let depth = 0, j = start;
-  for (; j < s.length; j++) {
-    const c = s[j];
-    if (c === "[") depth++;
-    else if (c === "]" && --depth === 0) { j++; break; }
-  }
-  return vm.runInNewContext("(" + s.slice(start, j) + ")");
-}
-
-const ROUTES = loadRoutesLiteral();
+const ROUTES = extractLiteral(readFileSync(join(ROOT, "script.js"), "utf8"), "ROUTES");
 const geo = JSON.parse(readFileSync(join(ROOT, "data/routes.geojson"), "utf8"));
 const geomById = {};
 for (const f of geo.features) geomById[f.properties.id] = f.geometry;

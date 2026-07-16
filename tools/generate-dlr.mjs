@@ -11,10 +11,10 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { brouterRaw } from "./lib/brouter.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const API = "https://api.tfl.gov.uk";
-const BROUTER = "https://brouter.de/brouter";
 const ID = "dlr", NAME = "DLR", COLOUR = "#00A4A7";
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const r5 = (n) => Math.round(n * 1e5) / 1e5;
@@ -86,12 +86,8 @@ writeFileSync(geoPath, JSON.stringify(geo));
 console.log(`merged into tube-network.json + tube-lines.geojson (${rings.length} geometry chunks)`);
 
 // --- BRouter the main branch -> routes/dlr.gpx ---
-async function brouter(points) {
-  const lonlats = points.map((p) => `${p.lon},${p.lat}`).join("|");
-  const res = await fetch(`${BROUTER}?lonlats=${lonlats}&profile=shortest&alternativeidx=0&format=geojson`, { headers: { "User-Agent": "TubeRun/1.0 (dlr route)" } });
-  const text = await res.text(); let gj; try { gj = JSON.parse(text); } catch { throw new Error(`non-JSON (${res.status})`); }
-  if (!gj.features || !gj.features[0]) throw new Error("no route"); return gj.features[0].geometry.coordinates;
-}
+// Single attempt, throws on failure — routeStations' per-leg fallback handles it.
+const brouter = (points) => brouterRaw(points, "shortest", { userAgent: "TubeRun/1.0 (dlr route)" });
 async function routeStations(st) {
   try { return await brouter(st); } catch (_) { /* per-leg fallback */ }
   const out = []; for (let i = 0; i < st.length - 1; i++) { let seg; try { seg = await brouter([st[i], st[i + 1]]); } catch { seg = [[st[i].lon, st[i].lat, 0], [st[i + 1].lon, st[i + 1].lat, 0]]; } out.push(...(out.length ? seg.slice(1) : seg)); await sleep(300); } return out;

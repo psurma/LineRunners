@@ -8,7 +8,7 @@
 //
 //   node tools/snap-race-routes.mjs
 //
-// Reuses the proven BRouter helpers from build-book-routes.mjs (full-route first,
+// Uses the shared BRouter helpers in lib/brouter.mjs (full-route first,
 // per-leg fallback that skips islands rather than drawing a chord). deSpur is
 // deliberately skipped: these courses are precise and genuinely double back
 // (Big Half runs out The Highway and returns), which deSpur would wrongly collapse.
@@ -16,52 +16,16 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { routeThrough } from "./lib/brouter.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const GEOJSON = join(ROOT, "data/routes.geojson");
 const STOPS = join(ROOT, "data/route-stops.json");
 
-const BROUTER = "https://brouter.de/brouter";
 const UA = "TubeRun/1.0 (race route snapping; https://psurma.github.io/TubeRun)";
-const PROFILE = "hiking-beta";
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-
-async function brouterRaw(points, profile) {
-  const lonlats = points.map((p) => `${p[1]},${p[0]}`).join("|");
-  const res = await fetch(`${BROUTER}?lonlats=${lonlats}&profile=${profile}&alternativeidx=0&format=geojson`, { headers: { "User-Agent": UA } });
-  const text = await res.text();
-  if (text[0] === "{") {
-    const gj = JSON.parse(text);
-    if (gj.features && gj.features[0]) return gj.features[0].geometry.coordinates; // [lon,lat]
-    throw Object.assign(new Error("no route"), { kind: "route" });
-  }
-  const permanent = /island|not mapped|not routable|unreachable|too far/i.test(text);
-  throw Object.assign(new Error(text.slice(0, 90)), { kind: permanent ? "island" : "net" });
-}
-// `profiles` is an ordered [profile, retries] list: try each in turn, retrying
-// only transient (network) failures. A road race prefers "shortest" (tracks the
-// carriageway); a foot/park route prefers "hiking-beta".
-async function brouterTry(points, profiles) {
-  for (const [profile, tries] of profiles) {
-    for (let a = 0; a < tries; a++) {
-      try { return await brouterRaw(points, profile); }
-      catch (e) { if (e.kind === "island" || e.kind === "route") break; await sleep(800 * (a + 1)); }
-    }
-  }
-  return null;
-}
-async function routeThrough(pts, profiles) {
-  const full = await brouterTry(pts, profiles);
-  if (full) return full;
-  const out = []; let cur = pts[0];
-  for (let k = 1; k < pts.length; k++) {
-    const seg = await brouterTry([cur, pts[k]], profiles);
-    await sleep(200);
-    if (seg && seg.length >= 2) { out.push(...(out.length ? seg.slice(1) : seg)); cur = pts[k]; }
-    else if (out.length === 0) cur = pts[k];
-  }
-  return out.length >= 2 ? out : null;
-}
+// `profiles` lists below are ordered [profile, retries] pairs (see lib/brouter.mjs):
+// a road race prefers "shortest" (tracks the carriageway); a foot/park route
+// prefers "hiking-beta".
 
 const toR = Math.PI / 180;
 const distM = (a, b) => 12742000 * Math.asin(Math.sqrt(Math.sin((b[0] - a[0]) * toR / 2) ** 2 + Math.cos(a[0] * toR) * Math.cos(b[0] * toR) * Math.sin((b[1] - a[1]) * toR / 2) ** 2));
@@ -156,7 +120,7 @@ for (const race of RACES) {
   const profiles = race.profile === "shortest"
     ? [["shortest", 3], ["hiking-beta", 2]]
     : [["hiking-beta", 3], ["shortest", 2]];
-  const coords = await routeThrough(race.path, profiles); // [lon,lat]
+  const coords = await routeThrough(race.path, profiles, { userAgent: UA }); // [lon,lat]
   if (!coords) { console.log("FAILED — left unchanged"); continue; }
   const simplified = simplify(coords, 0.00010).map((p) => [r5(p[0]), r5(p[1])]);
   const km = lineKm(simplified);

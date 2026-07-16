@@ -13,22 +13,15 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { brouterRaw } from "./lib/brouter.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const NET = JSON.parse(readFileSync(join(ROOT, "data/tube-network.json"), "utf8"));
-const BROUTER = "https://brouter.de/brouter";
 const LINES = ["dlr"]; // tube-network lines that want branch pavement geometry
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-async function brouter(points) {
-  const lonlats = points.map((p) => `${p.lon},${p.lat}`).join("|");
-  const res = await fetch(`${BROUTER}?lonlats=${lonlats}&profile=shortest&alternativeidx=0&format=geojson`, { headers: { "User-Agent": "TubeRun/1.0 (dlr branch routes)" } });
-  const text = await res.text();
-  let gj;
-  try { gj = JSON.parse(text); } catch { throw new Error(`non-JSON (${res.status})`); }
-  if (!gj.features || !gj.features[0]) throw new Error("no route");
-  return gj.features[0].geometry.coordinates;
-}
+// Single attempt, throws on failure — routeStations' per-leg fallback handles it.
+const brouter = (points) => brouterRaw(points, "shortest", { userAgent: "TubeRun/1.0 (dlr branch routes)" });
 async function routeStations(st) {
   try { return await brouter(st); } catch (_) { /* per-leg fallback */ }
   const out = [];

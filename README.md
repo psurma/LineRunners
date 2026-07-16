@@ -42,12 +42,16 @@ Everything data-driven lives at the top of `script.js`:
 - `CONNECT` — social links
 - `RUN_PLAN` — the monthly schedule (tube / river / canal / bus / adventure)
 - `WAYPOINTS` — ordered stations (with coords) for the planner + running-times
-- `LINES_DONE` / `LINE_DIRS` — line-collector progress
+- `LINE_DIRS` — line-collector progress
 - `LIVE` — live-now banner (flip `active` on run day, paste Garmin/Strava links)
 - `ROUTES` — the route-ideas library
 - `GALLERY` — photos
 
-Bump the `?v=` query on the `style.css` / `script.js` links in `index.html` after edits to bust the browser cache during local dev.
+The `?v=` cache-buster on the `style.css` / `script.js` links in `index.html` is bumped automatically by the pre-commit hook whenever a commit touches the files it references — no hand-editing needed. The hook also syntax-checks `script.js`, regenerates `data/schedule.json` and runs `tools/validate-data.mjs` over the derived data. It lives tracked at `tools/pre-commit`; install it after a fresh clone with:
+
+```
+cp tools/pre-commit .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit
+```
 
 ## Maps
 

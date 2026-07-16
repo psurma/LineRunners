@@ -16,28 +16,14 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import vm from "node:vm";
+import { extractLiteral } from "./lib/extract.mjs";
+import { brouterRaw } from "./lib/brouter.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const NET = JSON.parse(readFileSync(join(ROOT, "data/tube-network.json"), "utf8"));
 
-// Pull a top-level object literal (`const NAME = { ... }`) straight out of
-// script.js so LINE_VARIANTS stays the single source of truth. The literal holds
-// only strings/numbers/arrays and nested {} — a balanced-brace scan is safe.
-function loadLiteral(name) {
-  const s = readFileSync(join(ROOT, "script.js"), "utf8");
-  const i = s.indexOf(`const ${name} = {`);
-  if (i < 0) throw new Error(`${name} not found in script.js`);
-  const start = s.indexOf("{", i);
-  let depth = 0, j = start;
-  for (; j < s.length; j++) {
-    const c = s[j];
-    if (c === "{") depth++;
-    else if (c === "}" && --depth === 0) { j++; break; }
-  }
-  return vm.runInNewContext("(" + s.slice(start, j) + ")");
-}
-const LINE_VARIANTS = loadLiteral("LINE_VARIANTS");
+// LINE_VARIANTS stays defined in script.js (single source of truth).
+const LINE_VARIANTS = extractLiteral(readFileSync(join(ROOT, "script.js"), "utf8"), "LINE_VARIANTS");
 
 // Replicate the site's assembleVariant: stitch branch station-id sequences into
 // one ordered [{name,lat,lon}], dropping the shared join station between segs.
@@ -57,20 +43,11 @@ function assembleVariant(id, variant) {
   return ids.map((sid) => { const s = ln.stations[sid]; return s ? { name: s.n, lat: s.lat, lon: s.lon } : null; }).filter(Boolean);
 }
 
-const BROUTER = "https://brouter.de/brouter";
 const PROFILE = "shortest"; // most direct — hugs the line's road corridor, matches generate-routes.mjs
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-async function brouter(points) {
-  const lonlats = points.map((p) => `${p.lon},${p.lat}`).join("|");
-  const url = `${BROUTER}?lonlats=${lonlats}&profile=${PROFILE}&alternativeidx=0&format=geojson`;
-  const res = await fetch(url, { headers: { "User-Agent": "TubeRun/1.0 (variant routes)" } });
-  const text = await res.text();
-  let gj;
-  try { gj = JSON.parse(text); } catch { throw new Error(`non-JSON (${res.status}): ${text.slice(0, 120)}`); }
-  if (!gj.features || !gj.features[0]) throw new Error(`no route: ${text.slice(0, 120)}`);
-  return gj.features[0].geometry.coordinates;
-}
+// Single attempt, throws on failure — the caller's per-segment fallback handles it.
+const brouter = (points) => brouterRaw(points, PROFILE, { userAgent: "TubeRun/1.0 (variant routes)" });
 
 // Whole path in one request; per-segment fallback so one un-snappable station
 // doesn't lose the whole variant (that leg becomes a straight-line placeholder).

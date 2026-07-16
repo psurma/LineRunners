@@ -11,9 +11,9 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { brouterRaw } from "./lib/brouter.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
-const BROUTER = "https://brouter.de/brouter";
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // Hand-placed [lat, lon] via-points tracing each route's intended course.
@@ -30,16 +30,8 @@ const VIAS = {
   "grand-union-paddington": [[51.5223, -0.183], [51.5303, -0.2205], [51.5365, -0.2455], [51.5395, -0.2745], [51.5407, -0.2997]],
 };
 
-async function brouter(vias) {
-  const lonlats = vias.map(([lat, lon]) => `${lon},${lat}`).join("|");
-  const url = `${BROUTER}?lonlats=${lonlats}&profile=shortest&alternativeidx=0&format=geojson`;
-  const res = await fetch(url, { headers: { "User-Agent": "TubeRun/1.0 (route geometry repair)" } });
-  const text = await res.text();
-  let gj;
-  try { gj = JSON.parse(text); } catch { throw new Error(`non-JSON (${res.status}): ${text.slice(0, 120)}`); }
-  if (!gj.features || !gj.features[0]) throw new Error(`no route: ${text.slice(0, 120)}`);
-  return gj.features[0].geometry.coordinates;
-}
+// Single attempt, throws on failure — the caller reports the id and moves on.
+const brouter = (vias) => brouterRaw(vias, "shortest", { userAgent: "TubeRun/1.0 (route geometry repair)" });
 
 const toR = Math.PI / 180;
 function distM(a, b) {

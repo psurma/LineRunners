@@ -58,6 +58,7 @@
   // The collectable list: the TfL lines above, plus the National Rail
   // operators once the network data loads (computeNrStats appends them).
   const COLLECT_LINES = TUBE_LINES.slice();
+  // Not static either: computeNrStats adds each NR/DLR line's two directions at runtime.
   const LINE_DIRS = {
     Bakerloo: ["→ Harrow & Wealdstone", "→ Elephant & Castle"],
     Central: ["→ Epping", "→ Ealing Broadway"],
@@ -88,11 +89,13 @@
 
   const MEET_TIME = "09:00";
   const ROAD_FACTOR = 1.3;   // streets are longer than crow-flies between points
+  const GROUP_PACE = 6.5;    // min/km — the group's steady no-drop pace (the "6:30/km" in copy)
   const WALK_MIN_PER_KM = 12; // ~5 km/h walking pace
   const CYCLE_MIN_PER_KM = 4; // ~15 km/h city cycling pace
   const LONDON = { lat: 51.5033, lon: -0.1145 };
 
-  // Official-ish TfL line colours.
+  // Official-ish TfL line colours. Not static: computeNrStats adds the NR and
+  // DLR lines' colours at runtime once the network data loads.
   const LINE_COLOURS = {
     Bakerloo: "#B36305", Central: "#E32017", Circle: "#FFD300", District: "#00782A",
     "Hammersmith & City": "#F3A9BB", Jubilee: "#A0A5A9", Metropolitan: "#9B0056",
@@ -139,7 +142,7 @@
         { title: "Day 2 · Sun 5 July — Wembley Park → Aldgate", start: "Wembley Park Underground Station, 9:35am", finish: "Aldgate" },
       ],
     },
-    { type: "tube", line: "Victoria", leg: "Brixton → Walthamstow Central", start: "Brixton stn (outside M&S)", distance: "~13 km" },
+    { type: "tube", line: "Victoria", leg: "Brixton → Walthamstow Central", start: "Brixton stn (outside M&S)", distance: "~26 km" },
     {
       type: "adventure", name: "Shipwrights Way", colour: "#5A7D2A",
       date: "2026-07-11", location: "East Hampshire → Portsmouth",
@@ -160,9 +163,9 @@
         { name: "Rising Sun Inn", url: "https://risingsunclanfield.co.uk/" },
       ],
     },
-    { type: "tube", line: "Bakerloo", leg: "Elephant & Castle → Harrow & Wealdstone", start: "Elephant & Castle stn", distance: "~15 km" },
+    { type: "tube", line: "Bakerloo", leg: "Elephant & Castle → Harrow & Wealdstone", start: "Elephant & Castle stn", distance: "~30 km" },
     { type: "canal", name: "Regent's Canal towpath", leg: "Little Venice → Limehouse Basin", start: "Warwick Ave stn", distance: "~14 km" },
-    { type: "tube", line: "Central", leg: "Liverpool St → Ealing Broadway", start: "Liverpool Street stn (main entrance)", distance: "~14 km" },
+    { type: "tube", line: "Central", leg: "Liverpool St → Ealing Broadway", start: "Liverpool Street stn (main entrance)", distance: "~22 km" },
     { type: "river", name: "Thames Path", leg: "Putney Bridge → Tower Bridge", start: "Putney Bridge stn", distance: "~16 km" },
     { type: "bus", name: "Route 38", leg: "Clapton Pond → Victoria", start: "Clapton Pond", distance: "~11 km" },
   ];
@@ -323,7 +326,7 @@
       const [H, M] = (d ? parseClock(d.start) : MEET_TIME).split(":").map(Number);
       const start = londonInstant(base.getFullYear(), base.getMonth(), base.getDate(), H, M);
       const seg = segs && segs[i];
-      const dur = seg ? legDistanceKm(wp, seg.from, seg.to) * 6.5 * 60000 + 30 * 60000 : RUN_WINDOW_MS;
+      const dur = seg ? legDistanceKm(wp, seg.from, seg.to) * GROUP_PACE * 60000 + 30 * 60000 : RUN_WINDOW_MS;
       return { start, end: start + dur };
     });
   }
@@ -437,8 +440,10 @@
   const autoCount = RUN_PLAN.filter((r) => !r.date).length;
   const pinned = RUN_PLAN.filter((r) => r.date).map((r) => parseISO(r.date));
   // Don't auto-schedule a first-Sunday run on a weekend already taken by a dated special.
+  // +3 headroom (matching tools/generate-schedule.mjs) so a pinned-heavy month
+  // can't exhaust the candidate pool before the near-pinned filter runs.
   const nearPinned = (sun) => pinned.some((p) => Math.abs(p - sun) <= 2 * 86400000);
-  const sundays = upcomingSundays(autoCount + pinned.length).filter((s) => !nearPinned(s)).slice(0, autoCount);
+  const sundays = upcomingSundays(autoCount + pinned.length + 3).filter((s) => !nearPinned(s)).slice(0, autoCount);
   let si = 0;
   // Runs from the start of next month on are tentative "suggestions" — the plan is
   // only firmed up a month out. Pinned specials (explicit dates) stay confirmed.
@@ -683,7 +688,7 @@
     const seg = segs[di];
     const startMs = tl[Math.min(di, tl.length - 1)].start;
     const elapsed = (Date.now() - startMs) / 60000;
-    const paceKm = 6.5;
+    const paceKm = GROUP_PACE;
     const endMin = legDistanceKm(wp, seg.from, seg.to) * paceKm;
     if (elapsed < 0 || elapsed > endMin + 10) return { dayIdx: di, absIdx: null };
     let best = seg.from, bestD = Infinity;
@@ -700,7 +705,7 @@
     if (!el || !nextRun) return;
     const wp = WAYPOINTS[nextRun.key];
     if (!wp || wp.length < 2) { el.innerHTML = ""; jbRenderedKey = null; return; }
-    const c = nextRun.colour, paceKm = 6.5;
+    const c = nextRun.colour, paceKm = GROUP_PACE;
     const segs = journeySegments(nextRun, wp) || [{ label: null, leg: nextRun.leg, from: 0, to: wp.length - 1, start: MEET_TIME }];
     const multi = segs.length > 1;
     const tl = runTimeline(nextRun);
@@ -718,7 +723,7 @@
     el.innerHTML = `
       <h3 class="jb-title">Journey board ${gpxDownloadHtml(lineSlug(nextRun.key), nextRun.key, "jb-gpx")}</h3>
       ${sections}
-      <p class="jb-foot">Expected arrival windows at a steady 6:30/km from each day's start — add time for regroups and photos.</p>`;
+      <p class="jb-foot">Expected arrival windows at a steady ${fmtPace(GROUP_PACE)}/km from each day's start — add time for regroups and photos.</p>`;
     jbRenderedKey = nextRun.key; jbRenderedDay = curDay;
   }
 
@@ -767,12 +772,18 @@
   const CAL_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4.5" width="18" height="17" rx="2.5"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4"/></svg>`;
   const pad2 = (n) => String(n).padStart(2, "0");
   function icsEsc(s) { return String(s).replace(/([\\;,])/g, "\\$1").replace(/\n/g, "\\n"); }
-  // Fold physical lines at 75 octets per RFC 5545 (continuation lines start with a space).
+  // Fold physical lines at 75 octets per RFC 5545 (continuation lines start with
+  // a space). Measured in UTF-8 bytes, not chars — summaries carry "·" and
+  // friends, and the limit is octets on the wire.
+  const ICS_UTF8 = new TextEncoder();
   function icsFold(line) {
-    if (line.length <= 74) return line;
-    let out = line.slice(0, 74), rest = line.slice(74);
-    while (rest.length) { out += "\r\n " + rest.slice(0, 73); rest = rest.slice(73); }
-    return out;
+    let out = "", cur = "", bytes = 0, budget = 74; // continuation content gets 73 + the leading space
+    for (const ch of line) { // by code point, so multibyte chars never split
+      const b = ICS_UTF8.encode(ch).length;
+      if (bytes + b > budget) { out += (out ? "\r\n " : "") + cur; cur = ch; bytes = b; budget = 73; }
+      else { cur += ch; bytes += b; }
+    }
+    return out ? out + "\r\n " + cur : cur;
   }
   function icsDate(d, hh, mm) {
     const base = `${d.getFullYear()}${pad2(d.getMonth() + 1)}${pad2(d.getDate())}`;
@@ -786,7 +797,7 @@
   function runIcs(r) {
     const [mh, mm] = MEET_TIME.split(":").map(Number);
     const multi = r.days && r.days.length > 1;
-    const slug = (r.key || r.badge).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+    const slug = lineSlug(r.key || r.badge);
     let dtStart, dtEnd;
     if (multi) {
       const end = new Date(r.date.getTime() + r.days.length * 86400000); // DTEND date is exclusive
@@ -814,13 +825,7 @@
     return lines.map(icsFold).join("\r\n");
   }
   function downloadRunIcs(r) {
-    const blob = new Blob([runIcs(r)], { type: "text/calendar;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `tube-run-${(r.key || r.badge).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "")}.ics`;
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 2000);
+    downloadBlob(`tube-run-${lineSlug(r.key || r.badge)}.ics`, new Blob([runIcs(r)], { type: "text/calendar;charset=utf-8" }));
   }
 
   function renderList() {
@@ -970,7 +975,7 @@
     const hasNamedNr = (interchangeMap ? (interchangeMap[key] || []) : []).some((x) => x.nr);
     const other = (nonTubeByNorm[key] || []).filter((n) => !tubeNames.has(norm(n.replace(/ line$/i, ""))) && !(n === "National Rail" && hasNamedNr));
     if (!tube.length && !other.length) return "";
-    const pills = tube.map((x) => `<span class="stn-tag" style="background:${x.colour};color:${contrastText(x.colour)}">${escapeHtml(x.name)}</span>`)
+    const pills = tube.map((x) => `<span class="stn-tag" style="background:${safeColour(x.colour)};color:${contrastText(x.colour)}">${escapeHtml(x.name)}</span>`)
       .concat(other.map((n) => {
         const c = NON_TUBE_COLOURS[n] || ["#555", "#fff"];
         return `<span class="stn-tag" style="background:${c[0]};color:${c[1]}">${escapeHtml(n)}</span>`;
@@ -1007,7 +1012,7 @@
     return best && bd <= 0.2 ? best.lines : [];
   }
   function tubePills(lines) {
-    return lines.map((x) => `<span class="stn-tag" style="background:${x.colour};color:${contrastText(x.colour)}">${escapeHtml(x.name)}</span>`).join("");
+    return lines.map((x) => `<span class="stn-tag" style="background:${safeColour(x.colour)};color:${contrastText(x.colour)}">${escapeHtml(x.name)}</span>`).join("");
   }
   // Interchange tags for a stop identified only by coordinates (bus strips/maps).
   function geoInterchangeTags(lat, lon) {
@@ -1041,6 +1046,10 @@
     const diagram = document.getElementById("lineDiagram");
     const result = document.getElementById("calcResult");
     const calc = document.getElementById("calc");
+    // Re-runs on the monthly rollover (setupLiveClock) — drop last month's GPX
+    // row so every path below starts clean.
+    const oldGpxRow = document.querySelector(".plan-gpx-row");
+    if (oldGpxRow) oldGpxRow.remove();
     if (!nextRun) {
       // Empty RUN_PLAN — hide the planner instead of aborting the whole init chain.
       if (calc) calc.style.display = "none";
@@ -1068,11 +1077,15 @@
     fromSel.value = 0;
     toSel.value = pts.length - 1;
     if (startSel && !startSel.value) startSel.value = MEET_TIME;
-    [fromSel, toSel, paceSel, startSel].filter(Boolean).forEach((s) => s.addEventListener("input", update));
+    // Wire the inputs once — rollover re-runs must not stack listeners.
+    if (!fromSel.dataset.wired) {
+      fromSel.dataset.wired = "1";
+      [fromSel, toSel, paceSel, startSel].filter(Boolean).forEach((s) => s.addEventListener("input", update));
+    }
     renderDiagram();
     update();
     // Full-line pavement GPX for this month's line — a sibling of the diagram, so
-    // it survives the diagram's re-renders. setupPlanner runs once, so no dupes.
+    // it survives the diagram's re-renders (any previous row was removed above).
     const planGpx = gpxDownloadHtml(lineSlug(nextRun.key), nextRun.key, "plan-gpx");
     if (diagram && planGpx) diagram.insertAdjacentHTML("afterend", `<p class="plan-gpx-row">Take it with you: ${planGpx}</p>`);
   }
@@ -1195,6 +1208,7 @@
       : `${fmtPace(paceKm)} /km`;
 
     const result = document.getElementById("calcResult");
+    if (!result) return;
     result.innerHTML = `
       <div class="cr-main"><span class="cr-km">${dist}</span></div>
       ${timesRowHtml(km, paceKm)}
@@ -1313,6 +1327,9 @@
     const u = String(url);
     return /^https?:\/\//i.test(u) ? u.replace(/"/g, "%22") : "#";
   }
+  // Tool-fetched JSON lands in these style attributes; a poisoned upstream could
+  // smuggle markup — clamp to a hex colour.
+  const safeColour = (c) => (/^#[0-9a-fA-F]{3,8}$/.test(String(c)) ? c : "#0019A8");
   // Route resources — routeLink may be a single URL or an array. Label each by
   // provider so runners know whether it's Strava, Garmin, komoot, etc.
   function providerOf(url) {
@@ -1408,6 +1425,17 @@
 </gpx>`;
   }
 
+  // Client-side "save this blob as a file": synthesise a download click, then
+  // revoke the object URL once the browser has had time to start the save.
+  function downloadBlob(filename, blob) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+  }
+
   // One delegated handler covers every "⌚ TCX" link the templates emit
   // (journey board, plan, line-by-line, geo map picker).
   document.addEventListener("click", async (e) => {
@@ -1424,11 +1452,7 @@
       if (!pts || pts.length < 2) throw new Error("no track");
       const tcx = tcxFromPoints(pts, `TubeRun ${slug}`, reverse);
       if (!tcx) throw new Error("no track");
-      const url = URL.createObjectURL(new Blob([tcx], { type: "application/vnd.garmin.tcx+xml" }));
-      const dl = document.createElement("a");
-      dl.href = url; dl.download = `TubeRun-${slug}${reverse ? "-reverse" : ""}.tcx`;
-      document.body.appendChild(dl); dl.click(); dl.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 4000);
+      downloadBlob(`TubeRun-${slug}${reverse ? "-reverse" : ""}.tcx`, new Blob([tcx], { type: "application/vnd.garmin.tcx+xml" }));
     } catch (_) {
       const was = a.textContent;
       a.textContent = "TCX unavailable";
@@ -1832,7 +1856,8 @@
   let routePubsPromise = null;
   function loadRoutePubs() {
     if (!routePubsPromise) {
-      routePubsPromise = vfetch("data/route-pubs.json").then((r) => (r.ok ? r.json() : {})).catch(() => ({}));
+      routePubsPromise = vfetch("data/route-pubs.json").then((r) => (r.ok ? r.json() : {}))
+        .catch(() => { routePubsPromise = null; return {}; }); // reset so a transient failure can retry
     }
     return routePubsPromise;
   }
@@ -1841,7 +1866,10 @@
   // oddities worth a detour (data/secrets.json, hand-curated).
   let secretsPromise = null;
   function loadSecrets() {
-    if (!secretsPromise) secretsPromise = vfetch("data/secrets.json").then((r) => (r.ok ? r.json() : [])).catch(() => []);
+    if (!secretsPromise) {
+      secretsPromise = vfetch("data/secrets.json").then((r) => (r.ok ? r.json() : []))
+        .catch(() => { secretsPromise = null; return []; }); // reset so a transient failure can retry
+    }
     return secretsPromise;
   }
 
@@ -2089,7 +2117,7 @@
     && (routeFilter.dist === "all" || distBucket(routeKm(r)) === routeFilter.dist);
 
   function routeCardHtml(r, i) {
-    const c = ROUTE_COLOURS[r.type] || "#0019A8";
+    const c = safeColour(ROUTE_COLOURS[r.type] || "#0019A8");
     return `<div class="route-card" data-i="${i}" role="button" tabindex="0" aria-pressed="false" style="border-top-color:${c}">
         <div class="rc-top"><span class="rc-type" style="background:${c}">${escapeHtml(r.type)}</span><span class="rc-dist">${escapeHtml(distText(r.distance))}</span></div>
         <h3>${escapeHtml(r.name)}</h3>
@@ -2790,7 +2818,7 @@
         <td class="ls-name"><button type="button" class="ls-row-btn" aria-expanded="false"><span class="ls-caret" aria-hidden="true">▸</span><span class="ls-name-in"><span class="ls-dot" style="background:${c}"></span>${escapeHtml(name)}${name === active ? ' <span class="ls-next">next run</span>' : ""}${badgeHtml}</span></button></td>
         <td>${fmtKm(km, 1)}</td>
         <td>${stations}</td>
-        <td>${fmtTime(km * 6.5)}</td>
+        <td>${fmtTime(km * GROUP_PACE)}</td>
         <td>${fmtTime(km * CYCLE_MIN_PER_KM)}</td>
         <td>${fmtTime(km * WALK_MIN_PER_KM)}</td>
       </tr>`;
@@ -2805,7 +2833,7 @@
         <thead><tr>${heads}</tr></thead>
         <tbody>${rows}</tbody>
       </table>
-      <p class="ls-foot">Tap a column to sort, or a line to see its run route on a map. Run at a steady 6:30/km, cycle at ~15 km/h, walk at ~5 km/h, end to end.</p>`;
+      <p class="ls-foot">Tap a column to sort, or a line to see its run route on a map. Run at a steady ${fmtPace(GROUP_PACE)}/km, cycle at ~15 km/h, walk at ~5 km/h, end to end.</p>`;
     const tbody = el.querySelector("tbody");
     if (tbody) tbody.addEventListener("click", (e) => {
       const btn = e.target.closest(".ls-row-btn");
@@ -3074,7 +3102,7 @@
     if (!tr._origStats) tr._origStats = [1, 2, 3, 4, 5].map((i) => cells[i].textContent);
     cells[1].textContent = fmtKm(km, 1);
     cells[2].textContent = stops;
-    cells[3].textContent = fmtTime(km * 6.5);
+    cells[3].textContent = fmtTime(km * GROUP_PACE);
     cells[4].textContent = fmtTime(km * CYCLE_MIN_PER_KM);
     cells[5].textContent = fmtTime(km * WALK_MIN_PER_KM);
   }
@@ -3237,7 +3265,8 @@
     try { localStorage.setItem(RUN_DATES_KEY, JSON.stringify(runDates)); } catch (_) { /* private mode */ }
   }
   let collectorDone = loadCollector();
-  // Line length (km) for collector distance totals.
+  // Line length (km) for collector distance totals. Not static: computeNrStats
+  // adds the NR/DLR lines at runtime once the network data loads.
   const LINE_KM = {};
   LINE_STATS.forEach(([nm, km]) => { LINE_KM[nm] = km; });
 
@@ -3358,7 +3387,10 @@
   // its own) against build-time tagging in data/boroughs.json.
   let boroughsPromise = null;
   function loadBoroughs() {
-    if (!boroughsPromise) boroughsPromise = vfetch("data/boroughs.json").then((r) => (r.ok ? r.json() : null)).catch(() => null);
+    if (!boroughsPromise) {
+      boroughsPromise = vfetch("data/boroughs.json").then((r) => (r.ok ? r.json() : null))
+        .catch(() => { boroughsPromise = null; return null; }); // reset so a transient failure can retry
+    }
     return boroughsPromise;
   }
   async function renderBoroughBagger() {
@@ -3557,6 +3589,18 @@
       }
     }
     return grp;
+  }
+  // Leaflet style for a line feature at a time-machine year, shared by the geo
+  // map's inline scrubber and the dedicated Time Machine section: ghost lines
+  // that don't exist yet, hide lines mid-construction (the era layer draws
+  // their built extent instead), full modern geometry otherwise. opts:
+  // ghostOpacity (the two surfaces differ), on (bold the highlighted line),
+  // dimmed (fade the rest while one is lit).
+  function eraLineStyle(f, year, opts = {}) {
+    const id = f.properties.line, nr = f.properties.nr;
+    if (lineYear(id) > year) return { color: f.properties.colour, weight: 1, opacity: opts.ghostOpacity || 0.06, dashArray: "2 6", lineJoin: "round", lineCap: "round" };
+    if (lineMaxYear(id) > year) return { color: f.properties.colour, weight: 0, opacity: 0 };
+    return { color: f.properties.colour, weight: opts.on ? 5 : (nr ? 2 : 3), opacity: opts.on ? 1 : (opts.dimmed ? 0.3 : (nr ? 0.6 : 0.9)), dashArray: nr ? "6 5" : null, lineJoin: "round", lineCap: "round" };
   }
   // [year, story, target?] — the optional target makes the panel entry a
   // clickable zoom: {station}, {line}, {at:[lat,lon,zoom]} or {ext:index}.
@@ -4252,6 +4296,7 @@
     if (routeGpxCache[slug] !== undefined) return routeGpxCache[slug];
     try {
       const res = await vfetch(`routes/${slug}.gpx`);
+      if (res.status === 404) { routeGpxCache[slug] = null; return null; } // genuinely no file — remember that
       if (!res.ok) throw new Error("gpx " + res.status);
       const doc = new DOMParser().parseFromString(await res.text(), "application/xml");
       const segs = [...doc.getElementsByTagName("trkseg")]
@@ -4261,7 +4306,7 @@
         }))
         .filter((s) => s.length > 1);
       routeGpxCache[slug] = segs.length ? segs : null;
-    } catch (_) { routeGpxCache[slug] = null; }
+    } catch (_) { delete routeGpxCache[slug]; return null; } // transient fetch failure — retry next call
     return routeGpxCache[slug];
   }
 
@@ -4483,7 +4528,6 @@
       // Distance / stops / running time of the selected route, under the picker.
       const stats = L.DomUtil.create("div", "geo-stats", div);
       let curIdx = selectedIdx, gpxBlob = null;
-      const slugify = (s) => String(s).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
       // A picked variant exports its own pavement polyline (variant-routes.json — the
       // geometry the map draws); whole-line entries keep their static GPX file.
       const syncGpx = (i) => {
@@ -4493,7 +4537,7 @@
           const text = gpxFromPoints(e.route, `TubeRun ${e.label}`);
           if (text) {
             gpxBlob = URL.createObjectURL(new Blob([text], { type: "application/gpx+xml" }));
-            gpx.href = gpxBlob; gpx.download = `TubeRun-${e.id}-${slugify(e.label)}.gpx`;
+            gpx.href = gpxBlob; gpx.download = `TubeRun-${e.id}-${lineSlug(e.label)}.gpx`;
             gpx.title = "Download this exact route as a GPX file for your watch";
             gpx.style.display = ""; tcx.style.display = ""; return;
           }
@@ -4514,10 +4558,7 @@
         }
         const doc = pts && pts.length > 1 ? tcxFromPoints(pts, `TubeRun ${e.label}`, false) : null;
         if (!doc) { const was = tcx.textContent; tcx.textContent = "TCX unavailable"; setTimeout(() => { tcx.textContent = was; }, 1800); return; }
-        const url = URL.createObjectURL(new Blob([doc], { type: "application/vnd.garmin.tcx+xml" }));
-        const a = document.createElement("a"); a.href = url; a.download = `TubeRun-${e.id}-${slugify(e.label)}.tcx`;
-        document.body.appendChild(a); a.click(); a.remove();
-        setTimeout(() => URL.revokeObjectURL(url), 4000);
+        downloadBlob(`TubeRun-${e.id}-${lineSlug(e.label)}.tcx`, new Blob([doc], { type: "application/vnd.garmin.tcx+xml" }));
       });
       const syncStats = (i) => {
         const wp = entries[i] && entries[i].wp;
@@ -4578,6 +4619,10 @@
       <ul class="tm2-events">${events.map(([y, t, tgt]) => `<li${tgt ? " class=\"tmz\"" : ""}${tmzAttr(tgt)}><b>${y}</b> ${escapeHtml(t)}</li>`).join("")}</ul>`;
   }
 
+  // Coarse same-place box for spotting an NR station's TfL twin / a nearby
+  // interchange (~440 m N–S and ~415 m E–W at London's latitude).
+  const TWIN_LAT_DEG = 0.004, TWIN_LON_DEG = 0.006;
+
   function renderTimeMachine() {
     const mapEl = document.getElementById("tm2Map");
     if (!mapEl) return;
@@ -4588,12 +4633,7 @@
         note = document.getElementById("tm2Note"), panel = document.getElementById("tm2Panel");
       let year = +slider.value;
       const map = createSiteMap(mapEl);
-      const style = (f) => {
-        const id = f.properties.line, nr = f.properties.nr;
-        if (lineYear(id) > year) return { color: f.properties.colour, weight: 1, opacity: 0.06, dashArray: "2 6" };
-        if (lineMaxYear(id) > year) return { color: f.properties.colour, weight: 0, opacity: 0 };
-        return { color: f.properties.colour, weight: nr ? 2 : 3, opacity: nr ? 0.6 : 0.9, dashArray: nr ? "6 5" : null, lineJoin: "round", lineCap: "round" };
-      };
+      const style = (f) => eraLineStyle(f, year, { ghostOpacity: 0.06 });
       const lineLayer = L.geoJSON(geo, { style }).addTo(map);
       const b = L.latLngBounds([]);
       lineLayer.eachLayer((l) => { if (!l.feature.properties.nr) b.extend(l.getBounds()); });
@@ -4634,7 +4674,7 @@
           const y = stationYear(id, st[sid].n);
           if (y > year) continue;
           const twin = tflByName[norm(st[sid].n)];
-          if (twin && Math.abs(twin.lat - st[sid].lat) < 0.004 && Math.abs(twin.lon - st[sid].lon) < 0.006) continue;
+          if (twin && Math.abs(twin.lat - st[sid].lat) < TWIN_LAT_DEG && Math.abs(twin.lon - st[sid].lon) < TWIN_LON_DEG) continue;
           if (!chosen[sid] || y < chosen[sid].y) chosen[sid] = { s: st[sid], y, c: net[id].colour };
         } }
         for (const sid in chosen) {
@@ -4668,12 +4708,14 @@
       panel.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.closest(".tmz")) { e.preventDefault(); tmzZoom(e.target.closest(".tmz")); } });
       redraw();
     };
+    // A failed data fetch must degrade like the other map surfaces, not leave
+    // the section silently blank with an unhandled rejection.
     if ("IntersectionObserver" in window) {
       const io = new IntersectionObserver((entries, obs) => {
-        if (entries.some((e) => e.isIntersecting)) { obs.disconnect(); init(); }
+        if (entries.some((e) => e.isIntersecting)) { obs.disconnect(); init().catch(() => mapUnavailable(mapEl)); }
       }, { rootMargin: "250px" });
       io.observe(mapEl);
-    } else init();
+    } else init().catch(() => mapUnavailable(mapEl));
   }
 
   // Friendly message in a map container when Leaflet itself failed to load.
@@ -4788,15 +4830,8 @@
     // Tube lines (real track geometry). Highlighted line bold & on top, others
     // dimmed. National Rail rides underneath — thinner and dashed, the classic
     // NR cartography — so the TfL network stays the hero of the map. Lines the
-    // time machine says don't exist yet linger as faint ghosts.
-    const lineStyle = (f) => {
-      const on = curHi && f.properties.line === curHi, nr = f.properties.nr;
-      if (lineYear(f.properties.line) > tmYear) return { color: f.properties.colour, weight: 1, opacity: 0.07, dashArray: "2 6", lineJoin: "round", lineCap: "round" };
-      // Partially built in this year: hide the modern geometry — the era layer
-      // below draws only the extent that had actually opened.
-      if (tmYear < 9999 && lineMaxYear(f.properties.line) > tmYear) return { color: f.properties.colour, weight: 0, opacity: 0 };
-      return { color: f.properties.colour, weight: on ? 5 : (nr ? 2 : 3), opacity: on ? 1 : (curHi ? 0.3 : (nr ? 0.6 : 0.9)), dashArray: nr ? "6 5" : null, lineJoin: "round", lineCap: "round" };
-    };
+    // time machine says don't exist yet linger as faint ghosts (eraLineStyle).
+    const lineStyle = (f) => eraLineStyle(f, tmYear, { ghostOpacity: 0.07, on: curHi && f.properties.line === curHi, dimmed: !!curHi });
     const lineLayer = L.geoJSON(geo, { style: lineStyle }).addTo(map);
 
     // Era geometry for partially built lines: each branch drawn only through
@@ -4858,7 +4893,7 @@
       if (!coordById[sid]) { coordById[sid] = st[sid]; colourById[sid] = net[id].colour; tflByName[norm(st[sid].n)] = st[sid]; } } }
     for (const id in net) { if (!net[id].nr) continue; const st = net[id].stations; for (const sid in st) {
       const twin = tflByName[norm(st[sid].n)];
-      if (twin && Math.abs(twin.lat - st[sid].lat) < 0.004 && Math.abs(twin.lon - st[sid].lon) < 0.006) continue;
+      if (twin && Math.abs(twin.lat - st[sid].lat) < TWIN_LAT_DEG && Math.abs(twin.lon - st[sid].lon) < TWIN_LON_DEG) continue;
       count[sid] = (count[sid] || 0) + 1; markYear(sid, id, st[sid].n);
       if (!coordById[sid]) { coordById[sid] = st[sid]; colourById[sid] = net[id].colour; } } }
     let km = tmComputeKm(net, curHi);
@@ -4947,7 +4982,7 @@
         const A = coordById[sids[i]];
         for (let j = i + 1; j < sids.length; j++) {
           const B = coordById[sids[j]];
-          if (Math.abs(A.lat - B.lat) > 0.004 || Math.abs(A.lon - B.lon) > 0.006) continue;
+          if (Math.abs(A.lat - B.lat) > TWIN_LAT_DEG || Math.abs(A.lon - B.lon) > TWIN_LON_DEG) continue;
           if (haversineKm([0, A.lat, A.lon], [0, B.lat, B.lon]) < 0.25) add(sids[i], sids[j], 6);
         }
       }
@@ -5354,7 +5389,10 @@
   // in routes/<id>.gpx) — so journey legs off the main line trace real streets.
   let nrBranchPromise = null;
   function loadNrBranches() {
-    if (!nrBranchPromise) nrBranchPromise = vfetch("data/nr-branch-routes.json").then((r) => (r.ok ? r.json() : {})).catch(() => ({}));
+    if (!nrBranchPromise) {
+      nrBranchPromise = vfetch("data/nr-branch-routes.json").then((r) => (r.ok ? r.json() : {}))
+        .catch(() => { nrBranchPromise = null; return {}; }); // reset so a transient failure can retry
+    }
     return nrBranchPromise;
   }
   // Pavement geometry for tube-network lines whose secondary branches need it —
@@ -5362,7 +5400,10 @@
   // main branch lives in routes/dlr.gpx). Same shape as the NR branch file.
   let tubeBranchPromise = null;
   function loadTubeBranches() {
-    if (!tubeBranchPromise) tubeBranchPromise = vfetch("data/tube-branch-routes.json").then((r) => (r.ok ? r.json() : {})).catch(() => ({}));
+    if (!tubeBranchPromise) {
+      tubeBranchPromise = vfetch("data/tube-branch-routes.json").then((r) => (r.ok ? r.json() : {}))
+        .catch(() => { tubeBranchPromise = null; return {}; }); // reset so a transient failure can retry
+    }
     return tubeBranchPromise;
   }
   // Stitch a leg's real pavement hop by hop from every track we hold for the
@@ -5493,7 +5534,7 @@
     let html = `<div class="jrn">`;
     segments.forEach((seg, si) => {
       const info = graph.lines[seg.line] || { name: seg.line, colour: "#0019a8" };
-      const col = info.colour, hops = seg.nodes.length - 1;
+      const col = safeColour(info.colour), hops = seg.nodes.length - 1;
       const stops = seg.nodes; // show the interchange on both lines (it's the last stop of the leg above and where you board this one)
       html += `<div class="jrn-leg" style="--c:${col}">`;
       html += `<div class="jrn-badge" style="background:${col};color:${contrastText(col)}">${escapeHtml(info.name)} line <span class="jrn-badge-n">${hops} stop${hops === 1 ? "" : "s"}</span></div>`;
@@ -6001,5 +6042,18 @@
       if (cur) setActive(cur.id);
     }, { rootMargin: "-14% 0px -80% 0px", threshold: 0 });
     sections.forEach((s) => io.observe(s));
+  }
+
+  // Exposes pure helpers to tools/test under a flag; never set in production.
+  if (typeof window !== "undefined" && window.__TUBERUN_TEST__) {
+    window.__tuberunTest = {
+      londonParts, londonInstant, londonHM, londonDayNo,
+      firstSunday, upcomingSundays, pickNextRun,
+      parseClock, clockAdd, arrivalWindow, fmtTime, fmtPace, fmtKm, distText,
+      icsFold, icsEsc, runIcs, lineSlug, safeColour,
+      haversineKm, legDistanceKm, journeySegments,
+      reverseGpxText, gpxFromPoints, tcxFromPoints,
+      buildStationGraph, shortestPath, buildLoop, eraLineStyle,
+    };
   }
 })();

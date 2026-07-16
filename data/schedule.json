@@ -1,7 +1,7 @@
 {
  "club": "Tube Run",
  "site": "https://psurma.github.io/TubeRun/",
- "generated": "2026-07-15",
+ "generated": "2026-07-16",
  "rule": "Regular runs are the first Sunday of each month, meeting 09:00 at the start station unless stated; dated specials are pinned. Runs beyond the current month are suggestions until confirmed a month out.",
  "runs": [
   {
@@ -60,7 +60,7 @@
    "line": "Victoria",
    "leg": "Brixton → Walthamstow Central",
    "start": "Brixton stn (outside M&S)",
-   "distance": "~13 km",
+   "distance": "~26 km",
    "location": "London",
    "routeLink": null,
    "notes": null,
@@ -75,7 +75,7 @@
    "line": "Bakerloo",
    "leg": "Elephant & Castle → Harrow & Wealdstone",
    "start": "Elephant & Castle stn",
-   "distance": "~15 km",
+   "distance": "~30 km",
    "location": "London",
    "routeLink": null,
    "notes": null,
@@ -105,7 +105,7 @@
    "line": "Central",
    "leg": "Liverpool St → Ealing Broadway",
    "start": "Liverpool Street stn (main entrance)",
-   "distance": "~14 km",
+   "distance": "~22 km",
    "location": "London",
    "routeLink": null,
    "notes": null,

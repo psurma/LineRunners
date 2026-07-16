@@ -13,9 +13,9 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { brouterRaw } from "./lib/brouter.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
-const BROUTER = "https://brouter.de/brouter";
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // Station name -> [lat, lon] from the network data (tube + NR), so anchors
@@ -44,16 +44,9 @@ const DISUSED = [
   { id: "longmoor-military", vias: [stn("Liss"), [51.0505, -0.8877], [51.0571, -0.8842]] },
 ];
 
-async function brouter(vias) {
-  const lonlats = vias.map(([lat, lon]) => `${lon},${lat}`).join("|");
-  const url = `${BROUTER}?lonlats=${lonlats}&profile=shortest&alternativeidx=0&format=geojson`;
-  const res = await fetch(url, { headers: { "User-Agent": "TubeRun/1.0 (disused railway routes)" } });
-  const text = await res.text();
-  let gj;
-  try { gj = JSON.parse(text); } catch { throw new Error(`non-JSON (${res.status}): ${text.slice(0, 120)}`); }
-  if (!gj.features || !gj.features[0]) throw new Error(`no route: ${text.slice(0, 120)}`);
-  return gj.features[0].geometry.coordinates; // [lon, lat, ele]
-}
+// Single attempt, throws on failure (there is no fallback for these — a failed
+// route is reported and left alone).
+const brouter = (vias) => brouterRaw(vias, "shortest", { userAgent: "TubeRun/1.0 (disused railway routes)" }); // [lon, lat, ele]
 
 const toR = Math.PI / 180;
 function distM(a, b) {

@@ -14,24 +14,16 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { brouterRaw } from "./lib/brouter.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const NET = JSON.parse(readFileSync(join(ROOT, "data/nr-network.json"), "utf8"));
-const BROUTER = "https://brouter.de/brouter";
 const PROFILE = "shortest"; // most direct — hugs the rail corridor, matches the tube GPX builds
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
-async function brouter(points) {
-  const lonlats = points.map((p) => `${p.lon},${p.lat}`).join("|");
-  const url = `${BROUTER}?lonlats=${lonlats}&profile=${PROFILE}&alternativeidx=0&format=geojson`;
-  const res = await fetch(url, { headers: { "User-Agent": "TubeRun/1.0 (national rail routes)" } });
-  const text = await res.text();
-  let gj;
-  try { gj = JSON.parse(text); } catch { throw new Error(`non-JSON (${res.status}): ${text.slice(0, 120)}`); }
-  if (!gj.features || !gj.features[0]) throw new Error(`no route: ${text.slice(0, 120)}`);
-  return gj.features[0].geometry.coordinates; // [lon, lat, ele]
-}
+// Single attempt, throws on failure — routeStations' per-segment fallback handles it.
+const brouter = (points) => brouterRaw(points, PROFILE, { userAgent: "TubeRun/1.0 (national rail routes)" }); // [lon, lat, ele]
 
 // Whole line in one request; per-segment fallback so one un-snappable station
 // doesn't lose the line (that leg becomes a straight-line placeholder).

@@ -7,6 +7,12 @@
 // line into routes/. The site then loads those static files — no backend, no CSP
 // change. Re-run when station orderings change.
 //
+// Each GPX carries the line's MAIN route only — one <trk>, one <trkseg>. GPX
+// importers (Komoot and friends) treat extra track segments as extra routes and
+// make the user pick, so branches are deliberately NOT bundled here; their
+// pavement geometry ships separately (data/variant-routes.json and the
+// *-branch-routes.json files) and nothing consumed the bundled segments.
+//
 //   node tools/generate-routes.mjs
 //
 // Data sources (the same two the site uses, so the GPX matches what it draws):
@@ -19,28 +25,14 @@
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import vm from "node:vm";
+import { extractLiteral } from "./lib/extract.mjs";
+import { brouterRaw } from "./lib/brouter.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const NET = JSON.parse(readFileSync(join(ROOT, "data/tube-network.json"), "utf8"));
 
-// Pull the WAYPOINTS literal straight out of script.js so it stays the single
-// source of truth. Station names hold no braces, so a balanced-brace scan is safe;
-// vm evaluates just that one object expression in an isolated context.
-function loadWaypoints() {
-  const s = readFileSync(join(ROOT, "script.js"), "utf8");
-  const i = s.indexOf("const WAYPOINTS = {");
-  if (i < 0) throw new Error("WAYPOINTS not found in script.js");
-  const start = s.indexOf("{", i);
-  let depth = 0, j = start;
-  for (; j < s.length; j++) {
-    const c = s[j];
-    if (c === "{") depth++;
-    else if (c === "}" && --depth === 0) { j++; break; }
-  }
-  return vm.runInNewContext("(" + s.slice(start, j) + ")");
-}
-const WP = loadWaypoints();
+// WAYPOINTS stays defined in script.js (single source of truth).
+const WP = extractLiteral(readFileSync(join(ROOT, "script.js"), "utf8"), "WAYPOINTS");
 
 // The 4 lines with no `route` in tube-network.json are exactly the WAYPOINTS lines.
 const WP_SLUG = { Victoria: "victoria", Bakerloo: "bakerloo", Central: "central", Metropolitan: "metropolitan" };
@@ -77,10 +69,9 @@ function checkWaypointDrift() {
 }
 
 // Ordered [{name, lat, lon}] per line, from whichever source carries the ordering.
-// `stations` is the main route (drawn as the first track); `branches` are every
-// other branch's ordered stations, so the GPX traces the whole line — not just
-// the trunk — which the A→B journey planner slices per leg. `allStations` is the
-// full de-duplicated waypoint set.
+// `stations` is the main route (the single routed track); `allStations` is the
+// full de-duplicated waypoint set (branch stations included, as POIs only).
+// Branches are deliberately not routed here — see the header note.
 function loadLines() {
   const out = [];
   for (const [slug, ln] of Object.entries(NET)) {
@@ -95,37 +86,23 @@ function loadLines() {
       if (!key) { console.warn(`! ${slug}: no route and no WAYPOINTS mapping — skipped`); continue; }
       stations = WP[key].map(([name, lat, lon]) => ({ name, lat, lon }));
     }
-    const routeSig = Array.isArray(ln.route) ? ln.route.join(",") : null;
-    const branches = (ln.branches || [])
-      .filter((br) => br.join(",") !== routeSig) // the main route is already track 0
-      .map((br) => br.map((id) => { const st = ln.stations[id]; return { name: st.n, lat: st.lat, lon: st.lon }; }))
-      .filter((br) => br.length >= 2);
     const seen = new Set(), allStations = [];
     for (const st of Object.values(ln.stations)) {
       if (seen.has(st.n)) continue;
       seen.add(st.n);
       allStations.push({ name: st.n, lat: st.lat, lon: st.lon });
     }
-    out.push({ slug, name: ln.name, colour: ln.colour, stations, branches, allStations });
+    out.push({ slug, name: ln.name, colour: ln.colour, stations, allStations });
   }
   return out;
 }
 
-const BROUTER = "https://brouter.de/brouter";
 const PROFILE = "shortest"; // BRouter shortest-distance profile — most direct route (follows the line's road corridor rather than detouring for green/quiet paths)
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // Route through the given points as hard via-points; returns [[lon,lat(,ele)], ...].
-async function brouter(points) {
-  const lonlats = points.map((p) => `${p.lon},${p.lat}`).join("|");
-  const url = `${BROUTER}?lonlats=${lonlats}&profile=${PROFILE}&alternativeidx=0&format=geojson`;
-  const res = await fetch(url);
-  const text = await res.text();
-  let gj;
-  try { gj = JSON.parse(text); } catch { throw new Error(`non-JSON (${res.status}): ${text.slice(0, 120)}`); }
-  if (!gj.features || !gj.features[0]) throw new Error(`no route: ${text.slice(0, 120)}`);
-  return gj.features[0].geometry.coordinates;
-}
+// Single attempt, throws on failure — routeLine's per-segment fallback handles it.
+const brouter = (points) => brouterRaw(points, PROFILE, { userAgent: "TubeRun/1.0 (line routes)" });
 
 // Whole-line in one request; if any station won't snap, fall back to per-segment
 // so one bad leg (a straight-line placeholder) doesn't lose the whole line.
@@ -167,26 +144,22 @@ function distKm(coords) {
   return m / 1000;
 }
 
-// One <trkseg> per track (track 0 = main route, then each branch), so the whole
-// line is in the file. The site draws track 0 as the line's route and slices any
-// track for A→B legs.
-function toGpx(line, tracks, when) {
+// One <trk>, one <trkseg> — the main route only. Importers treat each extra
+// trkseg as another route to choose between, so nothing else goes in the file.
+function toGpx(line, coords, when) {
   const wpts = line.allStations
     .map((s) => `  <wpt lat="${s.lat}" lon="${s.lon}"><name>${esc(s.name)}</name></wpt>`)
     .join("\n");
-  const trksegs = tracks.map((coords) => {
-    const trkpts = coords
-      .map((c) => (c.length > 2
-        ? `      <trkpt lat="${c[1]}" lon="${c[0]}"><ele>${c[2]}</ele></trkpt>`
-        : `      <trkpt lat="${c[1]}" lon="${c[0]}"/>`))
-      .join("\n");
-    return `    <trkseg>\n${trkpts}\n    </trkseg>`;
-  }).join("\n");
+  const trkpts = coords
+    .map((c) => (c.length > 2
+      ? `      <trkpt lat="${c[1]}" lon="${c[0]}"><ele>${c[2]}</ele></trkpt>`
+      : `      <trkpt lat="${c[1]}" lon="${c[0]}"/>`))
+    .join("\n");
   return `<?xml version="1.0" encoding="UTF-8"?>
 <gpx version="1.1" creator="TubeRun route generator" xmlns="http://www.topografix.com/GPX/1/1">
   <metadata>
     <name>${esc(line.name)} line — TubeRun</name>
-    <desc>Above-ground running route tracing the ${esc(line.name)} line and its branches, station to station. Routed on pavements and footways from OpenStreetMap data (BRouter, ${PROFILE}).</desc>
+    <desc>Above-ground running route tracing the ${esc(line.name)} line, station to station. Routed on pavements and footways from OpenStreetMap data (BRouter, ${PROFILE}).</desc>
     <author><name>TubeRun</name></author>
     <copyright author="OpenStreetMap contributors"><license>https://opendatacommons.org/licenses/odbl/1-0/</license></copyright>
     <link href="https://www.openstreetmap.org/copyright"><text>© OpenStreetMap contributors</text></link>
@@ -195,7 +168,9 @@ function toGpx(line, tracks, when) {
 ${wpts}
   <trk>
     <name>${esc(line.name)} line</name>
-${trksegs}
+    <trkseg>
+${trkpts}
+    </trkseg>
   </trk>
 </gpx>
 `;
@@ -208,21 +183,13 @@ const when = new Date().toISOString();
 console.log(`Generating GPX for ${lines.length} lines via BRouter (${PROFILE})...\n`);
 const summary = [];
 for (const line of lines) {
-  process.stdout.write(`${line.slug.padEnd(18)} main ${String(line.stations.length).padStart(2)} + ${line.branches.length} br  … `);
-  const tracks = [];
+  process.stdout.write(`${line.slug.padEnd(18)} main ${String(line.stations.length).padStart(2)} stations  … `);
   const main = await routeLine({ stations: line.stations });
-  tracks.push(main.coords);
   await sleep(400);
-  for (const br of line.branches) {
-    const r = await routeLine({ stations: br });
-    tracks.push(r.coords);
-    await sleep(400);
-  }
-  const km = distKm(tracks[0]);
-  const points = tracks.reduce((a, t) => a + t.length, 0);
-  writeFileSync(join(ROOT, "routes", `${line.slug}.gpx`), toGpx(line, tracks, when));
-  console.log(`${tracks.length} trkseg  ${String(points).padStart(5)} pts  main ${km.toFixed(1)} km  [${main.mode}]`);
-  summary.push({ line: line.slug, trksegs: tracks.length, points, mainKm: +km.toFixed(1) });
+  const km = distKm(main.coords);
+  writeFileSync(join(ROOT, "routes", `${line.slug}.gpx`), toGpx(line, main.coords, when));
+  console.log(`${String(main.coords.length).padStart(5)} pts  ${km.toFixed(1)} km  [${main.mode}]`);
+  summary.push({ line: line.slug, points: main.coords.length, km: +km.toFixed(1) });
 }
-console.log("\nDone -> routes/*.gpx (main route + all branches)");
+console.log("\nDone -> routes/*.gpx (main route, single trkseg)");
 console.table(summary);

@@ -3,6 +3,7 @@
  * Strategy:
  *   - navigations   → network-first, fall back to the cached shell (opens offline)
  *   - same-origin   → stale-while-revalidate (serve cache, refresh in the background)
+ *   - live.json     → network only (must be fresh; its per-minute ?t= would flood the cache)
  *   - map tiles     → cache-first with a capped runtime cache (offline maps you've seen)
  *   - external APIs → straight to the network (open-meteo / TfL are online-only)
  *
@@ -10,7 +11,7 @@
  * stale-while-revalidate handler caches whatever the page actually loads, so a new
  * ?v= simply becomes a new cache entry. Bump SW_VERSION to purge old caches.
  */
-const SW_VERSION = "v1";
+const SW_VERSION = "v2"; // v2: global cache lookup + runtime ?v= eviction; bumping purges v1's unbounded runtime
 const SHELL = "tuberun-shell-" + SW_VERSION;
 const RUNTIME = "tuberun-runtime-" + SW_VERSION;
 const TILES = "tuberun-tiles-" + SW_VERSION;
@@ -25,9 +26,6 @@ const PRECACHE = [
   "img/icon.svg",
   "img/apple-touch-icon.png",
   "img/favicon-32.png",
-  "vendor/leaflet/leaflet.js",
-  "vendor/leaflet/leaflet.css",
-  "vendor/fonts/fonts.css",
 ];
 
 self.addEventListener("install", (e) => {
@@ -35,8 +33,8 @@ self.addEventListener("install", (e) => {
     caches.open(SHELL).then(async (cache) => {
       await Promise.all(PRECACHE.map((u) => cache.add(u).catch(() => null)));
       // Also precache the ?v=-versioned assets index.html references (script.js,
-      // style.css, fonts.css) so the app works offline right after the first visit,
-      // before any reload has had a chance to cache them via stale-while-revalidate.
+      // style.css, fonts.css, leaflet) so the app works offline right after the first
+      // visit, before any reload has had a chance to cache them via stale-while-revalidate.
       try {
         const html = await (await fetch("index.html", { cache: "no-store" })).text();
         const versioned = [...html.matchAll(/(?:href|src)="([^"]+\?v=\d+)"/g)].map((m) => m[1]);
@@ -54,6 +52,8 @@ self.addEventListener("activate", (e) => {
   );
 });
 
+// Path of the SW scope root ("/TubeRun/" in production) — used to spot shell navigations.
+const SCOPE_PATH = new URL(self.registration.scope).pathname;
 const isTile = (href) => /basemaps\.cartocdn\.com|api\.os\.uk/.test(href);
 
 self.addEventListener("fetch", (e) => {
@@ -62,10 +62,13 @@ self.addEventListener("fetch", (e) => {
   const url = new URL(req.url);
 
   // Navigations: network-first, fall back to the cached shell so the app opens offline.
+  // Only a navigation to the shell itself may refresh the cached copy — a lab page
+  // (hero-lab.html, maplibre-lab.html) must not overwrite index.html's offline slot.
   if (req.mode === "navigate") {
+    const isShell = url.pathname === SCOPE_PATH || url.pathname === SCOPE_PATH + "index.html";
     e.respondWith(
       fetch(req)
-        .then((res) => { if (res.ok) { const copy = res.clone(); caches.open(SHELL).then((c) => c.put("index.html", copy)); } return res; })
+        .then((res) => { if (res.ok && isShell) { const copy = res.clone(); caches.open(SHELL).then((c) => c.put("index.html", copy)); } return res; })
         .catch(() => caches.match("index.html"))
     );
     return;
@@ -81,13 +84,29 @@ self.addEventListener("fetch", (e) => {
     return;
   }
 
-  // Same-origin assets + data: stale-while-revalidate.
+  // Live status must always be network-fresh, and its per-minute ?t= key would mint
+  // an endless stream of cache entries — so never cache it. Not intercepting leaves
+  // failures to the page, which already handles a missing live.json.
+  if (url.pathname.endsWith("/data/live.json")) return;
+
+  // Same-origin assets + data: stale-while-revalidate. Look the request up across ALL
+  // caches (global match) — the SHELL precache has to serve first-visit offline loads —
+  // but write fresh responses to RUNTIME. After each write, evict RUNTIME entries for
+  // the same path under a different query, so old ?v= generations don't pile up deploy
+  // after deploy.
   if (url.origin === self.location.origin) {
     e.respondWith(
-      caches.open(RUNTIME).then((cache) => cache.match(req).then((hit) => {
-        const network = fetch(req).then((res) => { if (res.ok) cache.put(req, res.clone()); return res; }).catch(() => hit);
+      Promise.all([caches.open(RUNTIME), caches.match(req)]).then(([cache, hit]) => {
+        const network = fetch(req).then((res) => {
+          if (res.ok) {
+            cache.put(req, res.clone())
+              .then(() => cache.keys(req, { ignoreSearch: true }))
+              .then((keys) => Promise.all(keys.filter((k) => k.url !== req.url).map((k) => cache.delete(k))));
+          }
+          return res;
+        }).catch(() => hit);
         return hit || network;
-      }))
+      })
     );
   }
   // External APIs (open-meteo / TfL): not intercepted — they need the live network.
