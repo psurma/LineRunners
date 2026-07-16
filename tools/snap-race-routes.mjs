@@ -163,6 +163,74 @@ const RACES = [
       ["Whitehall", 51.5040, -0.1262],
     ],
   },
+  {
+    // Saucony Run Shoreditch Half (September, upgraded from the 10K in 2025):
+    // starts and finishes alongside Shoreditch Park (Bridport Place). Confirmed
+    // neighbourhoods/roads: Hoxton Street market, Regent's Canal, De Beauvoir,
+    // Essex Road, Newington Green, St Paul's Road, Queen's Drive, Albion Road,
+    // Stoke Newington Church Street, Clissold Park — with the Stoke Newington
+    // circuit run twice (a full Highbury/Queen's Drive lap, then a shorter Green
+    // Lanes/Clissold lap: the organisers say Newington Green spectators see the
+    // field three times, which only a repeated circuit produces).
+    id: "run-shoreditch-half", km: 21.1, profile: "shortest",
+    path: [
+      [51.5368, -0.0862], [51.5390, -0.0885],
+      [51.5358, -0.0800], [51.5320, -0.0788],
+      [51.5358, -0.0800], [51.5362, -0.0830],
+      [51.5405, -0.0838], [51.5445, -0.0855], [51.5455, -0.0900],
+      [51.5520, -0.0868],
+      [51.5485, -0.0975], [51.5462, -0.1030],
+      [51.5520, -0.1000], [51.5570, -0.0985], [51.5620, -0.1000], [51.5655, -0.0955],
+      [51.5645, -0.0900], [51.5620, -0.0880], [51.5605, -0.0855],
+      [51.5625, -0.0790],
+      [51.5590, -0.0830], [51.5555, -0.0850],
+      [51.5522, -0.0862],
+      [51.5560, -0.0935], [51.5600, -0.0895], [51.5605, -0.0855],
+      [51.5625, -0.0790],
+      [51.5590, -0.0830], [51.5555, -0.0850],
+      [51.5518, -0.0870],
+      [51.5480, -0.0890], [51.5432, -0.0930], [51.5400, -0.0975], [51.5390, -0.0990],
+      [51.5410, -0.0958],
+      [51.5420, -0.0880], [51.5408, -0.0805], [51.5390, -0.0845],
+      [51.5370, -0.0858],
+    ],
+    stops: [
+      ["Shoreditch Park", 51.5368, -0.0862], ["Hoxton", 51.5320, -0.0788], ["De Beauvoir", 51.5445, -0.0855],
+      ["Newington Green", 51.5520, -0.0868], ["Clissold Park", 51.5620, -0.0880], ["Stoke Newington", 51.5625, -0.0790],
+      ["Essex Road", 51.5400, -0.0975],
+    ],
+  },
+  {
+    // HOKA Hackney Half (May, Hackney Moves festival): starts and finishes at the
+    // Hackney Marshes festival village. Official narrative order: south-west
+    // through Homerton to Hackney Downs, Hackney Town Hall and the Empire on
+    // Mare Street, west into Dalston and up Kingsland High Street, south through
+    // London Fields and Broadway Market, a Haggerston loop picking up Cambridge
+    // Heath Road briefly, Victoria Park around halfway with a long stretch of its
+    // avenues, then east through Hackney Wick, skirting the Olympic Park north
+    // back to the Marshes.
+    id: "hackney-half", km: 21.1, profile: "shortest",
+    path: [
+      [51.5545, -0.0330], [51.5520, -0.0395], [51.5470, -0.0450], [51.5462, -0.0520],
+      [51.5510, -0.0555], [51.5535, -0.0560], [51.5545, -0.0640], [51.5530, -0.0680],
+      [51.5490, -0.0640], [51.5455, -0.0555],
+      [51.5468, -0.0640], [51.5478, -0.0720], [51.5462, -0.0755],
+      [51.5480, -0.0755], [51.5520, -0.0745],
+      [51.5462, -0.0755], [51.5420, -0.0768],
+      [51.5412, -0.0700], [51.5410, -0.0625], [51.5390, -0.0605], [51.5378, -0.0615],
+      [51.5362, -0.0620], [51.5360, -0.0680], [51.5330, -0.0700],
+      [51.5305, -0.0640], [51.5320, -0.0565], [51.5330, -0.0530],
+      [51.5355, -0.0490], [51.5340, -0.0400], [51.5352, -0.0320],
+      [51.5385, -0.0420], [51.5378, -0.0430], [51.5400, -0.0310],
+      [51.5410, -0.0295], [51.5435, -0.0245], [51.5445, -0.0220],
+      [51.5490, -0.0195], [51.5520, -0.0260], [51.5545, -0.0325],
+    ],
+    stops: [
+      ["Hackney Marshes", 51.5545, -0.0330], ["Homerton", 51.5470, -0.0450], ["Hackney Downs", 51.5530, -0.0680],
+      ["Hackney Central", 51.5455, -0.0555], ["Dalston", 51.5462, -0.0755], ["London Fields", 51.5410, -0.0625],
+      ["Victoria Park", 51.5355, -0.0490], ["Hackney Wick", 51.5435, -0.0245],
+    ],
+  },
 ];
 
 const gj = JSON.parse(readFileSync(GEOJSON, "utf8"));
