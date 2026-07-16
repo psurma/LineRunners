@@ -165,39 +165,44 @@ const RACES = [
   },
   {
     // Saucony Run Shoreditch Half (September, upgraded from the 10K in 2025):
-    // starts and finishes alongside Shoreditch Park (Bridport Place). Confirmed
-    // neighbourhoods/roads: Hoxton Street market, Regent's Canal, De Beauvoir,
-    // Essex Road, Newington Green, St Paul's Road, Queen's Drive, Albion Road,
-    // Stoke Newington Church Street, Clissold Park — with the Stoke Newington
-    // circuit run twice (a full Highbury/Queen's Drive lap, then a shorter Green
-    // Lanes/Clissold lap: the organisers say Newington Green spectators see the
-    // field three times, which only a repeated circuit produces).
+    // a single loop from Shoreditch Park. The southern miles follow the exact
+    // street grid of the event's official (10K-era) course map — Shepperton Rd,
+    // Rotherfield St, the Essex Rd corner, Elmore St, Southgate/Boleyn Rd up to
+    // Matthias Rd, and on the way home the De Beauvoir grid (Buckingham /
+    // Tottenham / Stamford / Englefield / Lawford / Downham / Hertford), Whitmore
+    // Rd over the Regent's Canal, Hoxton St past the market, Fanshaw and Pitfield
+    // to a Mintern St finish. The half's confirmed northern extension (St Paul's
+    // Rd, Highbury, Queen's Drive, Clissold Park, Church St, Albion Rd) hangs off
+    // Newington Green, which the course touches on three sides — the organisers'
+    // "spectators see runners at three different points". The real closed-road
+    // course packs more turns in; this is the faithful corridor.
     id: "run-shoreditch-half", km: 21.1, profile: "shortest",
     path: [
-      [51.5368, -0.0862], [51.5390, -0.0885],
-      [51.5358, -0.0800], [51.5320, -0.0788],
-      [51.5358, -0.0800], [51.5362, -0.0830],
-      [51.5405, -0.0838], [51.5445, -0.0855], [51.5455, -0.0900],
-      [51.5520, -0.0868],
-      [51.5485, -0.0975], [51.5462, -0.1030],
-      [51.5520, -0.1000], [51.5570, -0.0985], [51.5620, -0.1000], [51.5655, -0.0955],
-      [51.5645, -0.0900], [51.5620, -0.0880], [51.5605, -0.0855],
-      [51.5625, -0.0790],
-      [51.5590, -0.0830], [51.5555, -0.0850],
-      [51.5522, -0.0862],
-      [51.5560, -0.0935], [51.5600, -0.0895], [51.5605, -0.0855],
-      [51.5625, -0.0790],
-      [51.5590, -0.0830], [51.5555, -0.0850],
-      [51.5518, -0.0870],
-      [51.5480, -0.0890], [51.5432, -0.0930], [51.5400, -0.0975], [51.5390, -0.0990],
-      [51.5410, -0.0958],
-      [51.5420, -0.0880], [51.5408, -0.0805], [51.5390, -0.0845],
-      [51.5370, -0.0858],
+      [51.5362, -0.0890], [51.5390, -0.0940], [51.5400, -0.0963],
+      [51.5428, -0.0928], [51.5436, -0.0895], [51.5445, -0.0855],
+      [51.5480, -0.0840], [51.5505, -0.0822], [51.5528, -0.0842],
+      [51.5530, -0.0862],
+      [51.5520, -0.0875], [51.5482, -0.0975], [51.5470, -0.1010],
+      [51.5520, -0.1000], [51.5562, -0.0988], [51.5612, -0.1000], [51.5652, -0.0952],
+      [51.5638, -0.0892], [51.5622, -0.0885], [51.5636, -0.0830],
+      [51.5623, -0.0790],
+      [51.5592, -0.0827], [51.5556, -0.0849],
+      [51.5522, -0.0865], [51.5512, -0.0828],
+      [51.5498, -0.0800], [51.5468, -0.0808], [51.5450, -0.0812],
+      [51.5445, -0.0835], [51.5448, -0.0790],
+      [51.5455, -0.0785], [51.5452, -0.0765], [51.5438, -0.0768],
+      [51.5430, -0.0795], [51.5420, -0.0800], [51.5424, -0.0815],
+      [51.5435, -0.0845], [51.5410, -0.0845],
+      [51.5404, -0.0815], [51.5400, -0.0772],
+      [51.5380, -0.0778], [51.5370, -0.0790], [51.5360, -0.0795], [51.5348, -0.0798],
+      [51.5346, -0.0780], [51.5320, -0.0787], [51.5299, -0.0800],
+      [51.5297, -0.0818], [51.5312, -0.0824], [51.5340, -0.0836],
+      [51.5347, -0.0852], [51.5358, -0.0860],
     ],
     stops: [
-      ["Shoreditch Park", 51.5368, -0.0862], ["Hoxton", 51.5320, -0.0788], ["De Beauvoir", 51.5445, -0.0855],
-      ["Newington Green", 51.5520, -0.0868], ["Clissold Park", 51.5620, -0.0880], ["Stoke Newington", 51.5625, -0.0790],
-      ["Essex Road", 51.5400, -0.0975],
+      ["Shoreditch Park", 51.5362, -0.0890], ["Essex Road", 51.5400, -0.0963], ["Newington Green", 51.5530, -0.0862],
+      ["Clissold Park", 51.5622, -0.0885], ["Stoke Newington", 51.5623, -0.0790], ["De Beauvoir", 51.5445, -0.0835],
+      ["Hoxton", 51.5320, -0.0787],
     ],
   },
   {
