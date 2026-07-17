@@ -4543,6 +4543,7 @@
           <button type="button" class="tm-zbtn" data-z="reset">Reset</button>
           <button type="button" class="tm-zbtn" data-z="in" aria-label="Zoom in">+</button>
         </div>
+        <button type="button" class="tm-zbtn tm-fw" title="Fill the browser window" aria-label="Fill the browser window">⛶</button>
       </div>
       <div class="tm-scroll" id="tmHolder" role="tabpanel" aria-live="polite" tabindex="0"><p class="tm-loading">Loading the map…</p></div>
       <p class="tm-scrollhint">Drag to pan · ⌘/Ctrl + scroll to zoom to the cursor · or use +/&minus;.</p>`;
@@ -4552,12 +4553,27 @@
       root.querySelectorAll(".tm-tab").forEach((x) => { const on = x === b; x.classList.toggle("on", on); x.setAttribute("aria-selected", on ? "true" : "false"); });
       loadMap();
     }));
-    root.querySelectorAll(".tm-zbtn").forEach((b) => b.addEventListener("click", () => {
+    root.querySelectorAll(".tm-zbtn[data-z]").forEach((b) => b.addEventListener("click", () => {
       const z = b.dataset.z;
       curZoom = z === "in" ? Math.min(5, curZoom + 0.3) : z === "out" ? Math.max(0.8, curZoom - 0.3) : defaultZoom(curMapKind());
       wtSaveZoom();
       applyZoom();
     }));
+    // Full-window toggle for every map view — the tabs stay usable, so you can
+    // flick between maps while expanded. Escape (or ✕) returns to the page.
+    const fwBtn = root.querySelector(".tm-fw");
+    const setFw = (open) => {
+      root.classList.toggle("tm-fullwindow", open);
+      document.body.classList.toggle("map-fullwindow-open", open);
+      fwBtn.innerHTML = open ? "✕" : "⛶";
+      fwBtn.title = open ? "Exit full window" : "Fill the browser window";
+      fwBtn.setAttribute("aria-label", fwBtn.title);
+      if (tmMap.map) setTimeout(() => tmMap.map.invalidateSize(false), 80);
+    };
+    fwBtn.addEventListener("click", () => setFw(!root.classList.contains("tm-fullwindow")));
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && root.classList.contains("tm-fullwindow")) setFw(false);
+    });
     // Drag-to-pan inside the map viewport.
     const holder = root.querySelector("#tmHolder");
     let drag = false, sx, sy, sl, st;

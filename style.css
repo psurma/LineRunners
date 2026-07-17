@@ -910,6 +910,13 @@ body.strip-drag { user-select: none; -webkit-user-select: none; }
 .tm-scroll { position: relative; }
 body.tm-map-active .tm-scroll { overflow: hidden; cursor: default; }
 body.tm-map-active .tm-zoom, body.tm-map-active .tm-scrollhint { display: none; }
+/* Full-window mode for the whole map viewer — any tab, tabs still switchable. */
+#tubeMap.tm-fullwindow {
+  position: fixed; inset: 0; z-index: 9998; background: #fff;
+  margin: 0; padding: 10px 16px 8px; display: flex; flex-direction: column;
+}
+#tubeMap.tm-fullwindow .tm-scroll { height: auto; flex: 1; min-height: 0; }
+#tubeMap.tm-fullwindow .tm-scrollhint { margin: 6px 0 0; }
 .leaflet-tooltip.tm-run-label {
   background: rgba(255, 255, 255, 0.92); border: none; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
   border-radius: 5px; padding: 2px 6px; font: 700 11px Inter, sans-serif; color: #14171f; line-height: 1.2; white-space: nowrap;
