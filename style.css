@@ -1067,7 +1067,7 @@ tr.ls-open .ls-caret { transform: rotate(90deg); }
 .ls-ends { margin: 2px 0 10px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-weight: 800; font-size: 1.05rem; color: var(--ink); line-height: 1.2; }
 .ls-ends .ls-arrow { color: var(--tfl-blue); font-weight: 700; }
 .ls-ends:empty { display: none; }
-.ls-strip .stn.endpoint { touch-action: none; cursor: ew-resize; } /* draggable measuring ends */
+.ls-strip .stn.endpoint, .bus-strip .stn.endpoint { touch-action: none; cursor: ew-resize; } /* draggable measuring ends */
 .ls-measure { margin-top: 8px; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; font-size: 14px; color: var(--ink); }
 .ls-measure:empty { display: none; }
 .ls-measure .ls-arrow { color: var(--tfl-blue); font-weight: 700; padding: 0 2px; }

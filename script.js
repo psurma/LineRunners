@@ -2387,10 +2387,9 @@
     }));
   }
 
-  function drawBus(seq, wp, reversed) {
-    const m = busMapObj.map;
-    if (!m) return;
-    let segs = [];
+  // The TfL route's road geometry as [[lat,lon],...] segments (stop hops when absent).
+  function busLineSegs(seq, wp) {
+    const segs = [];
     (seq.lineStrings || []).forEach((ls) => {
       try {
         const parsed = JSON.parse(ls);
@@ -2398,7 +2397,12 @@
         lines.forEach((line) => segs.push(line.map((p) => [p[1], p[0]])));
       } catch (_) { /* skip malformed */ }
     });
-    if (!segs.length) segs = [wp.map((s) => [s[1], s[2]])];
+    return segs.length ? segs : [wp.map((s) => [s[1], s[2]])];
+  }
+  function drawBus(seq, wp, reversed) {
+    const m = busMapObj.map;
+    if (!m) return;
+    let segs = busLineSegs(seq, wp);
     // Flip the geometry too so the flow arrows run the reversed direction (wp is
     // already reversed by the caller, which swaps the start/finish markers).
     if (reversed) segs = segs.slice().reverse().map((s) => s.slice().reverse());
@@ -2468,14 +2472,55 @@
       // Render the traced route in the current direction. Reverse flips `reversed`
       // and re-renders — flipping the stops, the map's flow direction and the
       // elevation profile — so you can plan running the route either way round.
-      let reversed = false, renderSeq = 0;
+      // Direction and any measured stretch are kept on busMapObj per route, so
+      // they survive re-traces (the km/mi toggle re-runs trace()).
+      let reversed = false, renderSeq = 0, elevSeq = 0;
+      let pickA = -1, pickB = -1;
+      if (busMapObj.keep && busMapObj.keep.id === id) {
+        reversed = !!busMapObj.keep.reversed;
+        if (busMapObj.keep.a < fwd.length && busMapObj.keep.b < fwd.length) { pickA = busMapObj.keep.a; pickB = busMapObj.keep.b; }
+      }
+      const stash = () => { busMapObj.keep = { id, reversed, a: pickA, b: pickB }; };
       const render = async () => {
         const myRender = ++renderSeq;
         const wp = reversed ? [...fwd].reverse() : fwd;
         const km = legDistanceKm(wp, 0, wp.length - 1);
         const from = wp[0][0], to = wp[wp.length - 1][0];
         const banner = `Route ${id} · ${from} → ${to}`;
-        drawBus(seq, wp, reversed);
+        // Project every stop onto the TfL road line (concatenated, flipped with
+        // the direction) so a measured stretch can slice real road geometry.
+        // Multi-part or misordered lineStrings fail the monotonic check and the
+        // stretch simply draws stop-to-stop hops instead.
+        let roadPath = [];
+        busLineSegs(seq, wp).forEach((s) => roadPath.push(...s));
+        if (reversed) roadPath = roadPath.slice().reverse();
+        let roadCum = null, along = null;
+        if (roadPath.length > wp.length + 2) {
+          roadCum = pathCumKm(roadPath);
+          const al = [];
+          let ok = true;
+          for (const s of wp) {
+            const pr = projectOnPath(s[1], s[2], roadPath, roadCum);
+            if (pr.off > 0.4 || (al.length && pr.alongKm < al[al.length - 1] - 0.05)) { ok = false; break; }
+            al.push(pr.alongKm);
+          }
+          if (ok) along = al;
+        }
+        const pointAt = (kmAt) => {
+          let k = 1;
+          while (k < roadCum.length && roadCum[k] < kmAt) k++;
+          if (k >= roadPath.length) return roadPath[roadPath.length - 1];
+          const t = (kmAt - roadCum[k - 1]) / ((roadCum[k] - roadCum[k - 1]) || 1e-9);
+          return [roadPath[k - 1][0] + (roadPath[k][0] - roadPath[k - 1][0]) * t, roadPath[k - 1][1] + (roadPath[k][1] - roadPath[k - 1][1]) * t];
+        };
+        const spanRoadSeg = (i, j) => {
+          if (!along) return null;
+          const a = along[i], b = along[j];
+          const segOut = [pointAt(a)];
+          for (let k = 0; k < roadPath.length; k++) if (roadCum[k] > a && roadCum[k] < b) segOut.push(roadPath[k]);
+          segOut.push(pointAt(b));
+          return segOut.length >= 2 ? segOut : null;
+        };
         result.innerHTML = `
           <div class="bus-summary">
             <div class="cr-main"><span class="cr-km">${fmtKm(km, 1)}</span></div>
@@ -2488,15 +2533,151 @@
             </div>
             <div class="cr-note">Distance along the stops × ${ROAD_FACTOR} for the road. Buses run on-road — mind the traffic and lights.</div>
           </div>
-          <div class="line-diagram strip bus-strip" style="--line-col:${BUS_COL}">${stripMapHtml(null, BUS_COL, banner, { wp, bannerLabel: banner, tap: true, geoInterchange: true })}</div>`;
-        result.querySelectorAll(".bus-strip .stn").forEach((btn) => btn.addEventListener("click", () => {
-          const s = wp[+btn.dataset.i];
-          if (!s || !busMapObj.map) return;
-          busMapObj.map.setView([s[1], s[2]], 16, { animate: true });
-          L.popup({ offset: [0, -2], autoPan: false }).setLatLng([s[1], s[2]]).setContent(escapeHtml(s[0]) + geoInterchangeTags(s[1], s[2])).openOn(busMapObj.map);
-          if (window.matchMedia("(max-width: 860px)").matches)
-            document.getElementById("busMap").scrollIntoView({ behavior: "smooth", block: "center" });
-        }));
+          <div class="bus-measure ls-measure" aria-live="polite"></div>
+          <div class="line-diagram strip bus-strip" style="--line-col:${BUS_COL}"></div>`;
+        const stripEl = result.querySelector(".bus-strip");
+        const measEl = result.querySelector(".bus-measure");
+        const elBox = result.querySelector(".bus-elev");
+        // Elevation profile — buses carry no GPX, so sample open-meteo along the
+        // active stops (the measured stretch when one is set, else the route).
+        const updateElev = async (list) => {
+          if (!elBox) return;
+          const myElev = ++elevSeq;
+          elBox.innerHTML = `<p class="ls-elev-load">Reading elevation…</p>`;
+          const elev = await routeElevation(list.map((s) => [s[1], s[2]]));
+          if (myElev === elevSeq && myRender === renderSeq && mySeq === traceSeq && elBox.isConnected) elBox.innerHTML = elev ? elevationHtml(elev) : "";
+        };
+        // Map + elevation follow the measurement, like the Lines table: both
+        // ends picked draws just that stretch with its own start/finish.
+        let mapState = null; // "full" | "span"
+        const updateMap = () => {
+          const both = pickA >= 0 && pickB >= 0;
+          if (!both) {
+            if (mapState === "full") return;
+            mapState = "full";
+            drawBus(seq, wp, reversed);
+            updateElev(wp);
+            return;
+          }
+          mapState = "span";
+          const i = Math.min(pickA, pickB), j = Math.max(pickA, pickB);
+          const span = wp.slice(i, j + 1);
+          const road = spanRoadSeg(i, j);
+          drawFlowSegments(busMapObj.map, busMapObj, road ? [road] : [span.map((s) => [s[1], s[2]])], BUS_COL, {
+            start: { at: [span[0][1], span[0][2]], label: "Start · " + escapeHtml(span[0][0]) },
+            finish: { at: [span[span.length - 1][1], span[span.length - 1][2]], label: "Finish · " + escapeHtml(span[span.length - 1][0]) },
+            stops: span,
+            tubeConns: true,
+          }, [30, 30]);
+          updateElev(span);
+        };
+        let suppressClick = false; // a completed endpoint drag swallows the click it generates
+        let downX = null, downY = null; // last pointerdown on a stop — a click far from it was a pan
+        const paintMeasure = () => {
+          if (!measEl) return;
+          const both = pickA >= 0 && pickB >= 0;
+          const i = both ? Math.min(pickA, pickB) : pickA, j = both ? Math.max(pickA, pickB) : pickA;
+          if (both) {
+            const mKm = legDistanceKm(wp, i, j);
+            measEl.innerHTML = `<span class="lm-leg"><strong>${escapeHtml(wp[i][0])}</strong><span class="ls-arrow" aria-hidden="true">→</span><strong>${escapeHtml(wp[j][0])}</strong></span><span class="lm-km">${fmtKm(mKm, 1)}</span><span class="lm-legs">· ${j - i} leg${j - i > 1 ? "s" : ""}</span>${timesRowHtml(mKm)}`;
+          } else if (pickA >= 0) {
+            measEl.innerHTML = `Measuring from <strong>${escapeHtml(wp[pickA][0])}</strong> — tap the other end, or the same stop to clear.`;
+          } else {
+            measEl.innerHTML = `<span class="lm-hint">Tap two stops to measure the stretch between them — or drag an end of the route in.</span>`;
+          }
+        };
+        const paintStrip = () => {
+          stash();
+          const both = pickA >= 0 && pickB >= 0;
+          const i = both ? Math.min(pickA, pickB) : pickA, j = both ? Math.max(pickA, pickB) : pickA;
+          const sel = both ? { a: i, b: j, from: i, to: j }
+            : pickA >= 0 ? { a: i, b: i, from: i, to: i }
+            : { a: 0, b: wp.length - 1, from: 0, to: wp.length - 1 };
+          stripEl.innerHTML = stripMapHtml(null, BUS_COL, banner, { wp, bannerLabel: banner, interactive: true, ...sel, geoInterchange: true });
+          stripEl.querySelectorAll(".stn").forEach((sEl, si) => {
+            sEl.addEventListener("click", (eC) => {
+              if (suppressClick) { suppressClick = false; return; }
+              if (eC.detail > 0 && downX != null && Math.hypot(eC.clientX - downX, eC.clientY - downY) > 6) return;
+              if (myRender !== renderSeq || !busMapObj.map) return;
+              const s = wp[si];
+              if (pickA < 0 || pickB >= 0) { pickA = si; pickB = -1; } // first end, or start a fresh measurement
+              else if (si === pickA) pickA = -1;                       // same stop again — clear
+              else pickB = si;
+              // A tap that redraws the route lets the redraw's own fit place the
+              // map — centring the tapped stop would race it.
+              if (!(pickA >= 0 && pickB >= 0) && mapState !== "span") busMapObj.map.setView([s[1], s[2]], 16, { animate: true });
+              L.popup({ offset: [0, -2], autoPan: false }).setLatLng([s[1], s[2]]).setContent(escapeHtml(s[0]) + geoInterchangeTags(s[1], s[2])).openOn(busMapObj.map);
+              if (window.matchMedia("(max-width: 860px)").matches)
+                document.getElementById("busMap").scrollIntoView({ behavior: "smooth", block: "center" });
+              paintStrip();
+            });
+            // Drag a highlighted end along the strip to grow or shrink the
+            // stretch — same gesture as the Lines table. With nothing picked
+            // the whole route counts as the selection.
+            sEl.addEventListener("pointerdown", (eD) => {
+              downX = eD.clientX; downY = eD.clientY;
+              suppressClick = false; // any fresh press clears a stale swallow
+              if (myRender !== renderSeq || eD.button !== 0 || !sEl.classList.contains("endpoint")) return;
+              eD.stopPropagation(); // keep the strip's grab-to-scroll pan off this gesture
+              let moving = null, raf = 0, lastX = eD.clientX;
+              const btns = [...stripEl.querySelectorAll(".stn")];
+              const idxAt = (x) => {
+                let bi = -1, bd = Infinity;
+                btns.forEach((b, k) => { const rc = b.getBoundingClientRect(); const d = Math.abs((rc.left + rc.right) / 2 - x); if (d < bd) { bd = d; bi = k; } });
+                return bi;
+              };
+              const paintLive = () => {
+                const both2 = pickA >= 0 && pickB >= 0;
+                const lo = both2 ? Math.min(pickA, pickB) : pickA, hi = both2 ? Math.max(pickA, pickB) : pickA;
+                btns.forEach((b, k) => {
+                  b.classList.toggle("active", k >= lo && k <= hi);
+                  b.classList.toggle("endpoint", k === lo || k === hi);
+                });
+                stash();
+                paintMeasure();
+              };
+              const dragTo = (x) => {
+                const over = idxAt(x);
+                const other = moving === "A" ? pickB : pickA;
+                if (over < 0 || over === other || over === (moving === "A" ? pickA : pickB)) return;
+                if (moving === "A") pickA = over; else pickB = over;
+                paintLive();
+              };
+              const step = () => { // edge auto-scroll, so offscreen stops stay reachable
+                const rc = stripEl.getBoundingClientRect();
+                const v = lastX < rc.left + 48 ? -9 : lastX > rc.right - 48 ? 9 : 0;
+                if (v && moving) { stripEl.scrollLeft += v; dragTo(lastX); }
+                raf = requestAnimationFrame(step);
+              };
+              const move = (eM) => {
+                lastX = eM.clientX;
+                if (!moving) {
+                  if (idxAt(eM.clientX) === si) return; // still on the grabbed stop — not a drag yet
+                  if (pickA < 0) { pickA = 0; pickB = wp.length - 1; } // the whole route was "selected"
+                  moving = si === pickA ? "A" : "B";
+                  document.body.classList.add("strip-drag");
+                  raf = requestAnimationFrame(step);
+                }
+                dragTo(eM.clientX);
+              };
+              const up = () => {
+                sEl.removeEventListener("pointermove", move);
+                sEl.removeEventListener("pointerup", up);
+                sEl.removeEventListener("pointercancel", up);
+                cancelAnimationFrame(raf);
+                document.body.classList.remove("strip-drag");
+                if (moving) { suppressClick = true; paintStrip(); }
+              };
+              sEl.setPointerCapture(eD.pointerId);
+              sEl.addEventListener("pointermove", move);
+              sEl.addEventListener("pointerup", up);
+              sEl.addEventListener("pointercancel", up);
+            });
+          });
+          updateMap();
+          paintMeasure();
+        };
+        paintStrip();
         syncBusMark();
         const mark = document.getElementById("busMark");
         if (mark) mark.addEventListener("click", () => {
@@ -2505,14 +2686,15 @@
           saveBuses(busRun); syncBusMark(); renderBusProgress();
         });
         const revBtn = result.querySelector(".bus-reverse");
-        if (revBtn) revBtn.addEventListener("click", () => { reversed = !reversed; render(); });
-        // Elevation profile — buses carry no GPX, so sample open-meteo along the stops.
-        const elBox = result.querySelector(".bus-elev");
-        if (elBox) {
-          elBox.innerHTML = `<p class="ls-elev-load">Reading elevation…</p>`;
-          const elev = await routeElevation(wp.map((s) => [s[1], s[2]]));
-          if (myRender === renderSeq && mySeq === traceSeq && elBox.isConnected) elBox.innerHTML = elev ? elevationHtml(elev) : "";
-        }
+        if (revBtn) revBtn.addEventListener("click", () => {
+          reversed = !reversed;
+          // A reverse is a pure flip, so a measured stretch keeps its physical
+          // ends — remap the picked indices into the flipped stop order.
+          if (pickA >= 0) pickA = fwd.length - 1 - pickA;
+          if (pickB >= 0) pickB = fwd.length - 1 - pickB;
+          stash();
+          render();
+        });
       };
       render();
     };
