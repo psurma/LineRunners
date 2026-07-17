@@ -29,10 +29,10 @@
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-title" content="Tube Run" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-  <link rel="stylesheet" href="vendor/fonts/fonts.css?v=301" />
-  <link rel="stylesheet" href="vendor/leaflet/leaflet.css?v=301" />
-  <script src="vendor/leaflet/leaflet.js?v=301" defer></script>
-  <link rel="stylesheet" href="style.css?v=301" />
+  <link rel="stylesheet" href="vendor/fonts/fonts.css?v=302" />
+  <link rel="stylesheet" href="vendor/leaflet/leaflet.css?v=302" />
+  <script src="vendor/leaflet/leaflet.js?v=302" defer></script>
+  <link rel="stylesheet" href="style.css?v=302" />
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
@@ -80,6 +80,7 @@
     </nav>
     <div class="hdr-search">
       <input id="siteSearch" list="siteSearchList" placeholder="Search station, line, route…" autocomplete="off" aria-label="Search stations, lines and routes" />
+      <button type="button" id="nearBtn" class="near-btn" title="Find my nearest station — uses your location" aria-label="Find my nearest station">📍</button>
       <datalist id="siteSearchList"></datalist>
     </div>
     <div class="unit-toggle net-toggle" role="group" aria-label="Network coverage" title="Tube keeps it to the TfL network; All lines adds National Rail and routes outside London">
@@ -474,6 +475,6 @@
     <p class="fine"><span id="pageVersion" class="page-version"></span></p>
   </footer>
 
-  <script src="script.js?v=301" defer></script>
+  <script src="script.js?v=302" defer></script>
 </body>
 </html>

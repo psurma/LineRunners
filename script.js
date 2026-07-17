@@ -4277,6 +4277,41 @@
     };
     input.addEventListener("change", () => go());
     input.addEventListener("keydown", (e) => { if (e.key === "Enter") go(); });
+    // 📍 beside the search: locate the visitor and jump to the nearest station
+    // in the current network, through the same path as a search pick (map
+    // centring, station popup, "How far from here?"). Status messages flash in
+    // the search box's placeholder — the input itself stays untouched.
+    const nearBtn = document.getElementById("nearBtn");
+    const defPlaceholder = input.placeholder;
+    let flashT = 0;
+    const flash = (msg) => {
+      input.placeholder = msg;
+      clearTimeout(flashT);
+      flashT = setTimeout(() => { input.placeholder = defPlaceholder; }, 6000);
+    };
+    if (nearBtn) nearBtn.addEventListener("click", () => {
+      if (!navigator.geolocation) { flash("This device can't share its location"); return; }
+      nearBtn.disabled = true;
+      navigator.geolocation.getCurrentPosition(async (pos) => {
+        const { latitude: la, longitude: lo } = pos.coords;
+        const net = await loadNetwork().catch(() => null);
+        nearBtn.disabled = false;
+        if (!net) { flash("Couldn't load the network — try again"); return; }
+        let best = null;
+        for (const id in net) for (const sid in net[id].stations) {
+          const s = net[id].stations[sid];
+          const d = haversineKm([0, la, lo], [0, s.lat, s.lon]);
+          if (!best || d < best.d) best = { name: s.n, d };
+        }
+        if (!best) return;
+        // Crow-flies distance, small values in metres like the strip leg labels.
+        flash(`Nearest: ${best.name} · ${distUnit === "km" && best.d < 0.95 ? `${Math.round(best.d * 200) * 5} m` : fmtKm(best.d, 1)} away`);
+        go(`${best.name} (station)`);
+      }, (err) => {
+        nearBtn.disabled = false;
+        flash(err && err.code === 1 ? "Location permission is blocked" : "Couldn't get a location fix");
+      }, { enableHighAccuracy: true, timeout: 8000 });
+    });
     // A search that switched modes resumes here, once the network is in.
     let pending = null;
     try { pending = sessionStorage.getItem("tuberun_pending_search"); sessionStorage.removeItem("tuberun_pending_search"); } catch (_) { /* private mode */ }

@@ -449,7 +449,10 @@ section { max-width: var(--max); margin: 0 auto; padding: clamp(48px, 8vw, 88px)
   background: color-mix(in srgb, var(--line-col, #0019a8) 45%, #d7dae0);
 }
 /* header search */
-.hdr-search { margin-left: auto; }
+.hdr-search { margin-left: auto; display: flex; align-items: center; gap: 6px; }
+.near-btn { font-size: 14px; line-height: 1; background: #fff; border: 1px solid var(--line); border-radius: 999px; padding: 6px 9px; cursor: pointer; transition: border-color 0.15s; }
+.near-btn:hover { border-color: var(--tfl-blue); }
+.near-btn:disabled { opacity: 0.55; cursor: progress; }
 .hdr-search input {
   font: 500 13.5px Inter, sans-serif;
   color: var(--ink);
