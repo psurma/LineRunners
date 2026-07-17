@@ -3887,8 +3887,32 @@
     { key: "walking", file: "img/walking-map.png", label: "Walking times", kind: "img" },
     { key: "toilets", file: "img/toilet-map.png", label: "Toilets 🚻", kind: "img" },
     { key: "standard", file: "img/tube-map.svg", label: "Tube map", kind: "svg", highlight: true },
+    { key: "classic", file: "img/tube-map.svg", label: "Classic ends", kind: "svg", roundels: true },
     { key: "overground", file: "img/overground-map.png", label: "Overground", kind: "img" },
     { key: "connections", file: "img/connections-map.png", label: "Rail connections", kind: "img" },
+  ];
+  // Lettered end-of-line discs for the "Classic ends" tab — the terminus
+  // letters of the old printed pocket maps (a Tokyo habit on London ends),
+  // hand-placed on the December 2013 diagram. [letter, colour, x, y] in the
+  // SVG's viewBox coordinates.
+  const CLASSIC_BADGES = [
+    ["M", "#9B0056", 31, 125], ["M", "#9B0056", 32, 107], ["M", "#9B0056", 159, 118],
+    ["M", "#9B0056", 16, 189], ["P", "#003688", 29, 189],
+    ["C", "#E32017", 124, 160], ["B", "#B36305", 309, 188], ["J", "#A0A5A9", 339, 169],
+    ["C", "#E32017", 156, 427], ["D", "#00782A", 170, 427],
+    ["D", "#00782A", 202, 571], ["D", "#00782A", 346, 637],
+    ["P", "#003688", 38, 615], ["P", "#003688", 97, 613],
+    ["V", "#0098D4", 812, 229], ["C", "#E32017", 867, 97], ["D", "#00782A", 1011, 249],
+    ["N", "#000000", 578, 112], ["N", "#000000", 553, 149], ["N", "#000000", 405, 156], ["P", "#003688", 690, 115],
+    ["N", "#000000", 392, 745], ["V", "#0098D4", 520, 668], ["B", "#B36305", 535, 603],
+    ["M", "#9B0056", 696, 437],
+    ["W", "#95CDBA", 490, 532], ["W", "#95CDBA", 609, 466], ["D", "#00A4A7", 622, 466],
+    ["D", "#00A4A7", 698, 459],
+    ["J", "#A0A5A9", 897, 315], ["D", "#00A4A7", 909, 315], ["D", "#00A4A7", 788, 293],
+    ["H", "#F3A9BB", 918, 337], ["D", "#00A4A7", 1011, 522], ["D", "#00A4A7", 1003, 569], ["D", "#00A4A7", 789, 648],
+    ["H", "#F3A9BB", 259, 476], ["C", "#FFD300", 272, 476],
+    ["D", "#00782A", 356, 462],
+    ["C", "#FFD300", 349, 371], ["D", "#00782A", 362, 371],
   ];
   const svgCache = {};
   let curMap = "geo";
@@ -4594,6 +4618,7 @@
     const CAPTIONS = {
       geo: `Our own live map, built from open TfL data — zoom, drag and tap a station.`,
       standard: active ? `<strong style="color:${lineTextColour(LINE_COLOURS[active])}">${escapeHtml(active)} line</strong> highlighted for the next run — zoom in to trace it.` : `The official London Underground map.`,
+      classic: `Every terminus wears its line's initial — the lettered end-of-line discs of the classic printed pocket maps.`,
       running: `Estimated running time to each stop on the next run's line.`,
       walking: `Minutes between stations on the official walking map — flip to Run and every number becomes a running time at your pace.`,
       toilets: `Stations with toilets — plan your pit stops.`,
@@ -4639,8 +4664,8 @@
     }
 
     try {
-      let txt = svgCache[cfg.key];
-      if (!txt) { const res = await fetch(cfg.file); if (!res.ok) throw new Error("fetch"); txt = await res.text(); svgCache[cfg.key] = txt; }
+      let txt = svgCache[cfg.file];
+      if (!txt) { const res = await fetch(cfg.file); if (!res.ok) throw new Error("fetch"); txt = await res.text(); svgCache[cfg.file] = txt; }
       if (stale()) return;
       // Parse as SVG (not innerHTML) so xlink:href references resolve & render.
       const svg = new DOMParser().parseFromString(txt, "image/svg+xml").documentElement;
@@ -4651,6 +4676,22 @@
       applyZoom();
       const live = holder.querySelector("svg");
       if (active) highlightLine(live, LINE_FILL[active]);
+      if (cfg.roundels) {
+        const NS = "http://www.w3.org/2000/svg";
+        const g = document.createElementNS(NS, "g");
+        CLASSIC_BADGES.forEach(([t, c, x, y]) => {
+          const circ = document.createElementNS(NS, "circle");
+          circ.setAttribute("cx", x); circ.setAttribute("cy", y); circ.setAttribute("r", "6.4");
+          circ.setAttribute("fill", c); circ.setAttribute("stroke", "#fff"); circ.setAttribute("stroke-width", "1.3");
+          const txt2 = document.createElementNS(NS, "text");
+          txt2.setAttribute("x", x); txt2.setAttribute("y", y + 3.1); txt2.setAttribute("text-anchor", "middle");
+          txt2.setAttribute("font-family", "Arial, sans-serif"); txt2.setAttribute("font-weight", "bold");
+          txt2.setAttribute("font-size", "8.6"); txt2.setAttribute("fill", contrastText(c));
+          txt2.textContent = t;
+          g.appendChild(circ); g.appendChild(txt2);
+        });
+        live.appendChild(g);
+      }
       requestAnimationFrame(() => {
         if (active) centreOnLine(live, LINE_FILL[active], holder);
         else centreContent(holder);
