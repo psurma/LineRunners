@@ -2858,10 +2858,12 @@
     // stay open — note its line and shown route/direction, re-opened at the end.
     const openRow = el.querySelector("tbody tr.ls-open");
     const openSel = openRow ? el.querySelector(".ls-detail-row .ls-variant") : null;
+    const openDetail = openRow ? el.querySelector(".ls-detail-row") : null;
     const reopen = openRow ? {
       line: openRow.dataset.line,
       variant: openSel ? +openSel.value : 0,
       reversed: !!el.querySelector(".ls-detail-row .ls-reverse.on"),
+      picks: (openDetail && openDetail._lsPicks) || null,
     } : null;
     if (lsMap) { lsMap.remove(); lsMap = null; } // drop any open mini-map before re-render
     const heads = LS_COLS.map((h, i) => {
@@ -3127,7 +3129,7 @@
     const followWp = netData ? rtStations(netData, name) : null;
     const followBtn = followWp && followWp.length >= 2 ? `<button type="button" class="ls-follow" title="Follow this line live with GPS — next stop, progress and pace">▶ Follow live</button>` : "";
     const ctrlRow = gpx || followBtn ? `<div class="ls-gpx-row">${gpx}${reverseBtn}${followBtn}</div>` : "";
-    detail.innerHTML = `<td colspan="6"><div class="ls-detail-inner"><p class="ls-ends" aria-live="polite"></p>${ctrlRow}<div class="ls-map"></div><div class="ls-strip strip"></div><div class="ls-elev jr-elev"></div></div></td>`;
+    detail.innerHTML = `<td colspan="6"><div class="ls-detail-inner"><p class="ls-ends" aria-live="polite"></p>${ctrlRow}<div class="ls-map"></div><div class="ls-strip strip"></div><div class="ls-measure" aria-live="polite"></div><div class="ls-elev jr-elev"></div></div></td>`;
     tr.after(detail);
     lineRouteMap(detail.querySelector(".ls-map"), name, tr, restore);
     const fb = detail.querySelector(".ls-follow");
@@ -3197,6 +3199,11 @@
     const gpxLink = detailInner.querySelector(".ls-gpx");
     const endsEl = detailInner.querySelector(".ls-ends");
     let reversed = false, curIdx = 0, gpxText = null, revUrl = null, drawSeq = 0;
+    // Two-tap measuring on the station strip, planner-style. Picks reset when
+    // the drawn route changes (variant / reverse) — indices mean different
+    // stops then — but survive a table re-render via the reopen restore.
+    const detailRow = detailInner.closest("tr");
+    let pickA = -1, pickB = -1, pendingPicks = restore && restore.picks ? restore.picks : null;
     if (options) {
       const sel = document.createElement("select");
       sel.className = "ls-variant";
@@ -3272,18 +3279,49 @@
       }
       if (opt && opt.wp) setRowStats(tr, totalKm !== undefined ? totalKm : waypointsKm(opt.wp) * ROAD_FACTOR, opt.wp.length); // reflect the route in the row
       // Sign-style station strip under the map, running in the drawn direction.
-      // Tapping a station centres and names it on the mini-map above.
+      // Tapping a station centres and names it on the mini-map above AND sets a
+      // measuring end — two taps measure the stretch between them, like the
+      // planner's Start/Finish picks.
       const stripEl = detailInner.querySelector(".ls-strip");
+      const measEl = detailInner.querySelector(".ls-measure");
       if (stripEl && stripWp) {
-        stripEl.style.setProperty("--line-col", net[id].colour);
-        stripEl.innerHTML = stripMapHtml(null, net[id].colour, name, { wp: stripWp, tap: true, legKms, totalKm });
-        stripEl.querySelectorAll(".stn").forEach((sEl, si) => sEl.addEventListener("click", () => {
-          const p = stripWp[si];
-          if (lsMap !== map) return; // panel re-rendered since
-          map.setView([p[1], p[2]], Math.max(map.getZoom(), 15), { animate: true });
-          L.popup({ offset: [0, -2], autoPan: false }).setLatLng([p[1], p[2]])
-            .setContent(`<b>${escapeHtml(p[0])}</b>` + interchangeTags(p[0], name)).openOn(map);
-        }));
+        if (pendingPicks && pendingPicks.a < stripWp.length && pendingPicks.b < stripWp.length) { pickA = pendingPicks.a; pickB = pendingPicks.b; }
+        else { pickA = -1; pickB = -1; }
+        pendingPicks = null;
+        // Between-stop distance: true along-path km when the route projected,
+        // otherwise the same crow-flies × street-factor estimate the leg labels use.
+        const spanKm = (i, j) => (legKms ? legKms.slice(i + 1, j + 1).reduce((s, v) => s + v, 0) : legDistanceKm(stripWp, i, j));
+        const paintStrip = () => {
+          detailRow._lsPicks = { a: pickA, b: pickB }; // reopen restore reads this off the row
+          const both = pickA >= 0 && pickB >= 0;
+          const i = both ? Math.min(pickA, pickB) : pickA, j = both ? Math.max(pickA, pickB) : pickA;
+          const sel = both ? { a: i, b: j, from: i, to: j }
+            : pickA >= 0 ? { a: i, b: i, from: i, to: i }
+            : { a: 0, b: stripWp.length - 1, from: 0, to: stripWp.length - 1 };
+          stripEl.style.setProperty("--line-col", net[id].colour);
+          stripEl.innerHTML = stripMapHtml(null, net[id].colour, name, { wp: stripWp, interactive: true, ...sel, legKms, totalKm });
+          stripEl.querySelectorAll(".stn").forEach((sEl, si) => sEl.addEventListener("click", () => {
+            if (lsMap !== map) return; // panel re-rendered since
+            const p = stripWp[si];
+            map.setView([p[1], p[2]], Math.max(map.getZoom(), 15), { animate: true });
+            L.popup({ offset: [0, -2], autoPan: false }).setLatLng([p[1], p[2]])
+              .setContent(`<b>${escapeHtml(p[0])}</b>` + interchangeTags(p[0], name)).openOn(map);
+            if (pickA < 0 || pickB >= 0) { pickA = si; pickB = -1; } // first end, or start a fresh measurement
+            else if (si === pickA) pickA = -1;                       // same stop again — clear
+            else pickB = si;
+            paintStrip();
+          }));
+          if (!measEl) return;
+          if (both) {
+            const km = spanKm(i, j);
+            measEl.innerHTML = `<span class="lm-leg"><strong>${escapeHtml(stripWp[i][0])}</strong><span class="ls-arrow" aria-hidden="true">→</span><strong>${escapeHtml(stripWp[j][0])}</strong></span><span class="lm-km">${fmtKm(km, 1)}</span><span class="lm-legs">· ${j - i} leg${j - i > 1 ? "s" : ""}</span>${timesRowHtml(km, GROUP_PACE)}`;
+          } else if (pickA >= 0) {
+            measEl.innerHTML = `Measuring from <strong>${escapeHtml(stripWp[pickA][0])}</strong> — tap the other end, or the same stop to clear.`;
+          } else {
+            measEl.innerHTML = `<span class="lm-hint">Tap two stations to measure the stretch between them.</span>`;
+          }
+        };
+        paintStrip();
       }
       const elBox = detailInner.querySelector(".ls-elev");
       if (elBox && r && r.latlngs) {
