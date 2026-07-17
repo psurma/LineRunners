@@ -3214,7 +3214,7 @@
     }
     const map = createSiteMap(mapDiv);
     lsMap = map;
-    let routeGrp = null;
+    let routeGrp = null, spanShown = false; // spanShown: the map currently draws a measured stretch, not the whole line
     // Keep the GPX download in step with the shown direction: forward is the
     // static file; reversed is a client-built blob of the same file flipped.
     async function syncGpxDir() {
@@ -3243,6 +3243,7 @@
     async function drawVariant(idx) {
       const my = ++drawSeq;
       curIdx = idx;
+      spanShown = false;
       if (routeGrp) { routeGrp.remove(); routeGrp = null; }
       const opt = options ? options[idx] : null;
       // Name the route's endpoints (source → destination) — matches the drawn variant + direction.
@@ -3262,7 +3263,7 @@
       // not station hops), project each station onto it so the strip's leg
       // distances and total are true along-path km rather than estimates.
       const stripWp = seq && seq.length > 1 ? (reversed ? seq.slice().reverse() : seq) : null;
-      let legKms, totalKm;
+      let legKms, totalKm, alongKms = null, pathCum = null;
       if (r && r.latlngs && stripWp && r.latlngs.length > stripWp.length + 2) {
         const path = r.latlngs, cum = pathCumKm(path);
         const along = [];
@@ -3275,6 +3276,7 @@
         if (okProj) {
           legKms = along.map((v, i) => (i ? Math.max(0, v - along[i - 1]) : 0));
           totalKm = cum[cum.length - 1];
+          alongKms = along; pathCum = cum; // kept for slicing the measured stretch out of the drawn line
         }
       }
       if (opt && opt.wp) setRowStats(tr, totalKm !== undefined ? totalKm : waypointsKm(opt.wp) * ROAD_FACTOR, opt.wp.length); // reflect the route in the row
@@ -3291,6 +3293,52 @@
         // Between-stop distance: true along-path km when the route projected,
         // otherwise the same crow-flies × street-factor estimate the leg labels use.
         const spanKm = (i, j) => (legKms ? legKms.slice(i + 1, j + 1).reduce((s, v) => s + v, 0) : legDistanceKm(stripWp, i, j));
+        // The drawn-line slice between two strip stations: pavement vertices
+        // between their along-path kms, with interpolated exact endpoints —
+        // or straight station hops when the route never projected.
+        const pointAt = (km) => {
+          const path = r.latlngs;
+          let k = 1;
+          while (k < pathCum.length && pathCum[k] < km) k++;
+          if (k >= path.length) return path[path.length - 1];
+          const t = (km - pathCum[k - 1]) / ((pathCum[k] - pathCum[k - 1]) || 1e-9);
+          return [path[k - 1][0] + (path[k][0] - path[k - 1][0]) * t, path[k - 1][1] + (path[k][1] - path[k - 1][1]) * t];
+        };
+        const spanSeg = (i, j) => {
+          if (alongKms && r && r.latlngs) {
+            const a = alongKms[i], b = alongKms[j];
+            const seg = [pointAt(a)];
+            for (let k = 0; k < r.latlngs.length; k++) if (pathCum[k] > a && pathCum[k] < b) seg.push(r.latlngs[k]);
+            seg.push(pointAt(b));
+            if (seg.length >= 2) return seg;
+          }
+          return stripWp.slice(i, j + 1).map((p) => [p[1], p[2]]);
+        };
+        // Map + elevation follow the measurement: with both ends picked the map
+        // redraws as just that stretch (its own start/finish markers and arrows);
+        // clearing restores the whole line via drawVariant, keeping any live pick.
+        const updateMapSpan = async () => {
+          if (!(pickA >= 0 && pickB >= 0)) {
+            if (spanShown) { spanShown = false; pendingPicks = { a: pickA, b: pickB }; drawVariant(curIdx); }
+            return;
+          }
+          const i = Math.min(pickA, pickB), j = Math.max(pickA, pickB);
+          const seg = spanSeg(i, j);
+          const mySpan = ++drawSeq; // supersedes the full draw's pending work; variant changes supersede this
+          if (routeGrp) { routeGrp.remove(); routeGrp = null; }
+          const rs = await drawRunRoute(map, net, id, { waypoints: stripWp.slice(i, j + 1), routeLine: seg });
+          if (mySpan !== drawSeq || lsMap !== map) { if (rs) rs.group.remove(); return; }
+          routeGrp = rs && rs.group;
+          spanShown = true;
+          map.stop(); // cancel any in-flight pan/zoom so the fit isn't overridden
+          map.fitBounds(L.latLngBounds(seg), { padding: [18, 18] });
+          const elBox2 = detailInner.querySelector(".ls-elev");
+          if (elBox2) {
+            elBox2.innerHTML = `<p class="ls-elev-load">Reading elevation…</p>`;
+            const elev = await routeElevation(seg);
+            if (mySpan === drawSeq && lsMap === map && elBox2.isConnected) elBox2.innerHTML = elev ? elevationHtml(elev) : "";
+          }
+        };
         const paintStrip = () => {
           detailRow._lsPicks = { a: pickA, b: pickB }; // reopen restore reads this off the row
           const both = pickA >= 0 && pickB >= 0;
@@ -3303,14 +3351,18 @@
           stripEl.querySelectorAll(".stn").forEach((sEl, si) => sEl.addEventListener("click", () => {
             if (lsMap !== map) return; // panel re-rendered since
             const p = stripWp[si];
-            map.setView([p[1], p[2]], Math.max(map.getZoom(), 15), { animate: true });
-            L.popup({ offset: [0, -2], autoPan: false }).setLatLng([p[1], p[2]])
-              .setContent(`<b>${escapeHtml(p[0])}</b>` + interchangeTags(p[0], name)).openOn(map);
             if (pickA < 0 || pickB >= 0) { pickA = si; pickB = -1; } // first end, or start a fresh measurement
             else if (si === pickA) pickA = -1;                       // same stop again — clear
             else pickB = si;
+            // A tap that redraws the route (completing a measurement, or dropping
+            // one) lets the redraw's own fit place the map — centring the tapped
+            // station would race it. Other taps centre as before.
+            if (!(pickA >= 0 && pickB >= 0) && !spanShown) map.setView([p[1], p[2]], Math.max(map.getZoom(), 15), { animate: true });
+            L.popup({ offset: [0, -2], autoPan: false }).setLatLng([p[1], p[2]])
+              .setContent(`<b>${escapeHtml(p[0])}</b>` + interchangeTags(p[0], name)).openOn(map);
             paintStrip();
           }));
+          updateMapSpan();
           if (!measEl) return;
           if (both) {
             const km = spanKm(i, j);
