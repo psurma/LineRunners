@@ -4279,25 +4279,30 @@
     input.addEventListener("keydown", (e) => { if (e.key === "Enter") go(); });
     // 📍 beside the search: locate the visitor and jump to the nearest station
     // in the current network, through the same path as a search pick (map
-    // centring, station popup, "How far from here?"). Status messages flash in
-    // the search box's placeholder — the input itself stays untouched.
+    // centring, station popup, "How far from here?"). Status lives in a small
+    // bubble under the search — the input is far too narrow to carry messages.
     const nearBtn = document.getElementById("nearBtn");
-    const defPlaceholder = input.placeholder;
-    let flashT = 0;
-    const flash = (msg) => {
-      input.placeholder = msg;
-      clearTimeout(flashT);
-      flashT = setTimeout(() => { input.placeholder = defPlaceholder; }, 6000);
+    let noteEl = null, noteT = 0;
+    const note = (msg, ms) => {
+      if (!noteEl) {
+        noteEl = document.createElement("div");
+        noteEl.className = "near-note";
+        noteEl.setAttribute("aria-live", "polite");
+        input.parentNode.appendChild(noteEl);
+      }
+      noteEl.textContent = msg;
+      noteEl.hidden = false;
+      clearTimeout(noteT);
+      noteT = setTimeout(() => { noteEl.hidden = true; }, ms || 6000);
     };
     if (nearBtn) nearBtn.addEventListener("click", () => {
-      if (!navigator.geolocation) { flash("This device can't share its location"); return; }
       nearBtn.disabled = true;
-      flash("Finding your location…");
-      const found = async (pos) => {
+      note("Finding your location…", 25000);
+      const found = async (pos, approx) => {
         const { latitude: la, longitude: lo } = pos.coords;
         const net = await loadNetwork().catch(() => null);
         nearBtn.disabled = false;
-        if (!net) { flash("Couldn't load the network — try again"); return; }
+        if (!net) { note("Couldn't load the network — try again"); return; }
         let best = null;
         for (const id in net) for (const sid in net[id].stations) {
           const s = net[id].stations[sid];
@@ -4306,15 +4311,34 @@
         }
         if (!best) return;
         // Crow-flies distance, small values in metres like the strip leg labels.
-        flash(`Nearest: ${best.name} · ${distUnit === "km" && best.d < 0.95 ? `${Math.round(best.d * 200) * 5} m` : fmtKm(best.d, 1)} away`);
+        const dist = distUnit === "km" && best.d < 0.95 ? `${Math.round(best.d * 200) * 5} m` : fmtKm(best.d, 1);
+        note(`Nearest: ${best.name} · ${dist} away${approx ? " (approximate — located by network address)" : ""}`, 9000);
         go(`${best.name} (station)`);
       };
-      const fail = (err) => {
-        nearBtn.disabled = false;
-        flash(err && err.code === 1 ? "Location permission is blocked"
-          : err && err.code === 2 ? "Location unavailable — check the browser's Location Services"
-          : "Couldn't get a fix — try again");
+      // Last resort: a network-address (IP) lookup. Street-level accuracy is
+      // not guaranteed, but it beats a shrug when the browser has no position
+      // source (e.g. macOS with Location Services off for the browser).
+      const ipFallback = async () => {
+        try {
+          const r = await fetch("https://get.geojs.io/v1/ip/geo.json");
+          const j = await r.json();
+          const la = parseFloat(j.latitude), lo = parseFloat(j.longitude);
+          if (!Number.isFinite(la) || !Number.isFinite(lo)) throw new Error("no coords");
+          found({ coords: { latitude: la, longitude: lo } }, true);
+        } catch (_) {
+          nearBtn.disabled = false;
+          note("Couldn't find your location — type a station in the search instead", 9000);
+        }
       };
+      const fail = (err) => {
+        if (err && err.code === 1) {
+          nearBtn.disabled = false;
+          note("Location is blocked for this site — allow it in the browser, or search by name", 9000);
+          return;
+        }
+        ipFallback();
+      };
+      if (!navigator.geolocation) { ipFallback(); return; }
       // Coarse accuracy is plenty for picking a nearest station and resolves
       // fastest on desktops (Wi-Fi positioning); a fix up to 2 min old is fine.
       // Devices that only answer on the GPS path get one high-accuracy retry.

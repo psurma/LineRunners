@@ -449,7 +449,9 @@ section { max-width: var(--max); margin: 0 auto; padding: clamp(48px, 8vw, 88px)
   background: color-mix(in srgb, var(--line-col, #0019a8) 45%, #d7dae0);
 }
 /* header search */
-.hdr-search { margin-left: auto; display: flex; align-items: center; gap: 6px; }
+.hdr-search { margin-left: auto; display: flex; align-items: center; gap: 6px; position: relative; }
+.near-note { position: absolute; top: calc(100% + 8px); right: 0; z-index: 60; background: #fff; border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 6px 18px rgba(16, 19, 28, 0.14); padding: 8px 12px; font-size: 13px; font-weight: 600; color: var(--ink); width: max-content; max-width: min(320px, 84vw); }
+.near-note[hidden] { display: none; }
 .near-btn { font-size: 14px; line-height: 1; background: #fff; border: 1px solid var(--line); border-radius: 999px; padding: 6px 9px; cursor: pointer; transition: border-color 0.15s; }
 .near-btn:hover { border-color: var(--tfl-blue); }
 .near-btn:disabled { opacity: 0.55; cursor: progress; }
