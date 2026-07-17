@@ -2859,6 +2859,15 @@
         <td>${fmtTime(km * WALK_MIN_PER_KM)}</td>
       </tr>`;
     }).join("");
+    // A row open before a re-render (unit toggle, sort, NR rows arriving) should
+    // stay open — note its line and shown route/direction, re-opened at the end.
+    const openRow = el.querySelector("tbody tr.ls-open");
+    const openSel = openRow ? el.querySelector(".ls-detail-row .ls-variant") : null;
+    const reopen = openRow ? {
+      line: openRow.dataset.line,
+      variant: openSel ? +openSel.value : 0,
+      reversed: !!el.querySelector(".ls-detail-row .ls-reverse.on"),
+    } : null;
     if (lsMap) { lsMap.remove(); lsMap = null; } // drop any open mini-map before re-render
     const heads = LS_COLS.map((h, i) => {
       const on = i === lsSortCol;
@@ -2884,6 +2893,11 @@
       else { lsSortCol = col; lsSortDir = col === 0 ? 1 : -1; }
       renderLineStats();
     });
+    if (reopen) {
+      const row = [...el.querySelectorAll("tbody tr")].find((r) => r.dataset.line === reopen.line);
+      const rowBtn = row && row.querySelector(".ls-row-btn");
+      if (rowBtn) toggleLineDetail(rowBtn, reopen);
+    }
   }
 
   // Curated end-to-end route variants for lines with multiple paths. Each variant
@@ -3095,7 +3109,7 @@
 
   // "Line by line" row expansion: show a selected line's run route on a mini-map.
   let lsMap = null; // the single open mini-map (accordion — one line at a time)
-  function toggleLineDetail(btn) {
+  function toggleLineDetail(btn, restore) {
     const tr = btn.closest("tr");
     const tbody = tr.parentNode;
     const wasOpen = tr.classList.contains("ls-open");
@@ -3120,7 +3134,7 @@
     const ctrlRow = gpx || followBtn ? `<div class="ls-gpx-row">${gpx}${reverseBtn}${followBtn}</div>` : "";
     detail.innerHTML = `<td colspan="6"><div class="ls-detail-inner"><p class="ls-ends" aria-live="polite"></p>${ctrlRow}<div class="ls-map"></div><div class="ls-strip strip"></div><div class="ls-elev jr-elev"></div></div></td>`;
     tr.after(detail);
-    lineRouteMap(detail.querySelector(".ls-map"), name, tr);
+    lineRouteMap(detail.querySelector(".ls-map"), name, tr, restore);
     const fb = detail.querySelector(".ls-follow");
     if (fb) fb.addEventListener("click", () => {
       let colour = null;
@@ -3151,7 +3165,7 @@
   // Station to auto-focus when a line detail next opens (set by a pill click),
   // consumed once by lineRouteMap to pick the branch/variant containing it.
   let lineDetailFocus = null;
-  async function lineRouteMap(mapDiv, name, tr) {
+  async function lineRouteMap(mapDiv, name, tr, restore) {
     if (!mapDiv) return;
     if (typeof L === "undefined") { mapDiv.innerHTML = '<p class="diagram-empty">The map couldn\'t load.</p>'; return; }
     let net;
@@ -3181,6 +3195,8 @@
       if (fi >= 0) initIdx = fi;
     }
     lineDetailFocus = null;
+    // Re-opened after a table re-render — start on the variant that was shown.
+    if (restore && options && options[restore.variant]) initIdx = restore.variant;
     const detailInner = mapDiv.parentNode;
     const reverseBtn = detailInner.querySelector(".ls-reverse");
     const gpxLink = detailInner.querySelector(".ls-gpx");
@@ -3282,6 +3298,7 @@
       }
     }
     if (reverseBtn) reverseBtn.addEventListener("click", () => { setReversed(!reversed); drawVariant(curIdx); syncGpxDir(); });
+    if (restore && restore.reversed) { setReversed(true); syncGpxDir(); }
     await drawVariant(initIdx);
     setTimeout(() => { if (lsMap === map) map.invalidateSize(); }, 60);
   }
