@@ -3339,6 +3339,21 @@
             if (mySpan === drawSeq && lsMap === map && elBox2.isConnected) elBox2.innerHTML = elev ? elevationHtml(elev) : "";
           }
         };
+        let suppressClick = false; // a completed endpoint drag swallows the click it generates
+        let downX = null, downY = null; // last pointerdown on a station — a click far from it was a pan, not a tap
+        const paintMeasure = () => {
+          if (!measEl) return;
+          const both = pickA >= 0 && pickB >= 0;
+          const i = both ? Math.min(pickA, pickB) : pickA, j = both ? Math.max(pickA, pickB) : pickA;
+          if (both) {
+            const km = spanKm(i, j);
+            measEl.innerHTML = `<span class="lm-leg"><strong>${escapeHtml(stripWp[i][0])}</strong><span class="ls-arrow" aria-hidden="true">→</span><strong>${escapeHtml(stripWp[j][0])}</strong></span><span class="lm-km">${fmtKm(km, 1)}</span><span class="lm-legs">· ${j - i} leg${j - i > 1 ? "s" : ""}</span>${timesRowHtml(km, GROUP_PACE)}`;
+          } else if (pickA >= 0) {
+            measEl.innerHTML = `Measuring from <strong>${escapeHtml(stripWp[pickA][0])}</strong> — tap the other end, or the same stop to clear.`;
+          } else {
+            measEl.innerHTML = `<span class="lm-hint">Tap two stations to measure the stretch between them — or drag an end of the line in.</span>`;
+          }
+        };
         const paintStrip = () => {
           detailRow._lsPicks = { a: pickA, b: pickB }; // reopen restore reads this off the row
           const both = pickA >= 0 && pickB >= 0;
@@ -3348,30 +3363,90 @@
             : { a: 0, b: stripWp.length - 1, from: 0, to: stripWp.length - 1 };
           stripEl.style.setProperty("--line-col", net[id].colour);
           stripEl.innerHTML = stripMapHtml(null, net[id].colour, name, { wp: stripWp, interactive: true, ...sel, legKms, totalKm });
-          stripEl.querySelectorAll(".stn").forEach((sEl, si) => sEl.addEventListener("click", () => {
-            if (lsMap !== map) return; // panel re-rendered since
-            const p = stripWp[si];
-            if (pickA < 0 || pickB >= 0) { pickA = si; pickB = -1; } // first end, or start a fresh measurement
-            else if (si === pickA) pickA = -1;                       // same stop again — clear
-            else pickB = si;
-            // A tap that redraws the route (completing a measurement, or dropping
-            // one) lets the redraw's own fit place the map — centring the tapped
-            // station would race it. Other taps centre as before.
-            if (!(pickA >= 0 && pickB >= 0) && !spanShown) map.setView([p[1], p[2]], Math.max(map.getZoom(), 15), { animate: true });
-            L.popup({ offset: [0, -2], autoPan: false }).setLatLng([p[1], p[2]])
-              .setContent(`<b>${escapeHtml(p[0])}</b>` + interchangeTags(p[0], name)).openOn(map);
-            paintStrip();
-          }));
+          stripEl.querySelectorAll(".stn").forEach((sEl, si) => {
+            sEl.addEventListener("click", (eC) => {
+              if (suppressClick) { suppressClick = false; return; }
+              // detail 0 = keyboard activation, which has no meaningful coordinates
+              if (eC.detail > 0 && downX != null && Math.hypot(eC.clientX - downX, eC.clientY - downY) > 6) return;
+              if (lsMap !== map) return; // panel re-rendered since
+              const p = stripWp[si];
+              if (pickA < 0 || pickB >= 0) { pickA = si; pickB = -1; } // first end, or start a fresh measurement
+              else if (si === pickA) pickA = -1;                       // same stop again — clear
+              else pickB = si;
+              // A tap that redraws the route (completing a measurement, or dropping
+              // one) lets the redraw's own fit place the map — centring the tapped
+              // station would race it. Other taps centre as before.
+              if (!(pickA >= 0 && pickB >= 0) && !spanShown) map.setView([p[1], p[2]], Math.max(map.getZoom(), 15), { animate: true });
+              L.popup({ offset: [0, -2], autoPan: false }).setLatLng([p[1], p[2]])
+                .setContent(`<b>${escapeHtml(p[0])}</b>` + interchangeTags(p[0], name)).openOn(map);
+              paintStrip();
+            });
+            // Drag a highlighted end along the strip to grow or shrink the
+            // stretch. With nothing picked the whole line counts as the
+            // selection, so pulling its first/last stop in starts one. The
+            // strip and measure line follow live; the map redraws on release.
+            sEl.addEventListener("pointerdown", (eD) => {
+              downX = eD.clientX; downY = eD.clientY;
+              suppressClick = false; // any fresh press clears a stale swallow (the drag's own click may never fire)
+              if (lsMap !== map || eD.button !== 0 || !sEl.classList.contains("endpoint")) return;
+              eD.stopPropagation(); // keep the strip's grab-to-scroll pan off this gesture
+              let moving = null, raf = 0, lastX = eD.clientX;
+              const btns = [...stripEl.querySelectorAll(".stn")];
+              const idxAt = (x) => {
+                let bi = -1, bd = Infinity;
+                btns.forEach((b, k) => { const rc = b.getBoundingClientRect(); const d = Math.abs((rc.left + rc.right) / 2 - x); if (d < bd) { bd = d; bi = k; } });
+                return bi;
+              };
+              const paintLive = () => {
+                const both2 = pickA >= 0 && pickB >= 0;
+                const lo = both2 ? Math.min(pickA, pickB) : pickA, hi = both2 ? Math.max(pickA, pickB) : pickA;
+                btns.forEach((b, k) => {
+                  b.classList.toggle("active", k >= lo && k <= hi);
+                  b.classList.toggle("endpoint", k === lo || k === hi);
+                });
+                detailRow._lsPicks = { a: pickA, b: pickB };
+                paintMeasure();
+              };
+              const dragTo = (x) => {
+                const over = idxAt(x);
+                const other = moving === "A" ? pickB : pickA;
+                if (over < 0 || over === other || over === (moving === "A" ? pickA : pickB)) return;
+                if (moving === "A") pickA = over; else pickB = over;
+                paintLive();
+              };
+              const step = () => { // edge auto-scroll, so offscreen stations stay reachable
+                const rc = stripEl.getBoundingClientRect();
+                const v = lastX < rc.left + 48 ? -9 : lastX > rc.right - 48 ? 9 : 0;
+                if (v && moving) { stripEl.scrollLeft += v; dragTo(lastX); }
+                raf = requestAnimationFrame(step);
+              };
+              const move = (eM) => {
+                lastX = eM.clientX;
+                if (!moving) {
+                  if (idxAt(eM.clientX) === si) return; // still on the grabbed stop — not a drag yet
+                  if (pickA < 0) { pickA = 0; pickB = stripWp.length - 1; } // the whole line was "selected"
+                  moving = si === pickA ? "A" : "B";
+                  document.body.classList.add("strip-drag");
+                  raf = requestAnimationFrame(step);
+                }
+                dragTo(eM.clientX);
+              };
+              const up = () => {
+                sEl.removeEventListener("pointermove", move);
+                sEl.removeEventListener("pointerup", up);
+                sEl.removeEventListener("pointercancel", up);
+                cancelAnimationFrame(raf);
+                document.body.classList.remove("strip-drag");
+                if (moving) { suppressClick = true; paintStrip(); }
+              };
+              sEl.setPointerCapture(eD.pointerId);
+              sEl.addEventListener("pointermove", move);
+              sEl.addEventListener("pointerup", up);
+              sEl.addEventListener("pointercancel", up);
+            });
+          });
           updateMapSpan();
-          if (!measEl) return;
-          if (both) {
-            const km = spanKm(i, j);
-            measEl.innerHTML = `<span class="lm-leg"><strong>${escapeHtml(stripWp[i][0])}</strong><span class="ls-arrow" aria-hidden="true">→</span><strong>${escapeHtml(stripWp[j][0])}</strong></span><span class="lm-km">${fmtKm(km, 1)}</span><span class="lm-legs">· ${j - i} leg${j - i > 1 ? "s" : ""}</span>${timesRowHtml(km, GROUP_PACE)}`;
-          } else if (pickA >= 0) {
-            measEl.innerHTML = `Measuring from <strong>${escapeHtml(stripWp[pickA][0])}</strong> — tap the other end, or the same stop to clear.`;
-          } else {
-            measEl.innerHTML = `<span class="lm-hint">Tap two stations to measure the stretch between them.</span>`;
-          }
+          paintMeasure();
         };
         paintStrip();
       }
