@@ -823,6 +823,9 @@
   function renderList() {
     const el = document.getElementById("runList");
     if (!el) return;
+    // Details panels the user opened stay open across re-renders (unit toggle,
+    // interchange tags arriving) — the rebuild recreates every wrap hidden.
+    const open = [...el.querySelectorAll(".run-details-wrap:not([hidden])")].map((d) => d.id);
     el.innerHTML = runs.map((r, i) => {
       const loc = r.location !== "London" ? `<span class="r-loc">${escapeHtml(r.location)}</span>` : "";
       const toggle = hasDetails(r) ? `<button class="r-toggle" data-i="${i}" aria-expanded="false">Details</button>` : "";
@@ -858,6 +861,13 @@
         const btn = row.querySelector(".r-toggle");
         if (btn) { btn.setAttribute("aria-expanded", String(!open)); btn.textContent = open ? "Details" : "Hide"; }
       });
+    });
+    open.forEach((id) => {
+      const d = document.getElementById(id);
+      if (!d) return;
+      d.hidden = false;
+      const btn = el.querySelector(`.r-toggle[data-i="${id.replace("det-", "")}"]`);
+      if (btn) { btn.setAttribute("aria-expanded", "true"); btn.textContent = "Hide"; }
     });
   }
 
@@ -1094,17 +1104,9 @@
       tubeGeo = buildTubeGeo(net);
       renderDiagram();
       renderJourneyBoard();
-      // Re-render the schedule for interchange tags, restoring any details
-      // panel the user already opened (the rebuild recreates them hidden).
-      const open = [...document.querySelectorAll(".run-details-wrap:not([hidden])")].map((d) => d.id);
+      // Re-render the schedule for interchange tags — renderList itself keeps
+      // any details panel the user already opened.
       renderList();
-      open.forEach((id) => {
-        const d = document.getElementById(id);
-        if (!d) return;
-        d.hidden = false;
-        const btn = document.querySelector(`.r-toggle[data-i="${id.replace("det-", "")}"]`);
-        if (btn) { btn.setAttribute("aria-expanded", "true"); btn.textContent = "Hide"; }
-      });
     });
   }
 
