@@ -4339,12 +4339,18 @@
         }
         if (!best) return;
         // Crow-flies distance, small values in metres like the strip leg labels.
+        // An IP lookup only finds the ISP's node (often tens of km out), so its
+        // message names the network's town, keeps no pretend precision, and
+        // points at the real fix instead.
         const dist = distUnit === "km" && best.d < 0.95 ? `${Math.round(best.d * 200) * 5} m` : fmtKm(best.d, 1);
-        const msg = `Nearest: ${best.name} · ${dist} away${approx ? " (approximate — located by network address)" : ""}`;
+        const rad = approx && Number.isFinite(approx.acc) && approx.acc >= 5 ? ` — can be ~${Math.round(approx.acc)} km out` : "";
+        const msg = approx
+          ? `Your network address sits near ${approx.city || "its provider's node"}${rad}. Nearest station to that: ${best.name}. For a precise fix, allow location access for your browser.`
+          : `Nearest: ${best.name} · ${dist} away`;
         // A National-Rail-only result in Tube mode makes go() switch modes and
         // reload — stash the message so the fresh page can still show it.
         if (best.nr) { try { sessionStorage.setItem("tuberun_near_note", msg); } catch (_) { /* private mode */ } }
-        note(msg, 9000);
+        note(msg, approx ? 15000 : 9000);
         go(`${best.name} (station)`);
       };
       // Last resort: a network-address (IP) lookup. Street-level accuracy is
@@ -4356,7 +4362,7 @@
           const j = await r.json();
           const la = parseFloat(j.latitude), lo = parseFloat(j.longitude);
           if (!Number.isFinite(la) || !Number.isFinite(lo)) throw new Error("no coords");
-          found({ coords: { latitude: la, longitude: lo } }, true);
+          found({ coords: { latitude: la, longitude: lo } }, { city: j.city, acc: parseFloat(j.accuracy) });
         } catch (_) {
           nearBtn.disabled = false;
           note("Couldn't find your location — type a station in the search instead", 9000);
