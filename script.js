@@ -1740,6 +1740,21 @@
   // Draw route segments as a two-layer animated "flow" line (soft base + dashed
   // overlay) with start/finish markers, swap the group in as `holder.layer`, and
   // fit the map to it. `marks.finish` may be null for loop routes.
+  // Terminus roundel — the lettered end-of-line disc from the classic printed
+  // maps: the line's initial (or a bus number) in a coloured circle. Start ends
+  // draw filled, finish ends hollow so a run's direction still reads.
+  function roundelIcon(text, colour, opts = {}) {
+    const t = String(text || "").slice(0, 4);
+    const style = opts.hollow
+      ? `background:#fff;color:${colour};border-color:${colour}`
+      : `background:${colour};color:${contrastText(colour)};border-color:#fff`;
+    const w = Math.max(19, 9 + t.length * 7);
+    return L.divIcon({
+      className: "term-roundel",
+      html: `<span class="tr-in" style="${style}">${escapeHtml(t)}</span>`,
+      iconSize: [w, 19], iconAnchor: [w / 2, 9.5],
+    });
+  }
   function drawFlowSegments(map, holder, segs, colour, marks, padding) {
     if (holder.layer) map.removeLayer(holder.layer);
     const grp = L.layerGroup(), all = [];
@@ -1762,12 +1777,18 @@
         .bindTooltip(escapeHtml(s[0]), { direction: "top" })
         .on("click", () => centerOn(s[1], s[2], escapeHtml(s[0]))).addTo(grp);
     });
-    L.circleMarker(marks.start.at, { radius: 6, color: "#fff", weight: 2, fillColor: colour, fillOpacity: 1 })
-      .bindTooltip(marks.start.label, { direction: "top" })
+    const startMk = marks.letter
+      ? L.marker(marks.start.at, { icon: roundelIcon(marks.letter, colour), keyboard: false })
+      : L.circleMarker(marks.start.at, { radius: 6, color: "#fff", weight: 2, fillColor: colour, fillOpacity: 1 });
+    startMk.bindTooltip(marks.start.label, { direction: "top" })
       .on("click", () => centerOn(marks.start.at[0], marks.start.at[1], marks.start.label)).addTo(grp);
-    if (marks.finish) L.circleMarker(marks.finish.at, { radius: 6, color: colour, weight: 2, fillColor: "#fff", fillOpacity: 1 })
-      .bindTooltip(marks.finish.label, { direction: "top" })
-      .on("click", () => centerOn(marks.finish.at[0], marks.finish.at[1], marks.finish.label)).addTo(grp);
+    if (marks.finish) {
+      const finMk = marks.letter
+        ? L.marker(marks.finish.at, { icon: roundelIcon(marks.letter, colour, { hollow: true }), keyboard: false })
+        : L.circleMarker(marks.finish.at, { radius: 6, color: colour, weight: 2, fillColor: "#fff", fillOpacity: 1 });
+      finMk.bindTooltip(marks.finish.label, { direction: "top" })
+        .on("click", () => centerOn(marks.finish.at[0], marks.finish.at[1], marks.finish.label)).addTo(grp);
+    }
     grp.addTo(map);
     holder.layer = grp;
     if (all.length) map.fitBounds(L.latLngBounds(all), { padding });
@@ -1839,6 +1860,7 @@
     drawFlowSegments(m, routeMap, segs, c, {
       start: { at: segs[0][0], label: routeMap.reversed ? "Start · from the far end (reversed)" : "Start · " + escapeHtml(r.start) },
       finish: r.loop ? null : { at: lastSeg[lastSeg.length - 1], label: routeMap.reversed ? "Finish · " + escapeHtml(r.start) : "Finish" },
+      letter: (r.name || "").trim().charAt(0).toUpperCase(),
     }, [34, 34]);
   }
 
@@ -2412,6 +2434,7 @@
       finish: { at: [b[1], b[2]], label: "Finish · " + escapeHtml(b[0]) },
       stops: wp,
       tubeConns: true,
+      letter: busMapObj.currentId || "", // the route number in the terminus roundels
     }, [30, 30]);
   }
 
@@ -2568,6 +2591,7 @@
             finish: { at: [span[span.length - 1][1], span[span.length - 1][2]], label: "Finish · " + escapeHtml(span[span.length - 1][0]) },
             stops: span,
             tubeConns: true,
+            letter: id,
           }, [30, 30]);
           updateElev(span);
         };
@@ -4820,9 +4844,12 @@
     } else routeLine = wl;
     const grp = L.layerGroup().addTo(map);
     addFlowLine(grp, routeLine, line.colour);
-    L.circleMarker(wl[0], { radius: 6, color: "#fff", weight: 2, fillColor: line.colour, fillOpacity: 1 })
+    // Lettered terminus roundels, like the classic printed maps: the line's
+    // initial in a disc at each end — filled start, hollow finish.
+    const initial = (line.name || "?").trim().charAt(0).toUpperCase();
+    L.marker(wl[0], { icon: roundelIcon(initial, line.colour), keyboard: false })
       .bindTooltip("Start · " + escapeHtml(wp[0][0]), { direction: "top" }).addTo(grp);
-    L.marker(wl[wl.length - 1], { icon: L.divIcon({ className: "route-finish", html: "◉", iconSize: [15, 15], iconAnchor: [7, 7] }) })
+    L.marker(wl[wl.length - 1], { icon: roundelIcon(initial, line.colour, { hollow: true }), keyboard: false })
       .bindTooltip("Finish · " + escapeHtml(wp[wp.length - 1][0]), { direction: "top" }).addTo(grp);
     // Direction-of-travel arrows spaced along the route (point start → finish).
     const step = Math.max(1, Math.floor(wp.length / 9));
@@ -5311,13 +5338,79 @@
     const lineStyle = (f) => eraLineStyle(f, tmYear, { ghostOpacity: 0.07, on: curHi && f.properties.line === curHi, dimmed: !!curHi });
     const lineLayer = L.geoJSON(geo, { style: lineStyle }).addTo(map);
 
+    // Terminus roundels — the lettered end-of-line discs from the classic
+    // printed maps (a Tokyo habit on London ends): each TfL line's initial in
+    // its colour at every terminus. National Rail stays the unbadged
+    // background, as on the print. Shared termini (Uxbridge's M and P) sit
+    // side by side. A station only counts as a terminus if no branch of the
+    // line carries on through it.
+    const termGrp = L.layerGroup();
+    {
+      const bySid = {};
+      for (const id in net) {
+        if (net[id].nr) continue;
+        const ln = net[id];
+        // Candidate = any branch endpoint. It's a real terminus only if every
+        // neighbouring station on the line sits off to one side — a station
+        // the line carries on through (a segment joint like Harrow or a
+        // pass-through endpoint like Heathrow T2&3) has neighbours fanning out
+        // in opposing directions, while a shared-start terminus (Liverpool
+        // Street's three Weaver branches) keeps them clustered.
+        const ends = new Set();
+        (ln.branches || []).forEach((b) => { if (b.length >= 2) { ends.add(b[0]); ends.add(b[b.length - 1]); } });
+        // Branch segments can carry different ids for the same physical station
+        // (the Elizabeth's Paddington), so neighbours merge by station name.
+        const nameKey = (x) => (ln.stations[x] ? norm(ln.stations[x].n) : String(x));
+        const badged = new Set();
+        [...ends].filter((sid) => {
+          const st = ln.stations[sid];
+          if (!st || badged.has(nameKey(sid))) return false;
+          const key = nameKey(sid);
+          const nbr = new Set();
+          (ln.branches || []).forEach((b) => b.forEach((x, i) => {
+            if (nameKey(x) !== key) return;
+            if (i > 0 && nameKey(b[i - 1]) !== key) nbr.add(b[i - 1]);
+            if (i < b.length - 1 && nameKey(b[i + 1]) !== key) nbr.add(b[i + 1]);
+          }));
+          const brgs = [...nbr].map((n) => ln.stations[n]).filter(Boolean)
+            .map((n) => (Math.atan2(n.lon - st.lon, n.lat - st.lat) * 180) / Math.PI);
+          for (let a = 0; a < brgs.length; a++) for (let b = a + 1; b < brgs.length; b++) {
+            const d = Math.abs(brgs[a] - brgs[b]) % 360;
+            if (Math.min(d, 360 - d) > 100) return false; // neighbours oppose — the line runs through
+          }
+          badged.add(key);
+          return true;
+        }).forEach((sid) => {
+          (bySid[sid] = bySid[sid] || []).push({ ln, id });
+        });
+      }
+      for (const sid in bySid) {
+        const lines = bySid[sid];
+        lines.forEach(({ ln, id }, k) => {
+          const st = ln.stations[sid];
+          const icon = roundelIcon(ln.name.trim().charAt(0).toUpperCase(), ln.colour);
+          // Nudge the k-th badge sideways so co-terminating lines read in a row.
+          icon.options.iconAnchor = [icon.options.iconSize[0] / 2 - (k - (lines.length - 1) / 2) * 21, 9.5];
+          const mk = L.marker([st.lat, st.lon], { icon, interactive: false, keyboard: false }).addTo(termGrp);
+          mk._lnId = id;
+        });
+      }
+    }
+    // The route overlay draws its own lettered start/finish for the highlighted
+    // line, so that line's terminus badges step aside while it's up.
+    const syncTermini = () => termGrp.eachLayer((mk) => mk.setOpacity(curEntry && mk._lnId === curEntry.id ? 0 : 1));
+    if (tmYear >= 9999) termGrp.addTo(map);
+
     // Era geometry for partially built lines: each branch drawn only through
     // the stations that had opened by the time-machine year (skipping later
     // infills without breaking, truncating unbuilt extensions naturally).
     let eraGrp = null;
     function drawEra() {
       if (eraGrp) { map.removeLayer(eraGrp); eraGrp = null; }
-      if (tmYear >= 9999) return;
+      // Roundels are a today thing — the time machine's past hides them (the
+      // era's termini sat elsewhere).
+      if (tmYear >= 9999) { termGrp.addTo(map); return; }
+      map.removeLayer(termGrp);
       eraGrp = eraLayerFor(net, tmYear).addTo(map);
     }
     if (tmYear < 9999) drawEra(); // a persisted time-machine year applies on re-render
@@ -5332,6 +5425,7 @@
     async function drawMapRoute(entry) {
       if (hiRouteGrp) { hiRouteGrp.remove(); hiRouteGrp = null; }
       curEntry = entry;
+      syncTermini();
       const r = await drawRunRoute(map, net, entry.id, { waypoints: entry.wp, routeLine: entry.route, gpx: entry.gpx, stale });
       hiRouteGrp = r && r.group;
       // After the first render, switching route re-lights the chosen line: its

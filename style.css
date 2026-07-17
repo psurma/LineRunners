@@ -932,6 +932,15 @@ body.tm-map-active .tm-zoom, body.tm-map-active .tm-scrollhint { display: none; 
   color: #14171f; font-size: 15px; line-height: 15px; text-align: center;
   text-shadow: 0 0 2px #fff, 0 0 2px #fff;
 }
+/* Lettered terminus roundels (classic printed-map style) on route ends. */
+.term-roundel { background: none; border: none; }
+.term-roundel .tr-in {
+  display: flex; align-items: center; justify-content: center;
+  width: 100%; height: 100%; border-radius: 999px; box-sizing: border-box;
+  border: 2px solid; font: 800 10.5px Inter, sans-serif; letter-spacing: 0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+.leaflet-marker-pane .term-roundel:not(.leaflet-interactive) { pointer-events: none; }
 @media (prefers-reduced-motion: reduce) { .route-flow { animation: none; } }
 .tm-map-hint {
   background: rgba(255, 255, 255, 0.9); border-radius: 6px; padding: 3px 8px;
