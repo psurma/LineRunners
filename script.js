@@ -36,15 +36,7 @@
   // A one-off promo banner under the nav (e.g. a member's fundraiser). Shows
   // until `until` (inclusive, that day still shows) then hides itself; also
   // dismissible per-visitor. Set to null to remove. Preview with ?feature.
-  const FEATURE = {
-    id: "ray-elizabeth-2026",     // localStorage dismiss key — bump for a new promo
-    until: "2026-07-17",          // last day shown (the run day)
-    kicker: "This Friday",
-    title: "Ray's Elizabeth line run",
-    detail: "Reading → Shenfield, the whole Elizabeth line, for The Royal Marsden Cancer Charity",
-    cta: "Cheer Ray on",
-    url: "https://www.justgiving.com/fundraising/Ray4Cancer",
-  };
+  const FEATURE = null; // last: ray-elizabeth-2026 (see git history for the shape)
 
   // --- LINE COLLECTOR ----------------------------------------------------
   // Direction matters: running a line one way is a different run from running
