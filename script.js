@@ -4300,19 +4300,27 @@
       note("Finding your location…", 25000);
       const found = async (pos, approx) => {
         const { latitude: la, longitude: lo } = pos.coords;
+        // Like the search index, consider the FULL network — in Tube mode the
+        // true nearest station may be a National Rail one (go() then switches
+        // to All lines and resumes there, exactly as a typed search would).
         const net = await loadNetwork().catch(() => null);
+        const extra = NET_MODE === "all" ? {} : await vfetch("data/nr-network.json").then((r) => (r.ok ? r.json() : {})).catch(() => ({}));
         nearBtn.disabled = false;
         if (!net) { note("Couldn't load the network — try again"); return; }
         let best = null;
-        for (const id in net) for (const sid in net[id].stations) {
-          const s = net[id].stations[sid];
+        for (const src of [net, extra]) for (const id in src) for (const sid in src[id].stations) {
+          const s = src[id].stations[sid];
           const d = haversineKm([0, la, lo], [0, s.lat, s.lon]);
-          if (!best || d < best.d) best = { name: s.n, d };
+          if (!best || d < best.d) best = { name: s.n, d, nr: src === extra };
         }
         if (!best) return;
         // Crow-flies distance, small values in metres like the strip leg labels.
         const dist = distUnit === "km" && best.d < 0.95 ? `${Math.round(best.d * 200) * 5} m` : fmtKm(best.d, 1);
-        note(`Nearest: ${best.name} · ${dist} away${approx ? " (approximate — located by network address)" : ""}`, 9000);
+        const msg = `Nearest: ${best.name} · ${dist} away${approx ? " (approximate — located by network address)" : ""}`;
+        // A National-Rail-only result in Tube mode makes go() switch modes and
+        // reload — stash the message so the fresh page can still show it.
+        if (best.nr) { try { sessionStorage.setItem("tuberun_near_note", msg); } catch (_) { /* private mode */ } }
+        note(msg, 9000);
         go(`${best.name} (station)`);
       };
       // Last resort: a network-address (IP) lookup. Street-level accuracy is
@@ -4351,6 +4359,10 @@
     let pending = null;
     try { pending = sessionStorage.getItem("tuberun_pending_search"); sessionStorage.removeItem("tuberun_pending_search"); } catch (_) { /* private mode */ }
     if (pending) loadNetwork().catch(() => null).then(() => setTimeout(() => go(pending), 900));
+    // A nearest-station result that crossed the mode switch shows its bubble here.
+    let nearPending = null;
+    try { nearPending = sessionStorage.getItem("tuberun_near_note"); sessionStorage.removeItem("tuberun_near_note"); } catch (_) { /* private mode */ }
+    if (nearPending) setTimeout(() => note(nearPending, 9000), 1200);
   }
 
   // Every horizontal strip map can be grabbed with the mouse and dragged to
