@@ -4292,7 +4292,8 @@
     if (nearBtn) nearBtn.addEventListener("click", () => {
       if (!navigator.geolocation) { flash("This device can't share its location"); return; }
       nearBtn.disabled = true;
-      navigator.geolocation.getCurrentPosition(async (pos) => {
+      flash("Finding your location…");
+      const found = async (pos) => {
         const { latitude: la, longitude: lo } = pos.coords;
         const net = await loadNetwork().catch(() => null);
         nearBtn.disabled = false;
@@ -4307,10 +4308,20 @@
         // Crow-flies distance, small values in metres like the strip leg labels.
         flash(`Nearest: ${best.name} · ${distUnit === "km" && best.d < 0.95 ? `${Math.round(best.d * 200) * 5} m` : fmtKm(best.d, 1)} away`);
         go(`${best.name} (station)`);
-      }, (err) => {
+      };
+      const fail = (err) => {
         nearBtn.disabled = false;
-        flash(err && err.code === 1 ? "Location permission is blocked" : "Couldn't get a location fix");
-      }, { enableHighAccuracy: true, timeout: 8000 });
+        flash(err && err.code === 1 ? "Location permission is blocked"
+          : err && err.code === 2 ? "Location unavailable — check the browser's Location Services"
+          : "Couldn't get a fix — try again");
+      };
+      // Coarse accuracy is plenty for picking a nearest station and resolves
+      // fastest on desktops (Wi-Fi positioning); a fix up to 2 min old is fine.
+      // Devices that only answer on the GPS path get one high-accuracy retry.
+      navigator.geolocation.getCurrentPosition(found, (e1) => {
+        if (e1 && e1.code === 1) { fail(e1); return; }
+        navigator.geolocation.getCurrentPosition(found, fail, { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 });
+      }, { enableHighAccuracy: false, timeout: 10000, maximumAge: 120000 });
     });
     // A search that switched modes resumes here, once the network is in.
     let pending = null;
