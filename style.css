@@ -1187,6 +1187,12 @@ tr.ls-open .ls-caret { transform: rotate(90deg); }
 }
 .rf-chip:hover { border-color: var(--tfl-blue); color: var(--tfl-blue); }
 .rf-chip.on { background: var(--tfl-blue); border-color: var(--tfl-blue); color: #fff; }
+.rf-borough-label { font: 600 13px Inter, sans-serif; color: var(--muted); display: inline-flex; align-items: center; gap: 7px; }
+.rf-borough {
+  font: 600 13px Inter, sans-serif; padding: 5px 10px; border-radius: 20px;
+  border: 1px solid var(--line); background: #fff; color: var(--ink); cursor: pointer; max-width: 260px;
+}
+.rf-borough:hover, .rf-borough:focus-visible { border-color: var(--tfl-blue); color: var(--tfl-blue); outline: none; }
 .routes-empty { color: var(--muted); padding: 24px 4px; grid-column: 1 / -1; }
 
 /* Bus route runner */

@@ -2113,13 +2113,15 @@
     { key: "long", label: "Long · 10k+", test: (k) => k > 10 },
   ];
   const TYPE_LABELS = { all: "All", park: "Parks", trail: "Trails", canal: "Canals", river: "Rivers", landmark: "Landmarks", disused: "Disused railways", race: "Races" };
-  const routeFilter = { type: "all", dist: "all" };
+  const routeFilter = { type: "all", dist: "all", borough: "all" };
+  let routeBoroughData = null; // data/boroughs.json ({names, routes}) once loaded, for the borough filter
   const ROUTE_CARD_LIMIT = 6; // route cards shown before the "Show all" toggle (the library is long)
   let routesExpanded = false;
   const distBucket = (k) => { const b = DIST_BUCKETS.find((x) => x.test(k)); return b ? b.key : ""; };
   const routeMatches = (r) => (NET_MODE === "all" || !r.far) // out-of-London routes ride with the All lines mode
     && (routeFilter.type === "all" || r.type === routeFilter.type)
-    && (routeFilter.dist === "all" || distBucket(routeKm(r)) === routeFilter.dist);
+    && (routeFilter.dist === "all" || distBucket(routeKm(r)) === routeFilter.dist)
+    && (routeFilter.borough === "all" || !!(routeBoroughData && (routeBoroughData.routes[r.id] || []).includes(+routeFilter.borough)));
 
   function routeCardHtml(r, i) {
     const c = safeColour(ROUTE_COLOURS[r.type] || "#0019A8");
@@ -2161,7 +2163,7 @@
     if (!el) return -1;
     const visible = ROUTES.map((r, i) => ({ r, i })).filter((x) => routeMatches(x.r));
     if (!visible.length) {
-      el.innerHTML = `<p class="routes-empty">No routes match that filter — try a wider distance or another type.</p>`;
+      el.innerHTML = `<p class="routes-empty">No routes match that filter — try a wider distance, another type or another borough.</p>`;
       setRoutesToggle(0);
       return -1;
     }
@@ -2232,14 +2234,43 @@
       `<button type="button" class="rf-chip${routeFilter[group] === val ? " on" : ""}" aria-pressed="${routeFilter[group] === val}" data-group="${group}" data-val="${val}">${escapeHtml(label)}</button>`;
     const typeChips = types.map((t) => chip("type", t, TYPE_LABELS[t] || t)).join("");
     const distChips = [{ key: "all", label: "Any distance" }, ...DIST_BUCKETS].map((d) => chip("dist", d.key, d.label)).join("");
+    // Borough narrowing rides in a select (33 boroughs would swamp a chip row),
+    // fed by data/boroughs.json — the same tags the Borough Bagger uses. Options
+    // appear once the data lands; each shows how many routes touch the borough.
+    const boroughOptions = () => {
+      let html = `<option value="all"${routeFilter.borough === "all" ? " selected" : ""}>Any borough</option>`;
+      if (!routeBoroughData) return html;
+      const counts = new Map();
+      for (const r of ROUTES) for (const bi of routeBoroughData.routes[r.id] || []) counts.set(bi, (counts.get(bi) || 0) + 1);
+      routeBoroughData.names.forEach((n, i) => {
+        if (!counts.get(i)) return;
+        html += `<option value="${i}"${String(i) === routeFilter.borough ? " selected" : ""}>${escapeHtml(n)} (${counts.get(i)})</option>`;
+      });
+      return html;
+    };
     el.innerHTML = `<div class="rf-row" role="group" aria-label="Filter routes by type">${typeChips}</div>
-      <div class="rf-row" role="group" aria-label="Filter routes by distance">${distChips}</div>`;
+      <div class="rf-row" role="group" aria-label="Filter routes by distance">${distChips}</div>
+      <div class="rf-row"><label class="rf-borough-label">Borough: <select class="rf-borough" aria-label="Filter routes by borough">${boroughOptions()}</select></label></div>`;
     el.querySelectorAll(".rf-chip").forEach((b) => b.addEventListener("click", () => {
       routeFilter[b.dataset.group] = b.dataset.val;
       renderFilters();
       const first = renderRouteCards();
       if (first >= 0) selectRoute(first);
     }));
+    const bSel = el.querySelector(".rf-borough");
+    if (bSel) {
+      bSel.addEventListener("change", () => {
+        routeFilter.borough = bSel.value;
+        const first = renderRouteCards();
+        if (first >= 0) selectRoute(first);
+      });
+      if (!routeBoroughData) loadBoroughs().then((d) => {
+        if (routeBoroughData || !d || !d.names) return;
+        routeBoroughData = d;
+        const sel = document.querySelector("#routeFilters .rf-borough");
+        if (sel) sel.innerHTML = boroughOptions();
+      });
+    }
   }
 
   // A route's shareable URL, e.g. https://…/#routes/regents-canal.
