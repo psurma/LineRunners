@@ -1127,39 +1127,6 @@ tr.ls-open .ls-caret { transform: rotate(90deg); }
 @media (max-width: 560px) { .ls-map { height: 240px; } }
 .ls-foot { margin-top: 14px; color: var(--muted); font-size: 13px; }
 
-/* ---------- Gallery ---------- */
-.gallery-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
-.gal-item {
-  position: relative;
-  aspect-ratio: 4 / 3;
-  border-radius: 12px;
-  overflow: hidden;
-  margin: 0;
-}
-.gal-item img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.gal-item figcaption {
-  position: absolute;
-  left: 0; right: 0; bottom: 0;
-  padding: 10px 12px;
-  font-size: 13px;
-  color: #fff;
-  background: linear-gradient(transparent, rgba(0, 0, 0, 0.7));
-}
-.gal-empty {
-  display: grid;
-  place-items: center;
-  background: color-mix(in srgb, var(--t) 16%, #fff);
-  border: 2px dashed color-mix(in srgb, var(--t) 45%, #cfd4dc);
-}
-.gal-empty span { color: color-mix(in srgb, var(--t) 70%, #333); font-weight: 700; font-size: 14px; }
-.gal-cta {
-  grid-column: 1 / -1;
-  display: inline-block;
-  margin-top: 4px;
-  color: var(--tfl-blue);
-  font-weight: 700;
-}
-.gal-cta:hover { color: var(--tfl-red); }
 
 /* ---------- Responsive ---------- */
 @media (max-width: 720px) {

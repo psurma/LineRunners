@@ -74,11 +74,6 @@
   // Personal line-collector progress ("Line|0"/"Line|1", index into LINE_DIRS) is kept
   // per-visitor in the browser (localStorage) — see loadCollector/renderLineCollector.
 
-  // --- GALLERY -----------------------------------------------------------
-  // Drop in photos: { src: "photos/xyz.jpg", caption: "..." }. Leave empty to
-  // show a friendly "share your photos" placeholder.
-  const GALLERY = [];
-
   const MEET_TIME = "09:00";
   const ROAD_FACTOR = 1.3;   // streets are longer than crow-flies between points
   const GROUP_PACE = 6.5;    // min/km — the group's steady no-drop pace (the "6:30/km" in copy)
@@ -3830,37 +3825,6 @@
       <div class="bb-grid">${chips}</div>`;
   }
 
-  // --- Render: Gallery ---------------------------------------------------
-  // Photos are curated in data/gallery.json (array of {src, caption}); drop
-  // images in img/gallery/ and list them there — no code changes needed.
-  function galleryPlaceholder(el) {
-    const tints = ["Victoria", "Central", "Piccadilly", "Northern", "Jubilee", "Bakerloo"];
-    el.innerHTML = tints.map((n) =>
-      `<div class="gal-item gal-empty" style="--t:${LINE_COLOURS[n]}"><span>Your photos here</span></div>`).join("") +
-      (CONNECT.instagram ? `<a class="gal-cta" href="${escapeAttr(CONNECT.instagram)}" target="_blank" rel="noopener">Tag <strong>#TubeRun</strong> on Instagram →</a>` : "");
-  }
-  async function renderGallery() {
-    const el = document.getElementById("galleryGrid");
-    if (!el) return;
-    let items = GALLERY;
-    try {
-      const res = await vfetch("data/gallery.json", { cache: "no-cache" });
-      if (res.ok) { const j = await res.json(); if (Array.isArray(j)) items = j; }
-    } catch (_) { /* fall back to placeholder below */ }
-    // Only same-site relative image paths — gallery.json shouldn't be able to point elsewhere.
-    items = (items || []).filter((g) => g && typeof g.src === "string" && /^img\//.test(g.src));
-    if (!items.length) { galleryPlaceholder(el); return; }
-    el.innerHTML = items.map((g) => `<figure class="gal-item">
-        <img src="${attrVal(g.src)}" alt="${escapeHtml(g.caption || "")}" loading="lazy" />
-        ${g.caption ? `<figcaption>${escapeHtml(g.caption)}</figcaption>` : ""}</figure>`).join("");
-    // A broken/missing image removes just its tile; if none survive, show the placeholder.
-    el.querySelectorAll(".gal-item img").forEach((img) => img.addEventListener("error", () => {
-      const fig = img.closest(".gal-item");
-      if (fig) fig.remove();
-      if (!el.querySelector(".gal-item")) galleryPlaceholder(el);
-    }));
-  }
-
   // --- Render: Standard tube map (real map, one line highlighted) --------
   // img/tube-map.svg is the official map converted from PDF; each line is drawn
   // as filled paths in its colour. We highlight the next run's line by dimming
@@ -6580,7 +6544,7 @@
     ["setupJourneyPlanner", setupJourneyPlanner], ["renderLineCollector", renderLineCollector],
     ["renderTimeMachine", renderTimeMachine], ["setupNetToggle", setupNetToggle], ["setupSiteSearch", setupSiteSearch],
     ["setupStripInteractions", setupStripInteractions],
-    ["renderGallery", renderGallery], ["wireSocials", wireSocials],
+    ["wireSocials", wireSocials],
     ["loadWeather", loadWeather], ["setupScrollSpy", setupScrollSpy],
     ["setupUnitToggle", setupUnitToggle], ["setupLiveClock", setupLiveClock],
     ["loadLiveNow", loadLiveNow],
