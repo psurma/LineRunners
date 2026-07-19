@@ -54,7 +54,7 @@ self.addEventListener("activate", (e) => {
 
 // Path of the SW scope root ("/TubeRun/" in production) — used to spot shell navigations.
 const SCOPE_PATH = new URL(self.registration.scope).pathname;
-const isTile = (href) => /basemaps\.cartocdn\.com|api\.os\.uk/.test(href);
+const isTile = (href) => /basemaps\.cartocdn\.com|api\.os\.uk|tiles\.openfreemap\.org|server\.arcgisonline\.com/.test(href);
 
 self.addEventListener("fetch", (e) => {
   const req = e.request;

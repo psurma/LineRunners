@@ -829,7 +829,7 @@
         <div class="r-date">${r.date.getDate()} ${MON[r.date.getMonth()]}
           <small>${DOW[r.date.getDay()]} · ${r.date.getFullYear()}</small>
         </div>
-        <div class="r-swatch" style="background:${r.colour}"></div>
+        <div class="r-swatch" style="background:${safeColour(r.colour)}"></div>
         <div class="r-title">${escapeHtml(r.badge)} ${loc}${r.suggested ? ` <span class="r-suggest" title="Tentative — the plan is only firmed up about a month ahead">Suggested</span>` : ""}
           <small>${escapeHtml(r.leg)}</small>
         </div>
@@ -1115,7 +1115,7 @@
     const from = iact ? opts.from : 0, to = iact ? opts.to : wp.length - 1;
     const tag = tappable ? "button" : "span";
     const label = escapeHtml(opts.bannerLabel || `${lineName} line`);
-    const banner = `<div class="strip-line" style="background:${colour};color:${contrastText(colour)}">${label}</div>`;
+    const banner = `<div class="strip-line" style="background:${safeColour(colour)};color:${contrastText(colour)}">${label}</div>`;
     // Sign-style leg distances: each segment labels the gap from the previous
     // stop (on-street estimate, or true along-path km when the caller has it).
     const legKm = (i) => (opts.legKms ? opts.legKms[i] : haversineKm(wp[i - 1], wp[i]) * ROAD_FACTOR);
@@ -1309,8 +1309,6 @@
       { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]
     ));
   }
-  // For image src etc. (author-controlled) — allow relative paths, just neutralise quotes.
-  function attrVal(s) { return String(s).replace(/"/g, "%22"); }
   // For href/attribute values — only allow http(s), else drop to "#".
   function escapeAttr(url) {
     const u = String(url);
@@ -1896,10 +1894,10 @@
     maplibrePromise = new Promise((resolve, reject) => {
       if (typeof maplibregl !== "undefined") { resolve(maplibregl); return; }
       const css = document.createElement("link");
-      css.rel = "stylesheet"; css.href = "vendor/maplibre/maplibre-gl.css";
+      css.rel = "stylesheet"; css.href = "vendor/maplibre/maplibre-gl.css?v=" + ASSET_V;
       document.head.appendChild(css);
       const s = document.createElement("script");
-      s.src = "vendor/maplibre/maplibre-gl.js"; s.async = true;
+      s.src = "vendor/maplibre/maplibre-gl.js?v=" + ASSET_V; s.async = true;
       s.onload = () => (typeof maplibregl !== "undefined" ? resolve(maplibregl) : reject(new Error("maplibre unavailable")));
       s.onerror = () => reject(new Error("maplibre failed to load"));
       document.head.appendChild(s);
@@ -5133,14 +5131,14 @@
     const futSoon = year >= 2024 ? FUTURE_EXTENSIONS.filter((e) => e.year > year) : [];
     const futureHtml = futBuilt.length || futSoon.length ? `
       <h3 class="tm2-h">On the horizon</h3>
-      ${futBuilt.map((e) => `<div class="tm2-line tm2-future tmz" data-tmz-ext="${FUTURE_EXTENSIONS.indexOf(e)}" role="button" tabindex="0" title="Zoom the map to this"><i style="background:${(net[e.line] || {}).colour || "#0019A8"}"></i><div>
+      ${futBuilt.map((e) => `<div class="tm2-line tm2-future tmz" data-tmz-ext="${FUTURE_EXTENSIONS.indexOf(e)}" role="button" tabindex="0" title="Zoom the map to this"><i style="background:${safeColour((net[e.line] || {}).colour)}"></i><div>
         <b>${escapeHtml(e.name)}</b> <span class="tm2-yr">proposed · ${e.year}</span>
         <span class="tm2-ext">${escapeHtml(e.note)}</span></div></div>`).join("")}
       ${futSoon.length ? `<p class="tm2-soon"><b>Still on the drawing board:</b> ${futSoon.map((e) => `${escapeHtml(e.name)} (proposed ${e.year})`).join(" · ")}</p>` : ""}` : "";
     return `
       <h3 class="tm2-h">${year} · ${open.length} line${open.length === 1 ? "" : "s"} · ${openSids.size} stations open</h3>
       <div class="tm2-lines">${open.map((l) => `
-        <div class="tm2-line tmz" data-tmz-line="${escapeHtml(l.id)}" role="button" tabindex="0" title="Zoom the map to this line"><i style="background:${l.c}"></i><div>
+        <div class="tm2-line tmz" data-tmz-line="${escapeHtml(l.id)}" role="button" tabindex="0" title="Zoom the map to this line"><i style="background:${safeColour(l.c)}"></i><div>
           <b>${escapeHtml(l.n)}</b> <span class="tm2-yr">opened ${l.y}${l.building ? " · still growing" : ""}</span>
           ${l.from && l.to ? `<span class="tm2-ext">${escapeHtml(l.from)} → ${escapeHtml(l.to)} · ${l.stns}/${l.total} of today's stations</span>` : ""}
         </div></div>`).join("")}</div>
@@ -6654,6 +6652,7 @@
       haversineKm, legDistanceKm, journeySegments,
       reverseGpxText, gpxFromPoints, tcxFromPoints,
       buildStationGraph, shortestPath, buildLoop, eraLineStyle,
+      pathCumKm, projectOnPath, elevProfile,
     };
   }
 })();
