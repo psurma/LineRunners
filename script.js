@@ -747,7 +747,7 @@
     const notes = r.notes ? `<p class="d-notes">${escapeHtml(r.notes)}</p>` : "";
     const stripLabel = r.type === "tube" ? `${r.key} line` : (r.badge || r.key);
     const strip = WAYPOINTS[r.key]
-      ? `<div class="line-diagram strip run-strip" style="--line-col:${r.colour}">${stripMapHtml(r.key, r.colour, r.key, { bannerLabel: stripLabel })}</div>` : "";
+      ? `<div class="line-diagram strip run-strip" style="--line-col:${safeColour(r.colour)}">${stripMapHtml(r.key, r.colour, r.key, { bannerLabel: stripLabel })}</div>` : "";
     return `<div class="run-details">${notes}${strip}${days}${exits}${stay}${link}</div>`;
   }
 
