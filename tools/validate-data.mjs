@@ -261,6 +261,71 @@ try {
     }
     if (!bad) ok(`routes/*.gpx: ${checked} files are single-trk/single-trkseg and end within 500 m of their termini`);
   }
+
+  // --- h. runtime JSON: every data/*.json|geojson parses, plus the shapes ------
+  // script.js fetches at runtime. The sections above only JSON.parse the files
+  // they cross-check, so a truncated/corrupt regen of a purely-fetched artifact
+  // (the default map among them) sails through the hook and breaks the feature
+  // live. Parse everything cheaply, then assert only the keys the consumers read.
+  {
+    const dataFiles = readdirSync(DATA).filter((f) => f.endsWith(".json") || f.endsWith(".geojson")).sort();
+    const parsed = {};
+    let parseBad = false;
+    for (const f of dataFiles) {
+      try {
+        parsed[f] = JSON.parse(readFileSync(join(DATA, f), "utf8"));
+      } catch (e) {
+        fail(`data/${f}: not valid JSON (truncated or corrupt regen?) — ${e.message}`);
+        parseBad = true;
+      }
+    }
+    if (!parseBad) ok(`data/: all ${dataFiles.length} .json/.geojson files parse`);
+
+    // undefined = the file failed to parse above; its failure is already reported.
+    const has = (o, keys) => o && typeof o === "object" && keys.every((k) => k in o);
+    const isFC = (g) => g && g.type === "FeatureCollection" && Array.isArray(g.features) && g.features.length > 0;
+
+    // tube-lines.geojson (the default map) + nr-lines.geojson: the map pushes/
+    // iterates .features, so an empty or non-FeatureCollection draws nothing.
+    for (const f of ["tube-lines.geojson", "nr-lines.geojson"]) {
+      const g = parsed[f];
+      if (g === undefined) continue;
+      if (isFC(g)) ok(`${f}: FeatureCollection with ${g.features.length} features`);
+      else fail(`${f}: not a non-empty FeatureCollection — the map source would be empty`);
+    }
+
+    // secrets.json: the route-secrets layer reads .n/.lat/.lon/.d off each item.
+    const secrets = parsed["secrets.json"];
+    if (secrets !== undefined) {
+      if (Array.isArray(secrets) && secrets.every((p) => has(p, ["n", "lat", "lon", "d"]))) ok(`secrets.json: array of ${secrets.length}, each with n/lat/lon/d`);
+      else fail(`secrets.json: must be an array whose items each carry n/lat/lon/d (the route-secrets layer reads those)`);
+    }
+
+    // route-pubs.json: object routeId → array; the pubs layer reads .n/.lat/.lon/.r/.end.
+    const pubs = parsed["route-pubs.json"];
+    if (pubs !== undefined) {
+      const vals = pubs && typeof pubs === "object" && !Array.isArray(pubs) ? Object.values(pubs) : null;
+      if (vals && vals.every((a) => Array.isArray(a) && a.every((p) => has(p, ["n", "lat", "lon", "r", "end"])))) ok(`route-pubs.json: ${Object.keys(pubs).length} routes → items with n/lat/lon/r/end`);
+      else fail(`route-pubs.json: must be an object of routeId → array of items with n/lat/lon/r/end (the pubs layer reads those)`);
+    }
+
+    // walk-times.json: loadWalkTimes reads .markers and each marker's walk/x/y.
+    const wt = parsed["walk-times.json"];
+    if (wt !== undefined) {
+      const ms = wt && Array.isArray(wt.markers) ? wt.markers : null;
+      if (ms && ms.length && ms.every((m) => has(m, ["walk", "x", "y"]))) ok(`walk-times.json: ${ms.length} markers with walk/x/y`);
+      else fail(`walk-times.json: must be an object with a non-empty markers array whose items carry walk/x/y`);
+    }
+
+    // Remaining fetched artifacts are consumed as plain top-level arrays:
+    // station-toilets → new Set(ids), facilities-water → [[lat,lon],…], bus-routes → id list.
+    for (const f of ["station-toilets.json", "facilities-water.json", "bus-routes.json"]) {
+      const v = parsed[f];
+      if (v === undefined) continue;
+      if (Array.isArray(v)) ok(`${f}: array of ${v.length}`);
+      else fail(`${f}: expected a top-level array`);
+    }
+  }
 } catch (e) {
   fail(e.message);
 }
