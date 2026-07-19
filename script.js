@@ -2445,6 +2445,139 @@
     requestAnimationFrame(() => busMapObj.map.invalidateSize(false));
   }
 
+  // Shared "measure a stretch" interaction for a station strip: two taps pick a
+  // span, or drag either highlighted end along the strip to resize it (with edge
+  // auto-scroll). The Lines-table map and the bus-route map both use it — they
+  // were once copy-paste and had already drifted, so it lives here once with the
+  // genuine per-map differences injected via cfg. cfg.picks is the shared {a,b}
+  // pick-state the caller also reads (for its own redraw/persist/reverse); this
+  // mutates it in place. cfg supplies:
+  //   stripEl, measEl        the strip container + the measure-readout element
+  //   wp                     ordered [name,lat,lon] stops in the drawn direction
+  //   pace                   min/km for the run/cycle/walk row (undefined = rtPace)
+  //   emptyHint              the "tap two…" hint shown when nothing is picked
+  //   isStale()              true if the panel was re-rendered since (abort)
+  //   renderStripHtml(sel)   the caller's stripMapHtml call for a {a,b,from,to} sel
+  //   measureKm(i,j)         distance of the i..j stretch (true along-path or est.)
+  //   persist()              stash the current pick for the caller's restore path
+  //   redraw()               redraw the map + elevation for the current pick
+  //   centreOnTap(pt)        centre the map on a tapped stop (the caller no-ops it
+  //                          when a span is shown); pt = [name,lat,lon]
+  //   showPopup(pt)          open the stop popup (+ any caller-specific after-tap)
+  function attachStripMeasure(cfg) {
+    const { picks, stripEl, measEl, wp, pace, emptyHint, isStale, renderStripHtml,
+      measureKm, persist, redraw, centreOnTap, showPopup } = cfg;
+    let suppressClick = false; // a completed endpoint drag swallows the click it generates
+    let downX = null, downY = null; // last pointerdown on a stop — a click far from it was a pan
+    const span = () => {
+      const both = picks.a >= 0 && picks.b >= 0;
+      return { both, i: both ? Math.min(picks.a, picks.b) : picks.a, j: both ? Math.max(picks.a, picks.b) : picks.a };
+    };
+    const paintMeasure = () => {
+      if (!measEl) return;
+      const { both, i, j } = span();
+      if (both) {
+        const km = measureKm(i, j);
+        measEl.innerHTML = `<span class="lm-leg"><strong>${escapeHtml(wp[i][0])}</strong><span class="ls-arrow" aria-hidden="true">→</span><strong>${escapeHtml(wp[j][0])}</strong></span><span class="lm-km">${fmtKm(km, 1)}</span><span class="lm-legs">· ${j - i} leg${j - i > 1 ? "s" : ""}</span>${timesRowHtml(km, pace)}`;
+      } else if (picks.a >= 0) {
+        measEl.innerHTML = `Measuring from <strong>${escapeHtml(wp[picks.a][0])}</strong> — tap the other end, or the same stop to clear.`;
+      } else {
+        measEl.innerHTML = `<span class="lm-hint">${emptyHint}</span>`;
+      }
+    };
+    const paintStrip = () => {
+      persist();
+      const { both, i, j } = span();
+      const sel = both ? { a: i, b: j, from: i, to: j }
+        : picks.a >= 0 ? { a: i, b: i, from: i, to: i }
+        : { a: 0, b: wp.length - 1, from: 0, to: wp.length - 1 };
+      stripEl.innerHTML = renderStripHtml(sel);
+      stripEl.querySelectorAll(".stn").forEach((sEl, si) => {
+        sEl.addEventListener("click", (eC) => {
+          if (suppressClick) { suppressClick = false; return; }
+          // detail 0 = keyboard activation, which has no meaningful coordinates
+          if (eC.detail > 0 && downX != null && Math.hypot(eC.clientX - downX, eC.clientY - downY) > 6) return;
+          if (isStale()) return; // panel re-rendered since
+          const pt = wp[si];
+          if (picks.a < 0 || picks.b >= 0) { picks.a = si; picks.b = -1; } // first end, or start a fresh measurement
+          else if (si === picks.a) picks.a = -1;                           // same stop again — clear
+          else picks.b = si;
+          // A tap that redraws the route lets the redraw's own fit place the map —
+          // centring the tapped stop would race it (centreOnTap no-ops mid-span).
+          if (!(picks.a >= 0 && picks.b >= 0)) centreOnTap(pt);
+          showPopup(pt);
+          paintStrip();
+        });
+        // Drag a highlighted end along the strip to grow or shrink the stretch.
+        // With nothing picked the whole route counts as the selection, so pulling
+        // its first/last stop in starts one. Strip + measure follow live; the map
+        // redraws on release (paintStrip → redraw).
+        sEl.addEventListener("pointerdown", (eD) => {
+          downX = eD.clientX; downY = eD.clientY;
+          suppressClick = false; // any fresh press clears a stale swallow
+          if (isStale() || eD.button !== 0 || !sEl.classList.contains("endpoint")) return;
+          eD.stopPropagation(); // keep the strip's grab-to-scroll pan off this gesture
+          let moving = null, raf = 0, lastX = eD.clientX;
+          const btns = [...stripEl.querySelectorAll(".stn")];
+          const idxAt = (x) => {
+            let bi = -1, bd = Infinity;
+            btns.forEach((b, k) => { const rc = b.getBoundingClientRect(); const d = Math.abs((rc.left + rc.right) / 2 - x); if (d < bd) { bd = d; bi = k; } });
+            return bi;
+          };
+          const paintLive = () => {
+            const both2 = picks.a >= 0 && picks.b >= 0;
+            const lo = both2 ? Math.min(picks.a, picks.b) : picks.a, hi = both2 ? Math.max(picks.a, picks.b) : picks.a;
+            btns.forEach((b, k) => {
+              b.classList.toggle("active", k >= lo && k <= hi);
+              b.classList.toggle("endpoint", k === lo || k === hi);
+            });
+            persist();
+            paintMeasure();
+          };
+          const dragTo = (x) => {
+            const over = idxAt(x);
+            const other = moving === "A" ? picks.b : picks.a;
+            if (over < 0 || over === other || over === (moving === "A" ? picks.a : picks.b)) return;
+            if (moving === "A") picks.a = over; else picks.b = over;
+            paintLive();
+          };
+          const step = () => { // edge auto-scroll, so offscreen stops stay reachable
+            const rc = stripEl.getBoundingClientRect();
+            const v = lastX < rc.left + 48 ? -9 : lastX > rc.right - 48 ? 9 : 0;
+            if (v && moving) { stripEl.scrollLeft += v; dragTo(lastX); }
+            raf = requestAnimationFrame(step);
+          };
+          const move = (eM) => {
+            lastX = eM.clientX;
+            if (!moving) {
+              if (idxAt(eM.clientX) === si) return; // still on the grabbed stop — not a drag yet
+              if (picks.a < 0) { picks.a = 0; picks.b = wp.length - 1; } // the whole route was "selected"
+              moving = si === picks.a ? "A" : "B";
+              document.body.classList.add("strip-drag");
+              raf = requestAnimationFrame(step);
+            }
+            dragTo(eM.clientX);
+          };
+          const up = () => {
+            sEl.removeEventListener("pointermove", move);
+            sEl.removeEventListener("pointerup", up);
+            sEl.removeEventListener("pointercancel", up);
+            cancelAnimationFrame(raf);
+            document.body.classList.remove("strip-drag");
+            if (moving) { suppressClick = true; paintStrip(); }
+          };
+          sEl.setPointerCapture(eD.pointerId);
+          sEl.addEventListener("pointermove", move);
+          sEl.addEventListener("pointerup", up);
+          sEl.addEventListener("pointercancel", up);
+        });
+      });
+      redraw();
+      paintMeasure();
+    };
+    paintStrip();
+  }
+
   // Build the trace action for the bus runner — fetches the picked route's
   // stop sequence from TfL, draws it and renders the summary panel. A factory
   // so the staleness token stays private to the tracer.
@@ -2491,12 +2624,12 @@
       // Direction and any measured stretch are kept on busMapObj per route, so
       // they survive re-traces (the km/mi toggle re-runs trace()).
       let reversed = false, renderSeq = 0, elevSeq = 0;
-      let pickA = -1, pickB = -1;
+      const picks = { a: -1, b: -1 };
       if (busMapObj.keep && busMapObj.keep.id === id) {
         reversed = !!busMapObj.keep.reversed;
-        if (busMapObj.keep.a < fwd.length && busMapObj.keep.b < fwd.length) { pickA = busMapObj.keep.a; pickB = busMapObj.keep.b; }
+        if (busMapObj.keep.a < fwd.length && busMapObj.keep.b < fwd.length) { picks.a = busMapObj.keep.a; picks.b = busMapObj.keep.b; }
       }
-      const stash = () => { busMapObj.keep = { id, reversed, a: pickA, b: pickB }; };
+      const stash = () => { busMapObj.keep = { id, reversed, a: picks.a, b: picks.b }; };
       const render = async () => {
         const myRender = ++renderSeq;
         const wp = reversed ? [...fwd].reverse() : fwd;
@@ -2567,7 +2700,7 @@
         // ends picked draws just that stretch with its own start/finish.
         let mapState = null; // "full" | "span"
         const updateMap = () => {
-          const both = pickA >= 0 && pickB >= 0;
+          const both = picks.a >= 0 && picks.b >= 0;
           if (!both) {
             if (mapState === "full") return;
             mapState = "full";
@@ -2576,7 +2709,7 @@
             return;
           }
           mapState = "span";
-          const i = Math.min(pickA, pickB), j = Math.max(pickA, pickB);
+          const i = Math.min(picks.a, picks.b), j = Math.max(picks.a, picks.b);
           const span = wp.slice(i, j + 1);
           const road = spanRoadSeg(i, j);
           drawFlowSegments(busMapObj.map, busMapObj, road ? [road] : [span.map((s) => [s[1], s[2]])], BUS_COL, {
@@ -2588,113 +2721,21 @@
           }, [30, 30]);
           updateElev(span);
         };
-        let suppressClick = false; // a completed endpoint drag swallows the click it generates
-        let downX = null, downY = null; // last pointerdown on a stop — a click far from it was a pan
-        const paintMeasure = () => {
-          if (!measEl) return;
-          const both = pickA >= 0 && pickB >= 0;
-          const i = both ? Math.min(pickA, pickB) : pickA, j = both ? Math.max(pickA, pickB) : pickA;
-          if (both) {
-            const mKm = legDistanceKm(wp, i, j);
-            measEl.innerHTML = `<span class="lm-leg"><strong>${escapeHtml(wp[i][0])}</strong><span class="ls-arrow" aria-hidden="true">→</span><strong>${escapeHtml(wp[j][0])}</strong></span><span class="lm-km">${fmtKm(mKm, 1)}</span><span class="lm-legs">· ${j - i} leg${j - i > 1 ? "s" : ""}</span>${timesRowHtml(mKm)}`;
-          } else if (pickA >= 0) {
-            measEl.innerHTML = `Measuring from <strong>${escapeHtml(wp[pickA][0])}</strong> — tap the other end, or the same stop to clear.`;
-          } else {
-            measEl.innerHTML = `<span class="lm-hint">Tap two stops to measure the stretch between them — or drag an end of the route in.</span>`;
-          }
-        };
-        const paintStrip = () => {
-          stash();
-          const both = pickA >= 0 && pickB >= 0;
-          const i = both ? Math.min(pickA, pickB) : pickA, j = both ? Math.max(pickA, pickB) : pickA;
-          const sel = both ? { a: i, b: j, from: i, to: j }
-            : pickA >= 0 ? { a: i, b: i, from: i, to: i }
-            : { a: 0, b: wp.length - 1, from: 0, to: wp.length - 1 };
-          stripEl.innerHTML = stripMapHtml(null, BUS_COL, banner, { wp, bannerLabel: banner, interactive: true, ...sel, geoInterchange: true });
-          stripEl.querySelectorAll(".stn").forEach((sEl, si) => {
-            sEl.addEventListener("click", (eC) => {
-              if (suppressClick) { suppressClick = false; return; }
-              if (eC.detail > 0 && downX != null && Math.hypot(eC.clientX - downX, eC.clientY - downY) > 6) return;
-              if (myRender !== renderSeq || !busMapObj.map) return;
-              const s = wp[si];
-              if (pickA < 0 || pickB >= 0) { pickA = si; pickB = -1; } // first end, or start a fresh measurement
-              else if (si === pickA) pickA = -1;                       // same stop again — clear
-              else pickB = si;
-              // A tap that redraws the route lets the redraw's own fit place the
-              // map — centring the tapped stop would race it.
-              if (!(pickA >= 0 && pickB >= 0) && mapState !== "span") busMapObj.map.setView([s[1], s[2]], 16, { animate: true });
-              L.popup({ offset: [0, -2], autoPan: false }).setLatLng([s[1], s[2]]).setContent(escapeHtml(s[0]) + geoInterchangeTags(s[1], s[2])).openOn(busMapObj.map);
-              if (window.matchMedia("(max-width: 860px)").matches)
-                document.getElementById("busMap").scrollIntoView({ behavior: "smooth", block: "center" });
-              paintStrip();
-            });
-            // Drag a highlighted end along the strip to grow or shrink the
-            // stretch — same gesture as the Lines table. With nothing picked
-            // the whole route counts as the selection.
-            sEl.addEventListener("pointerdown", (eD) => {
-              downX = eD.clientX; downY = eD.clientY;
-              suppressClick = false; // any fresh press clears a stale swallow
-              if (myRender !== renderSeq || eD.button !== 0 || !sEl.classList.contains("endpoint")) return;
-              eD.stopPropagation(); // keep the strip's grab-to-scroll pan off this gesture
-              let moving = null, raf = 0, lastX = eD.clientX;
-              const btns = [...stripEl.querySelectorAll(".stn")];
-              const idxAt = (x) => {
-                let bi = -1, bd = Infinity;
-                btns.forEach((b, k) => { const rc = b.getBoundingClientRect(); const d = Math.abs((rc.left + rc.right) / 2 - x); if (d < bd) { bd = d; bi = k; } });
-                return bi;
-              };
-              const paintLive = () => {
-                const both2 = pickA >= 0 && pickB >= 0;
-                const lo = both2 ? Math.min(pickA, pickB) : pickA, hi = both2 ? Math.max(pickA, pickB) : pickA;
-                btns.forEach((b, k) => {
-                  b.classList.toggle("active", k >= lo && k <= hi);
-                  b.classList.toggle("endpoint", k === lo || k === hi);
-                });
-                stash();
-                paintMeasure();
-              };
-              const dragTo = (x) => {
-                const over = idxAt(x);
-                const other = moving === "A" ? pickB : pickA;
-                if (over < 0 || over === other || over === (moving === "A" ? pickA : pickB)) return;
-                if (moving === "A") pickA = over; else pickB = over;
-                paintLive();
-              };
-              const step = () => { // edge auto-scroll, so offscreen stops stay reachable
-                const rc = stripEl.getBoundingClientRect();
-                const v = lastX < rc.left + 48 ? -9 : lastX > rc.right - 48 ? 9 : 0;
-                if (v && moving) { stripEl.scrollLeft += v; dragTo(lastX); }
-                raf = requestAnimationFrame(step);
-              };
-              const move = (eM) => {
-                lastX = eM.clientX;
-                if (!moving) {
-                  if (idxAt(eM.clientX) === si) return; // still on the grabbed stop — not a drag yet
-                  if (pickA < 0) { pickA = 0; pickB = wp.length - 1; } // the whole route was "selected"
-                  moving = si === pickA ? "A" : "B";
-                  document.body.classList.add("strip-drag");
-                  raf = requestAnimationFrame(step);
-                }
-                dragTo(eM.clientX);
-              };
-              const up = () => {
-                sEl.removeEventListener("pointermove", move);
-                sEl.removeEventListener("pointerup", up);
-                sEl.removeEventListener("pointercancel", up);
-                cancelAnimationFrame(raf);
-                document.body.classList.remove("strip-drag");
-                if (moving) { suppressClick = true; paintStrip(); }
-              };
-              sEl.setPointerCapture(eD.pointerId);
-              sEl.addEventListener("pointermove", move);
-              sEl.addEventListener("pointerup", up);
-              sEl.addEventListener("pointercancel", up);
-            });
-          });
-          updateMap();
-          paintMeasure();
-        };
-        paintStrip();
+        attachStripMeasure({
+          picks, stripEl, measEl, wp, // pace omitted → timesRowHtml's rtPace default
+          emptyHint: "Tap two stops to measure the stretch between them — or drag an end of the route in.",
+          isStale: () => myRender !== renderSeq || !busMapObj.map,
+          renderStripHtml: (sel) => stripMapHtml(null, BUS_COL, banner, { wp, bannerLabel: banner, interactive: true, ...sel, geoInterchange: true }),
+          measureKm: (i, j) => legDistanceKm(wp, i, j),
+          persist: stash,
+          redraw: updateMap,
+          centreOnTap: (pt) => { if (mapState !== "span") busMapObj.map.setView([pt[1], pt[2]], 16, { animate: true }); },
+          showPopup: (pt) => {
+            L.popup({ offset: [0, -2], autoPan: false }).setLatLng([pt[1], pt[2]]).setContent(escapeHtml(pt[0]) + geoInterchangeTags(pt[1], pt[2])).openOn(busMapObj.map);
+            if (window.matchMedia("(max-width: 860px)").matches)
+              document.getElementById("busMap").scrollIntoView({ behavior: "smooth", block: "center" });
+          },
+        });
         syncBusMark();
         const mark = document.getElementById("busMark");
         if (mark) mark.addEventListener("click", () => {
@@ -2707,8 +2748,8 @@
           reversed = !reversed;
           // A reverse is a pure flip, so a measured stretch keeps its physical
           // ends — remap the picked indices into the flipped stop order.
-          if (pickA >= 0) pickA = fwd.length - 1 - pickA;
-          if (pickB >= 0) pickB = fwd.length - 1 - pickB;
+          if (picks.a >= 0) picks.a = fwd.length - 1 - picks.a;
+          if (picks.b >= 0) picks.b = fwd.length - 1 - picks.b;
           stash();
           render();
         });
@@ -3402,7 +3443,8 @@
     // the drawn route changes (variant / reverse) — indices mean different
     // stops then — but survive a table re-render via the reopen restore.
     const detailRow = detailInner.closest("tr");
-    let pickA = -1, pickB = -1, pendingPicks = restore && restore.picks ? restore.picks : null;
+    const picks = { a: -1, b: -1 };
+    let pendingPicks = restore && restore.picks ? restore.picks : null;
     if (options) {
       const sel = document.createElement("select");
       sel.className = "ls-variant";
@@ -3486,8 +3528,8 @@
       const stripEl = detailInner.querySelector(".ls-strip");
       const measEl = detailInner.querySelector(".ls-measure");
       if (stripEl && stripWp) {
-        if (pendingPicks && pendingPicks.a < stripWp.length && pendingPicks.b < stripWp.length) { pickA = pendingPicks.a; pickB = pendingPicks.b; }
-        else { pickA = -1; pickB = -1; }
+        if (pendingPicks && pendingPicks.a < stripWp.length && pendingPicks.b < stripWp.length) { picks.a = pendingPicks.a; picks.b = pendingPicks.b; }
+        else { picks.a = -1; picks.b = -1; }
         pendingPicks = null;
         // Between-stop distance: true along-path km when the route projected,
         // otherwise the same crow-flies × street-factor estimate the leg labels use.
@@ -3517,11 +3559,11 @@
         // redraws as just that stretch (its own start/finish markers and arrows);
         // clearing restores the whole line via drawVariant, keeping any live pick.
         const updateMapSpan = async () => {
-          if (!(pickA >= 0 && pickB >= 0)) {
-            if (spanShown) { spanShown = false; pendingPicks = { a: pickA, b: pickB }; drawVariant(curIdx); }
+          if (!(picks.a >= 0 && picks.b >= 0)) {
+            if (spanShown) { spanShown = false; pendingPicks = { a: picks.a, b: picks.b }; drawVariant(curIdx); }
             return;
           }
-          const i = Math.min(pickA, pickB), j = Math.max(pickA, pickB);
+          const i = Math.min(picks.a, picks.b), j = Math.max(picks.a, picks.b);
           const seg = spanSeg(i, j);
           const mySpan = ++drawSeq; // supersedes the full draw's pending work; variant changes supersede this
           if (routeGrp) { routeGrp.remove(); routeGrp = null; }
@@ -3538,116 +3580,24 @@
             if (mySpan === drawSeq && lsMap === map && elBox2.isConnected) elBox2.innerHTML = elev ? elevationHtml(elev) : "";
           }
         };
-        let suppressClick = false; // a completed endpoint drag swallows the click it generates
-        let downX = null, downY = null; // last pointerdown on a station — a click far from it was a pan, not a tap
-        const paintMeasure = () => {
-          if (!measEl) return;
-          const both = pickA >= 0 && pickB >= 0;
-          const i = both ? Math.min(pickA, pickB) : pickA, j = both ? Math.max(pickA, pickB) : pickA;
-          if (both) {
-            const km = spanKm(i, j);
-            measEl.innerHTML = `<span class="lm-leg"><strong>${escapeHtml(stripWp[i][0])}</strong><span class="ls-arrow" aria-hidden="true">→</span><strong>${escapeHtml(stripWp[j][0])}</strong></span><span class="lm-km">${fmtKm(km, 1)}</span><span class="lm-legs">· ${j - i} leg${j - i > 1 ? "s" : ""}</span>${timesRowHtml(km, GROUP_PACE)}`;
-          } else if (pickA >= 0) {
-            measEl.innerHTML = `Measuring from <strong>${escapeHtml(stripWp[pickA][0])}</strong> — tap the other end, or the same stop to clear.`;
-          } else {
-            measEl.innerHTML = `<span class="lm-hint">Tap two stations to measure the stretch between them — or drag an end of the line in.</span>`;
-          }
-        };
-        const paintStrip = () => {
-          detailRow._lsPicks = { a: pickA, b: pickB }; // reopen restore reads this off the row
-          const both = pickA >= 0 && pickB >= 0;
-          const i = both ? Math.min(pickA, pickB) : pickA, j = both ? Math.max(pickA, pickB) : pickA;
-          const sel = both ? { a: i, b: j, from: i, to: j }
-            : pickA >= 0 ? { a: i, b: i, from: i, to: i }
-            : { a: 0, b: stripWp.length - 1, from: 0, to: stripWp.length - 1 };
-          stripEl.style.setProperty("--line-col", net[id].colour);
-          stripEl.innerHTML = stripMapHtml(null, net[id].colour, name, { wp: stripWp, interactive: true, ...sel, legKms, totalKm });
-          stripEl.querySelectorAll(".stn").forEach((sEl, si) => {
-            sEl.addEventListener("click", (eC) => {
-              if (suppressClick) { suppressClick = false; return; }
-              // detail 0 = keyboard activation, which has no meaningful coordinates
-              if (eC.detail > 0 && downX != null && Math.hypot(eC.clientX - downX, eC.clientY - downY) > 6) return;
-              if (lsMap !== map) return; // panel re-rendered since
-              const p = stripWp[si];
-              if (pickA < 0 || pickB >= 0) { pickA = si; pickB = -1; } // first end, or start a fresh measurement
-              else if (si === pickA) pickA = -1;                       // same stop again — clear
-              else pickB = si;
-              // A tap that redraws the route (completing a measurement, or dropping
-              // one) lets the redraw's own fit place the map — centring the tapped
-              // station would race it. Other taps centre as before.
-              if (!(pickA >= 0 && pickB >= 0) && !spanShown) map.setView([p[1], p[2]], Math.max(map.getZoom(), 15), { animate: true });
-              L.popup({ offset: [0, -2], autoPan: false }).setLatLng([p[1], p[2]])
-                .setContent(`<b>${escapeHtml(p[0])}</b>` + interchangeTags(p[0], name)).openOn(map);
-              paintStrip();
-            });
-            // Drag a highlighted end along the strip to grow or shrink the
-            // stretch. With nothing picked the whole line counts as the
-            // selection, so pulling its first/last stop in starts one. The
-            // strip and measure line follow live; the map redraws on release.
-            sEl.addEventListener("pointerdown", (eD) => {
-              downX = eD.clientX; downY = eD.clientY;
-              suppressClick = false; // any fresh press clears a stale swallow (the drag's own click may never fire)
-              if (lsMap !== map || eD.button !== 0 || !sEl.classList.contains("endpoint")) return;
-              eD.stopPropagation(); // keep the strip's grab-to-scroll pan off this gesture
-              let moving = null, raf = 0, lastX = eD.clientX;
-              const btns = [...stripEl.querySelectorAll(".stn")];
-              const idxAt = (x) => {
-                let bi = -1, bd = Infinity;
-                btns.forEach((b, k) => { const rc = b.getBoundingClientRect(); const d = Math.abs((rc.left + rc.right) / 2 - x); if (d < bd) { bd = d; bi = k; } });
-                return bi;
-              };
-              const paintLive = () => {
-                const both2 = pickA >= 0 && pickB >= 0;
-                const lo = both2 ? Math.min(pickA, pickB) : pickA, hi = both2 ? Math.max(pickA, pickB) : pickA;
-                btns.forEach((b, k) => {
-                  b.classList.toggle("active", k >= lo && k <= hi);
-                  b.classList.toggle("endpoint", k === lo || k === hi);
-                });
-                detailRow._lsPicks = { a: pickA, b: pickB };
-                paintMeasure();
-              };
-              const dragTo = (x) => {
-                const over = idxAt(x);
-                const other = moving === "A" ? pickB : pickA;
-                if (over < 0 || over === other || over === (moving === "A" ? pickA : pickB)) return;
-                if (moving === "A") pickA = over; else pickB = over;
-                paintLive();
-              };
-              const step = () => { // edge auto-scroll, so offscreen stations stay reachable
-                const rc = stripEl.getBoundingClientRect();
-                const v = lastX < rc.left + 48 ? -9 : lastX > rc.right - 48 ? 9 : 0;
-                if (v && moving) { stripEl.scrollLeft += v; dragTo(lastX); }
-                raf = requestAnimationFrame(step);
-              };
-              const move = (eM) => {
-                lastX = eM.clientX;
-                if (!moving) {
-                  if (idxAt(eM.clientX) === si) return; // still on the grabbed stop — not a drag yet
-                  if (pickA < 0) { pickA = 0; pickB = stripWp.length - 1; } // the whole line was "selected"
-                  moving = si === pickA ? "A" : "B";
-                  document.body.classList.add("strip-drag");
-                  raf = requestAnimationFrame(step);
-                }
-                dragTo(eM.clientX);
-              };
-              const up = () => {
-                sEl.removeEventListener("pointermove", move);
-                sEl.removeEventListener("pointerup", up);
-                sEl.removeEventListener("pointercancel", up);
-                cancelAnimationFrame(raf);
-                document.body.classList.remove("strip-drag");
-                if (moving) { suppressClick = true; paintStrip(); }
-              };
-              sEl.setPointerCapture(eD.pointerId);
-              sEl.addEventListener("pointermove", move);
-              sEl.addEventListener("pointerup", up);
-              sEl.addEventListener("pointercancel", up);
-            });
-          });
-          updateMapSpan();
-          paintMeasure();
-        };
-        paintStrip();
+        attachStripMeasure({
+          picks, stripEl, measEl, wp: stripWp, pace: GROUP_PACE,
+          emptyHint: "Tap two stations to measure the stretch between them — or drag an end of the line in.",
+          isStale: () => lsMap !== map,
+          renderStripHtml: (sel) => {
+            stripEl.style.setProperty("--line-col", net[id].colour);
+            return stripMapHtml(null, net[id].colour, name, { wp: stripWp, interactive: true, ...sel, legKms, totalKm });
+          },
+          measureKm: spanKm,
+          persist: () => { detailRow._lsPicks = { a: picks.a, b: picks.b }; },
+          redraw: updateMapSpan,
+          // Other taps centre; a completed measurement's redraw does its own fit.
+          centreOnTap: (pt) => { if (!spanShown) map.setView([pt[1], pt[2]], Math.max(map.getZoom(), 15), { animate: true }); },
+          showPopup: (pt) => {
+            L.popup({ offset: [0, -2], autoPan: false }).setLatLng([pt[1], pt[2]])
+              .setContent(`<b>${escapeHtml(pt[0])}</b>` + interchangeTags(pt[0], name)).openOn(map);
+          },
+        });
       }
       const elBox = detailInner.querySelector(".ls-elev");
       if (elBox && r && r.latlngs) {
