@@ -1,0 +1,45 @@
+# Enforces the safety-critical pre-commit guards on every push/PR, so they can't
+# be bypassed by a fresh clone that never installed .git/hooks/pre-commit, a
+# `git commit --no-verify`, or a second contributor. Mirrors tools/pre-commit
+# minus the file-mutating steps (cache-buster bump). No dependencies to install —
+# TubeRun is dependency-free vanilla JS (no package.json).
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Syntax check (script.js)
+        run: node -c script.js
+
+      - name: No duplicate top-level functions
+        # Two `function name` (or `async function name`) in the same scope
+        # silently shadow each other — a duplicate journeySegments once blanked
+        # most of the page. Same guard the pre-commit hook runs.
+        run: |
+          dups=$(grep -aoE '^  (async )?function [A-Za-z0-9_]+' script.js | sed 's/async //' | sort | uniq -d)
+          if [ -n "$dups" ]; then
+            echo "Duplicate top-level function(s) in script.js — rename one:"
+            echo "$dups"
+            exit 1
+          fi
+
+      - name: Regenerate schedule
+        # Keeps the validator's date-sensitive schedule-freshness check stable in
+        # CI regardless of the run date; not committed, just to satisfy the check.
+        run: node tools/generate-schedule.mjs
+
+      - name: Validate derived data
+        run: node tools/validate-data.mjs
+
+      - name: Unit tests
+        run: node --test tools/test/*.test.mjs
