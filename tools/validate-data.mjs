@@ -317,6 +317,23 @@ try {
       else fail(`walk-times.json: must be an object with a non-empty markers array whose items carry walk/x/y`);
     }
 
+    // superloop.json: renderSuperloop reads .routes[], each with id + segs
+    // ([[lat,lon],…] polylines) + stops ([name,lat,lon]). A malformed regen would
+    // draw an empty or mislocated orbital, so assert the shape and London bounds.
+    const sl = parsed["superloop.json"];
+    if (sl !== undefined) {
+      const routes = sl && Array.isArray(sl.routes) ? sl.routes : null;
+      const inLondon = (lat, lon) => lat > 51.2 && lat < 51.8 && lon > -0.7 && lon < 0.4;
+      const okRoute = (r) =>
+        has(r, ["id", "segs", "stops"]) && typeof r.id === "string" &&
+        Array.isArray(r.segs) && r.segs.length > 0 &&
+        r.segs.every((s) => Array.isArray(s) && s.length > 1 && s.every((p) => Array.isArray(p) && p.length === 2 && inLondon(p[0], p[1]))) &&
+        Array.isArray(r.stops) && r.stops.length >= 2 &&
+        r.stops.every((s) => Array.isArray(s) && s.length === 3 && typeof s[0] === "string" && inLondon(s[1], s[2]));
+      if (routes && routes.length && routes.every(okRoute)) ok(`superloop.json: ${routes.length} routes, each with in-bounds segs + stops`);
+      else fail(`superloop.json: must be { routes: [ { id, segs:[[[lat,lon],…]], stops:[[name,lat,lon],…] } ] } with all coords inside Greater London — re-run tools/generate-superloop.mjs`);
+    }
+
     // Remaining fetched artifacts are consumed as plain top-level arrays:
     // station-toilets → new Set(ids), facilities-water → [[lat,lon],…], bus-routes → id list.
     for (const f of ["station-toilets.json", "facilities-water.json", "bus-routes.json"]) {

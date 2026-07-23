@@ -3802,7 +3802,15 @@
     { key: "classic", file: "img/tube-map.svg", label: "Classic ends", kind: "svg", roundels: true },
     { key: "overground", file: "img/overground-map.png", label: "Overground", kind: "img" },
     { key: "connections", file: "img/connections-map.png", label: "Rail connections", kind: "img" },
+    { key: "superloop", label: "Superloop", kind: "superloop" },
+    { key: "superloopmap", file: "img/superloop-diagram.png", label: "Superloop diagram", kind: "img" },
   ];
+  // Superloop teal — the fallback if data/superloop.json omits its own colour.
+  const SUPERLOOP_COL = "#12ABB6";
+  // The map kinds that are live Leaflet surfaces (Leaflet owns pan/zoom, and they
+  // share the tmMap holder + the tm-map-active body class). The holder's own
+  // drag-to-pan / wheel-zoom and the teardown in loadMap key off this set.
+  const LEAFLET_KINDS = new Set(["geo", "superloop"]);
   // Lettered end-of-line discs for the "Classic ends" tab — the terminus
   // letters of the old printed pocket maps (a Tokyo habit on London ends),
   // hand-placed on the December 2013 diagram. [letter, colour, x, y] in the
@@ -4490,7 +4498,7 @@
     const holder = root.querySelector("#tmHolder");
     let drag = false, sx, sy, sl, st;
     holder.addEventListener("pointerdown", (e) => {
-      if (curMapKind() === "data" || curMapKind() === "geo") return; // table scrolls; Leaflet owns the map
+      if (curMapKind() === "data" || LEAFLET_KINDS.has(curMapKind())) return; // table scrolls; Leaflet owns the map
       e.preventDefault(); // stop native image/text drag hijacking the pan
       drag = true; sx = e.clientX; sy = e.clientY; sl = holder.scrollLeft; st = holder.scrollTop;
       holder.setPointerCapture(e.pointerId); holder.style.cursor = "grabbing";
@@ -4505,7 +4513,7 @@
     holder.addEventListener("pointercancel", endDrag);
     // Cmd/Ctrl + wheel to zoom toward the cursor (trackpad pinch sends ctrl+wheel).
     holder.addEventListener("wheel", (e) => {
-      if (!(e.metaKey || e.ctrlKey) || curMapKind() === "data" || curMapKind() === "geo") return;
+      if (!(e.metaKey || e.ctrlKey) || curMapKind() === "data" || LEAFLET_KINDS.has(curMapKind())) return;
       const node = holder.querySelector("svg, img");
       if (!node) return;
       e.preventDefault();
@@ -4541,7 +4549,7 @@
     const cap = document.getElementById("tmCaption");
     const zoom = document.querySelector(".tm-zoom");
     const cfg = MAPS.find((m) => m.key === curMap);
-    if (cfg.kind !== "geo") { document.body.classList.remove("tm-map-active"); if (tmMap.map) { tmMap.map.remove(); tmMap.map = null; } }
+    if (!LEAFLET_KINDS.has(cfg.kind)) { document.body.classList.remove("tm-map-active"); if (tmMap.map) { tmMap.map.remove(); tmMap.map = null; } }
     const active = cfg.highlight && nextRun && LINE_FILL[nextRun.key] ? nextRun.key : null;
     const CAPTIONS = {
       geo: `Our own live map, built from open TfL data — zoom, drag and tap a station.`,
@@ -4552,6 +4560,8 @@
       toilets: `Stations with toilets — plan your pit stops.`,
       overground: `The London Overground network — great for orbital, out-of-centre routes.`,
       connections: `The geographic rail-connections map — every line where it really runs.`,
+      superloop: `TfL's Superloop — the express-bus orbital ringing outer London, drawn from live TfL route data. Tap any stop.`,
+      superloopmap: `The whole network at a glance — TfL's official Superloop diagram: all 12 express-bus routes (SL1–SL11 plus the BL1 Bakerloop).`,
     };
     if (cap) cap.innerHTML = CAPTIONS[cfg.key] || "";
     if (zoom) zoom.style.visibility = cfg.kind === "data" ? "hidden" : "visible";
@@ -4565,6 +4575,9 @@
 
     // Our own data-driven geographic map.
     if (cfg.kind === "geo") { renderGeoMap(holder, cap, stale).catch(() => { if (!stale()) holder.innerHTML = `<p class="diagram-empty">Couldn't build the map right now.</p>`; }); return; }
+
+    // The Superloop orbital — its own lightweight Leaflet surface (data/superloop.json).
+    if (cfg.kind === "superloop") { renderSuperloop(holder, cap, stale).catch(() => { if (!stale()) holder.innerHTML = `<p class="diagram-empty">Couldn't load the Superloop right now.</p>`; }); return; }
 
     // Data view: a computed per-station running-time table (no image).
     if (cfg.kind === "data") { renderRunningTimes(holder); return; }
@@ -5287,6 +5300,82 @@
       });
       tmSlider.addEventListener("input", () => { applyYear(+tmSlider.value); syncTm(); });
       syncTm();
+    }
+  }
+
+  // The Superloop orbital on its own live Leaflet surface. Every SLn route from
+  // data/superloop.json (baked from the TfL API by tools/generate-superloop.mjs)
+  // is drawn in the Superloop teal; shared stops merge into one tappable dot that
+  // names the routes serving it, and each route wears an SLn roundel mid-line.
+  async function renderSuperloop(holder, cap, stale) {
+    if (typeof L === "undefined") { mapUnavailable(holder); return; }
+    const res = await vfetch("data/superloop.json").catch(() => null);
+    if (stale && stale()) return;
+    if (!res || !res.ok) { holder.innerHTML = `<p class="diagram-empty">Couldn't load the Superloop right now.</p>`; return; }
+    const data = await res.json();
+    if (stale && stale()) return;
+    const routes = Array.isArray(data && data.routes) ? data.routes : [];
+    if (!routes.length) { holder.innerHTML = `<p class="diagram-empty">No Superloop routes to show.</p>`; return; }
+    const teal = safeColour(data.colour || SUPERLOOP_COL);
+
+    document.body.classList.add("tm-map-active");
+    holder.innerHTML = `<div id="tmMap"></div>`;
+    if (tmMap.map) { tmMap.map.remove(); tmMap.map = null; }
+    const map = createSiteMap("tmMap", { zoomHint: true });
+    tmMap.map = map;
+    const grp = L.layerGroup().addTo(map);
+    const all = [];
+
+    // Every route's road geometry, in the Superloop teal.
+    routes.forEach((rt) => (rt.segs || []).forEach((seg) => {
+      const ll = seg.map((p) => [p[0], p[1]]);
+      if (ll.length < 2) return;
+      addFlowLine(grp, ll, teal, { baseWeight: 5, flowWeight: 5 });
+      ll.forEach((p) => all.push(p));
+    }));
+
+    // Merge stops shared by several routes into one dot that lists them all;
+    // a stop that starts or ends any route is a terminus (drawn a touch larger).
+    const byName = new Map();
+    routes.forEach((rt) => {
+      const stops = rt.stops || [];
+      stops.forEach((s, i) => {
+        const key = norm(s[0]);
+        if (!key || !Number.isFinite(s[1]) || !Number.isFinite(s[2])) return;
+        let e = byName.get(key);
+        if (!e) { e = { n: s[0], lat: s[1], lon: s[2], routes: new Set(), term: false }; byName.set(key, e); }
+        e.routes.add(rt.id);
+        if (i === 0 || i === stops.length - 1) e.term = true;
+      });
+    });
+    const centreOn = (lat, lon, html) => {
+      map.setView([lat, lon], Math.max(map.getZoom(), 14), { animate: true });
+      L.popup({ offset: [0, -2], autoPan: false }).setLatLng([lat, lon]).setContent(html).openOn(map);
+    };
+    // SL routes numerically first, then BL — matches the generator's ordering.
+    const slRank = (id) => { const m = /^([A-Za-z]+)(\d+)$/.exec(id) || []; return [(m[1] || id).toUpperCase() === "SL" ? 0 : 1, parseInt(m[2] || "0", 10)]; };
+    byName.forEach((e) => {
+      const rlist = [...e.routes].sort((a, b) => { const ra = slRank(a), rb = slRank(b); return ra[0] - rb[0] || ra[1] - rb[1]; });
+      const html = `<strong>${escapeHtml(e.n)}</strong><br><span class="stn-tags">Superloop · ${rlist.map(escapeHtml).join(", ")}</span>`;
+      const mk = e.term
+        ? L.circleMarker([e.lat, e.lon], { radius: 5, color: "#fff", weight: 2, fillColor: teal, fillOpacity: 1 })
+        : L.circleMarker([e.lat, e.lon], { radius: 3.2, color: "#fff", weight: 1.3, fillColor: teal, fillOpacity: 1 });
+      mk.bindTooltip(escapeHtml(e.n), { direction: "top" }).on("click", () => centreOn(e.lat, e.lon, html)).addTo(grp);
+    });
+
+    // An SLn roundel mid-route, so each arc of the loop is labelled once without
+    // the clutter of a badge at every shared terminus.
+    routes.forEach((rt) => {
+      const flat = (rt.segs || []).flat();
+      if (!flat.length) return;
+      const mid = flat[Math.floor(flat.length / 2)];
+      L.marker([mid[0], mid[1]], { icon: roundelIcon(rt.id, teal), keyboard: false, interactive: false, zIndexOffset: 600 }).addTo(grp);
+    });
+
+    if (all.length) map.fitBounds(L.latLngBounds(all), { padding: [28, 28] });
+    requestAnimationFrame(() => map.invalidateSize(false));
+    if (cap) {
+      cap.innerHTML = `TfL's Superloop — <strong>${routes.length}</strong> express-bus routes ringing outer London, <strong>${byName.size}</strong> stops, drawn from live TfL data. Tap any stop.`;
     }
   }
 
