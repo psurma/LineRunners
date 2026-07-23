@@ -1006,7 +1006,10 @@
       const d = haversineKm([0, lat, lon], [0, s.lat, s.lon]);
       if (d < bd) { bd = d; best = s; }
     }
-    return best && bd <= 0.2 ? best.lines : [];
+    // 250 m: a bus stop set back from a big station's centroid (e.g. the Waterloo
+    // Road stop, ~210 m out) still counts as that interchange. Only ever the single
+    // nearest station's lines, so a looser radius can't attach the wrong ones.
+    return best && bd <= 0.25 ? best.lines : [];
   }
   function tubePills(lines) {
     return lines.map((x) => `<span class="stn-tag" style="background:${safeColour(x.colour)};color:${contrastText(x.colour)}">${escapeHtml(x.name)}</span>`).join("");
@@ -5409,16 +5412,37 @@
           <span class="sl-route-name">${escapeHtml(rt.from)} <span class="sl-arrow" aria-hidden="true">→</span> ${escapeHtml(rt.to)}</span>
           <span class="sl-route-meta">${rt.stops.length} stops · ${fmtKm(km, 1)}</span>
         </button>
-        <div class="sl-route-body line-diagram" hidden></div>
+        <div class="sl-route-body" hidden></div>
       </div>`;
     }).join("");
-    // Build (or rebuild, at the current unit) one route's strip into its body.
+    // Build (or rebuild, at the current unit) one route's strip + measure row,
+    // wiring the shared two-tap / drag-to-resize gesture so a shorter start→end
+    // stretch can be carved out, exactly as on the Lines table and bus routes.
+    // The pick-state lives on the card so it survives a unit-toggle rebuild.
     const build = (card) => {
-      const rt = routes[+card.dataset.i];
+      const rt = routes[+card.dataset.i], wp = rt.stops, c = colOf(rt);
       const body = card.querySelector(".sl-route-body");
-      body.style.setProperty("--line-col", colOf(rt));
-      body.innerHTML = stripMapHtml(null, colOf(rt), rt.id, {
-        wp: rt.stops, bannerLabel: `${rt.id} · ${rt.from} → ${rt.to}`, tap: false,
+      body.style.setProperty("--line-col", c);
+      body.innerHTML = `<div class="sl-strip line-diagram"></div><div class="sl-measure ls-measure" aria-live="polite"></div>`;
+      const picks = card._slPicks || (card._slPicks = { a: -1, b: -1 });
+      const seq = (card._slSeq = (card._slSeq || 0) + 1);
+      attachStripMeasure({
+        picks,
+        stripEl: body.querySelector(".sl-strip"),
+        measEl: body.querySelector(".sl-measure"),
+        wp,
+        emptyHint: "Tap two stops to measure a shorter stretch — or drag an end in.",
+        isStale: () => card._slSeq !== seq,
+        renderStripHtml: (sel) => stripMapHtml(null, c, rt.id, {
+          wp, bannerLabel: `${rt.id} · ${rt.from} → ${rt.to}`,
+          interactive: true, a: sel.a, b: sel.b, from: sel.from, to: sel.to,
+          // Match tube/rail interchanges by coordinates, not name — Superloop stops
+          // carry bus names ("Elephant & Castle / New Kent Road") that never match a
+          // station name, so name lookup missed the Underground. This is what buses do.
+          geoInterchange: true,
+        }),
+        measureKm: (i, j) => { let km = 0; for (let k = i + 1; k <= j; k++) km += haversineKm(wp[k - 1], wp[k]) * ROAD_FACTOR; return km; },
+        persist: () => {}, redraw: () => {}, centreOnTap: () => {}, showPopup: () => {},
       });
       body.dataset.built = "1";
     };
@@ -5439,6 +5463,12 @@
       const meta = card.querySelector(".sl-route-meta");
       if (meta) meta.textContent = `${rt.stops.length} stops · ${fmtKm(waypointsKm(rt.stops) * ROAD_FACTOR, 1)}`;
       if (card.classList.contains("open")) { build(card); card.querySelector(".sl-route-body").hidden = false; }
+    });
+    // The interchange tags match by coordinates against the tube network, which
+    // loads a moment after boot. If a strip was opened before it landed, rebuild
+    // it once so the Underground tags fill in without needing a re-open.
+    loadNetwork().catch(() => null).then(() => {
+      el.querySelectorAll(".sl-route.open").forEach((card) => { build(card); card.querySelector(".sl-route-body").hidden = false; });
     });
   }
 
