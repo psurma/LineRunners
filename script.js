@@ -824,13 +824,14 @@
     el.innerHTML = runs.map((r, i) => {
       const loc = r.location !== "London" ? `<span class="r-loc">${escapeHtml(r.location)}</span>` : "";
       const toggle = hasDetails(r) ? `<button class="r-toggle" data-i="${i}" aria-expanded="false">Details</button>` : "";
+      const isNext = r === nextRun;
       return `
-      <div class="run-row${r.suggested ? " is-suggested" : ""}${hasDetails(r) ? " has-details" : ""}" data-i="${i}">
+      <div class="run-row${isNext ? " is-next" : ""}${r.suggested ? " is-suggested" : ""}${hasDetails(r) ? " has-details" : ""}" data-i="${i}">
         <div class="r-date">${r.date.getDate()} ${MON[r.date.getMonth()]}
           <small>${DOW[r.date.getDay()]} · ${r.date.getFullYear()}</small>
         </div>
         <div class="r-swatch" style="background:${safeColour(r.colour)}"></div>
-        <div class="r-title">${escapeHtml(r.badge)} ${loc}${r.suggested ? ` <span class="r-suggest" title="Tentative — the plan is only firmed up about a month ahead">Suggested</span>` : ""}
+        <div class="r-title">${escapeHtml(r.badge)} ${loc}${isNext ? ` <span class="r-next">Next run</span>` : ""}${r.suggested ? ` <span class="r-suggest" title="Tentative — the plan is only firmed up about a month ahead">Suggested</span>` : ""}
           <small>${escapeHtml(r.leg)}</small>
         </div>
         <div class="r-dist">${escapeHtml(distText(r.distance))}

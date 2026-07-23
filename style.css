@@ -1145,6 +1145,10 @@ tr.ls-open .ls-caret { transform: rotate(90deg); }
 /* "Suggested" tag for tentative future runs */
 .r-suggest { display: inline-block; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #92600a; background: #fff4dc; border: 1px solid #f0d48a; border-radius: 999px; padding: 1px 8px; vertical-align: middle; }
 .run-row.is-suggested { opacity: 0.9; }
+/* The next run stands out at the top of the Upcoming list. */
+.run-row.is-next { border-color: var(--tfl-blue); background: rgba(0, 25, 168, 0.05); box-shadow: 0 0 0 2px rgba(0, 25, 168, 0.18); opacity: 1; }
+.run-row.is-next:hover { box-shadow: 0 0 0 2px rgba(0, 25, 168, 0.18), var(--shadow); }
+.r-next { display: inline-block; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #fff; background: var(--tfl-blue); border-radius: 999px; padding: 1px 9px; vertical-align: middle; }
 .ls-map { height: 320px; border-radius: 12px; overflow: hidden; border: 1px solid var(--line); }
 @media (max-width: 560px) { .ls-map { height: 240px; } }
 .ls-foot { margin-top: 14px; color: var(--muted); font-size: 13px; }
