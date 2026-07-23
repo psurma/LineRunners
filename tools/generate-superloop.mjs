@@ -15,7 +15,14 @@ import { dirname, join } from "node:path";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const OUT = join(ROOT, "data", "superloop.json");
-const COLOUR = "#12ABB6"; // TfL Superloop teal (approximate brand colour)
+const COLOUR = "#12ABB6"; // Superloop teal — the network-wide fallback colour
+// Each route's own colour, sampled straight from the legend swatches of TfL's
+// official Superloop diagram (img/superloop-diagram.png) so our map matches it.
+const ROUTE_COLOURS = {
+  SL1: "#FF5229", SL2: "#BFD755", SL3: "#7F3786", SL4: "#8C8D91",
+  SL5: "#49BBE8", SL6: "#F942A0", SL7: "#CA3B78", SL8: "#23419B",
+  SL9: "#39A0AA", SL10: "#FF983B", SL11: "#4985C6", BL1: "#7F5535",
+};
 // The Superloop family is 12 express routes: the SL orbital/radial services plus
 // the BL "Bakerloop" (BL1, Waterloo–Lewisham) TfL counts under the same network.
 // Probe a generous range; ids that don't exist 404 and are simply skipped.
@@ -75,8 +82,10 @@ async function fetchDir(id, dir) {
     .filter((s) => s[0] && Number.isFinite(s[1]) && Number.isFinite(s[2]));
   const segs = toSegs(j.lineStrings);
   if (stops.length < 2 || !segs.length) return null;
+  const rid = String(j.lineName || id).toUpperCase();
   return {
-    id: String(j.lineName || id).toUpperCase(),
+    id: rid,
+    colour: ROUTE_COLOURS[rid] || COLOUR,
     from: stops[0][0],
     to: stops[stops.length - 1][0],
     segs,

@@ -5316,7 +5316,8 @@
     if (stale && stale()) return;
     const routes = Array.isArray(data && data.routes) ? data.routes : [];
     if (!routes.length) { holder.innerHTML = `<p class="diagram-empty">No Superloop routes to show.</p>`; return; }
-    const teal = safeColour(data.colour || SUPERLOOP_COL);
+    const fallback = safeColour(data.colour || SUPERLOOP_COL);
+    const routeCol = (rt) => safeColour(rt.colour || fallback);
 
     document.body.classList.add("tm-map-active");
     holder.innerHTML = `<div id="tmMap"></div>`;
@@ -5326,13 +5327,16 @@
     const grp = L.layerGroup().addTo(map);
     const all = [];
 
-    // Every route's road geometry, in the Superloop teal.
-    routes.forEach((rt) => (rt.segs || []).forEach((seg) => {
-      const ll = seg.map((p) => [p[0], p[1]]);
-      if (ll.length < 2) return;
-      addFlowLine(grp, ll, teal, { baseWeight: 5, flowWeight: 5 });
-      ll.forEach((p) => all.push(p));
-    }));
+    // Every route's road geometry, in its own TfL Superloop colour.
+    routes.forEach((rt) => {
+      const col = routeCol(rt);
+      (rt.segs || []).forEach((seg) => {
+        const ll = seg.map((p) => [p[0], p[1]]);
+        if (ll.length < 2) return;
+        addFlowLine(grp, ll, col, { baseWeight: 5, flowWeight: 5 });
+        ll.forEach((p) => all.push(p));
+      });
+    });
 
     // Merge stops shared by several routes into one dot that lists them all;
     // a stop that starts or ends any route is a terminus (drawn a touch larger).
@@ -5357,19 +5361,21 @@
     byName.forEach((e) => {
       const rlist = [...e.routes].sort((a, b) => { const ra = slRank(a), rb = slRank(b); return ra[0] - rb[0] || ra[1] - rb[1]; });
       const html = `<strong>${escapeHtml(e.n)}</strong><br><span class="stn-tags">Superloop · ${rlist.map(escapeHtml).join(", ")}</span>`;
+      // Neutral tube-map ticks — a stop can sit on several differently-coloured
+      // routes, so the dot itself stays white-on-slate rather than picking a side.
       const mk = e.term
-        ? L.circleMarker([e.lat, e.lon], { radius: 5, color: "#fff", weight: 2, fillColor: teal, fillOpacity: 1 })
-        : L.circleMarker([e.lat, e.lon], { radius: 3.2, color: "#fff", weight: 1.3, fillColor: teal, fillOpacity: 1 });
+        ? L.circleMarker([e.lat, e.lon], { radius: 5, color: "#33383f", weight: 2, fillColor: "#fff", fillOpacity: 1 })
+        : L.circleMarker([e.lat, e.lon], { radius: 3.2, color: "#5b616b", weight: 1.3, fillColor: "#fff", fillOpacity: 1 });
       mk.bindTooltip(escapeHtml(e.n), { direction: "top" }).on("click", () => centreOn(e.lat, e.lon, html)).addTo(grp);
     });
 
-    // An SLn roundel mid-route, so each arc of the loop is labelled once without
-    // the clutter of a badge at every shared terminus.
+    // Each route's roundel mid-line, in its own colour — labels every arc of the
+    // loop once without the clutter of a badge at every shared terminus.
     routes.forEach((rt) => {
       const flat = (rt.segs || []).flat();
       if (!flat.length) return;
       const mid = flat[Math.floor(flat.length / 2)];
-      L.marker([mid[0], mid[1]], { icon: roundelIcon(rt.id, teal), keyboard: false, interactive: false, zIndexOffset: 600 }).addTo(grp);
+      L.marker([mid[0], mid[1]], { icon: roundelIcon(rt.id, routeCol(rt)), keyboard: false, interactive: false, zIndexOffset: 600 }).addTo(grp);
     });
 
     if (all.length) map.fitBounds(L.latLngBounds(all), { padding: [28, 28] });
@@ -5377,6 +5383,63 @@
     if (cap) {
       cap.innerHTML = `TfL's Superloop — <strong>${routes.length}</strong> express-bus routes ringing outer London, <strong>${byName.size}</strong> stops, drawn from live TfL data. Tap any stop.`;
     }
+  }
+
+  // The Superloop section: every route listed with a coloured SLn badge that
+  // expands to a horizontal stop strip (the shared stripMapHtml) in that route's
+  // own colour. Strips build on first open; open ones re-render on the unit toggle.
+  let superloopRefresh = null; // set below — re-renders open strips at the current unit
+  async function renderSuperloopRoutes() {
+    const el = document.getElementById("superloopRoutes");
+    if (!el) return;
+    const res = await vfetch("data/superloop.json").catch(() => null);
+    if (!res || !res.ok) { el.innerHTML = `<p class="diagram-empty">Couldn't load the Superloop routes right now.</p>`; return; }
+    const data = await res.json();
+    const routes = Array.isArray(data && data.routes) ? data.routes : [];
+    if (!routes.length) { el.innerHTML = `<p class="diagram-empty">No Superloop routes to show.</p>`; return; }
+    const fallback = safeColour(data.colour || SUPERLOOP_COL);
+    const colOf = (rt) => safeColour(rt.colour || fallback);
+    el.innerHTML = routes.map((rt, i) => {
+      const c = colOf(rt);
+      const km = waypointsKm(rt.stops) * ROAD_FACTOR;
+      return `<div class="sl-route" data-i="${i}">
+        <button type="button" class="sl-route-head" aria-expanded="false">
+          <span class="sl-caret" aria-hidden="true">▸</span>
+          <span class="sl-badge" style="background:${c};color:${contrastText(c)}">${escapeHtml(rt.id)}</span>
+          <span class="sl-route-name">${escapeHtml(rt.from)} <span class="sl-arrow" aria-hidden="true">→</span> ${escapeHtml(rt.to)}</span>
+          <span class="sl-route-meta">${rt.stops.length} stops · ${fmtKm(km, 1)}</span>
+        </button>
+        <div class="sl-route-body line-diagram" hidden></div>
+      </div>`;
+    }).join("");
+    // Build (or rebuild, at the current unit) one route's strip into its body.
+    const build = (card) => {
+      const rt = routes[+card.dataset.i];
+      const body = card.querySelector(".sl-route-body");
+      body.style.setProperty("--line-col", colOf(rt));
+      body.innerHTML = stripMapHtml(null, colOf(rt), rt.id, {
+        wp: rt.stops, bannerLabel: `${rt.id} · ${rt.from} → ${rt.to}`, tap: false,
+      });
+      body.dataset.built = "1";
+    };
+    el.querySelectorAll(".sl-route-head").forEach((btn) => btn.addEventListener("click", () => {
+      const card = btn.closest(".sl-route");
+      const body = card.querySelector(".sl-route-body");
+      const open = btn.getAttribute("aria-expanded") === "true";
+      btn.setAttribute("aria-expanded", open ? "false" : "true");
+      card.classList.toggle("open", !open);
+      if (open) { body.hidden = true; return; }
+      if (!body.dataset.built) build(card);
+      body.hidden = false;
+    }));
+    // km/mi toggle: refresh every row's end-to-end figure and rebuild any open
+    // strips in place, so distances follow the unit without collapsing them.
+    superloopRefresh = () => el.querySelectorAll(".sl-route").forEach((card) => {
+      const rt = routes[+card.dataset.i];
+      const meta = card.querySelector(".sl-route-meta");
+      if (meta) meta.textContent = `${rt.stops.length} stops · ${fmtKm(waypointsKm(rt.stops) * ROAD_FACTOR, 1)}`;
+      if (card.classList.contains("open")) { build(card); card.querySelector(".sl-route-body").hidden = false; }
+    });
   }
 
   // Real geographic map: Leaflet + CARTO Voyager basemap + our tube overlays.
@@ -6584,6 +6647,7 @@
     ["wireSocials", wireSocials],
     ["loadWeather", loadWeather], ["setupScrollSpy", setupScrollSpy],
     ["setupUnitToggle", setupUnitToggle], ["setupLiveClock", setupLiveClock],
+    ["renderSuperloopRoutes", renderSuperloopRoutes],
     ["loadLiveNow", loadLiveNow],
   ].forEach(([name, fn]) => {
     try { fn(); } catch (e) { console.error("init " + name + " failed:", e); }
@@ -6650,6 +6714,7 @@
       refreshPlanner(); // tube calc or adventure escape-point distances, at the new unit
       if (typeof geoRefresh === "function") geoRefresh(); // live network-map labels
       if (typeof journeyRefresh === "function") journeyRefresh(); // A→B planner result
+      if (typeof superloopRefresh === "function") superloopRefresh(); // Superloop section strips
       if (curMap === "running") loadMap();                // running-times table
     }));
   }
