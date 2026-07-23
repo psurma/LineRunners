@@ -6292,6 +6292,7 @@
       ${timesRowHtml(km)}
       ${journeyStripHtml(segments, graph)}
       <div class="jr-elev" aria-live="polite"></div>
+      <div class="jr-dl" aria-live="polite"></div>
       <p class="jr-note">${loopNote}The map traces the real pavement route (GPX) leg by leg where available. Distance is on-street (crow-flies &times; 1.3); elevation is measured along the traced pavement.</p>`;
   }
   function setupJourneyPlanner() {
@@ -6340,6 +6341,25 @@
           map.fitBounds(L.latLngBounds(drawn.latlngs), { padding: [28, 28] });
           const box = result.querySelector(".jr-elev");
           if (box) box.innerHTML = elevationHtml(drawn.elev);
+          // Export the traced pavement route for a watch. Built on click (no object
+          // URL to leak across re-renders); downloadBlob revokes its own URL.
+          const dlBox = result.querySelector(".jr-dl");
+          if (dlBox && drawn.latlngs.length > 1) {
+            const A = graph.nodes[res.path[0]].name, B = graph.nodes[res.path[res.path.length - 1]].name;
+            const name = res.loop ? `${A} loop` : `${A} to ${B}`;
+            const slug = lineSlug(name) || "route";
+            dlBox.innerHTML = `<a class="gpx-dl jr-gpx" href="#" title="Download this exact run route as a GPX file for your watch">↓ GPX route</a><a class="gpx-dl jr-tcx" href="#" title="Download as a Garmin TCX course — Virtual Partner pacing at your site pace">⌚ TCX</a>`;
+            dlBox.querySelector(".jr-gpx").addEventListener("click", (ev) => {
+              ev.preventDefault();
+              const text = gpxFromPoints(drawn.latlngs, `TubeRun ${name}`);
+              if (text) downloadBlob(`TubeRun-${slug}.gpx`, new Blob([text], { type: "application/gpx+xml" }));
+            });
+            dlBox.querySelector(".jr-tcx").addEventListener("click", (ev) => {
+              ev.preventDefault();
+              const doc = tcxFromPoints(drawn.latlngs, `TubeRun ${name}`, false);
+              if (doc) downloadBlob(`TubeRun-${slug}.tcx`, new Blob([doc], { type: "application/vnd.garmin.tcx+xml" }));
+            });
+          }
         });
       });
     }

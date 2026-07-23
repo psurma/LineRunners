@@ -1290,6 +1290,8 @@ tr.ls-open .ls-caret { transform: rotate(90deg); }
 .jr-elev-area { fill: rgba(0, 25, 168, 0.12); stroke: none; }
 .jr-elev-line { fill: none; stroke: var(--tfl-blue); stroke-width: 1.7; vector-effect: non-scaling-stroke; stroke-linejoin: round; stroke-linecap: round; }
 .jr-elev:empty { margin: 0; }
+.jr-dl { margin: 12px 0 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.jr-dl:empty { margin: 0; }
 .ls-elev-load { font-size: 12.5px; font-weight: 600; color: #4b5563; margin: 6px 0 2px; }
 
 /* Tube-map-style journey diagram: legs coloured by line, changes marked */
