@@ -5540,9 +5540,10 @@
   }
 
   let loopSectionsRefresh = null; // set below — refreshes section distances on unit toggle
-  // The London LOOP section: all 24 signed sections listed with a GPX/TCX export
-  // each, built on click from the section's OpenStreetMap footpath. No stop strip
-  // — the LOOP runs between stations, not along a stop sequence.
+  // The London LOOP section: all 24 signed sections, each expanding to a horizontal
+  // stop strip (the shared stripMapHtml) between the stations it links, with the
+  // two-tap / drag measure and a GPX/TCX export — the walking-trail equivalent of
+  // the tube and bus route strips. Reuses the Superloop section's card structure.
   async function renderLondonLoopSections() {
     const el = document.getElementById("loopSections");
     if (!el) return;
@@ -5555,37 +5556,89 @@
     const totalKm = sections.reduce((a, s) => a + s.km, 0);
     const totalHtml = () => `<strong>${sections.length}</strong> sections · <strong>${fmtKm(totalKm, 0)}</strong> right around London`;
     el.innerHTML = `<p class="loop-total">${totalHtml()}</p>` + sections.map((s, i) => `
-      <div class="loop-sec" data-i="${i}">
-        <span class="loop-badge" style="background:${col};color:${tc}">${s.n}</span>
-        <span class="loop-name">${escapeHtml(s.from)} <span class="loop-arrow" aria-hidden="true">→</span> ${escapeHtml(s.to)}</span>
-        <span class="loop-meta">${fmtKm(s.km, 1)}</span>
-        <span class="loop-dl">
-          <a class="gpx-dl loop-gpx" href="#" data-i="${i}" title="Download LOOP Section ${s.n} as a GPX file for your watch">↓ GPX</a>
-          <a class="gpx-dl loop-tcx" href="#" data-i="${i}" title="Download as a Garmin TCX course — Virtual Partner pacing at your site pace">⌚ TCX</a>
-        </span>
+      <div class="sl-route loop-route" data-i="${i}">
+        <button type="button" class="sl-route-head" aria-expanded="false">
+          <span class="sl-caret" aria-hidden="true">▸</span>
+          <span class="sl-badge loop-badge" style="background:${col};color:${tc}">${s.n}</span>
+          <span class="sl-route-name">${escapeHtml(s.from)} <span class="sl-arrow" aria-hidden="true">→</span> ${escapeHtml(s.to)}</span>
+          <span class="sl-route-meta">${fmtKm(s.km, 1)}</span>
+        </button>
+        <div class="sl-route-body" hidden></div>
       </div>`).join("");
-    const geomOf = (s) => (s.geom || []).filter((p) => Array.isArray(p) && Number.isFinite(p[0]) && Number.isFinite(p[1]));
-    el.querySelectorAll(".loop-gpx").forEach((a) => a.addEventListener("click", (ev) => {
-      ev.preventDefault();
-      const s = sections[+a.dataset.i];
-      const text = gpxFromPoints(geomOf(s), `London LOOP Section ${s.n} · ${s.from} → ${s.to}`);
-      if (text) downloadBlob(`london-loop-${s.n}.gpx`, new Blob([text], { type: "application/gpx+xml" }));
+
+    // Build one section's strip + measure + downloads on first open (and on the
+    // unit-toggle rebuild). Ticks are the section's stations; the measured stretch
+    // uses the baked along-trail km (index 3), not crow-flies.
+    const build = (card) => {
+      const s = sections[+card.dataset.i], wp = s.stops, body = card.querySelector(".sl-route-body");
+      // Leg + total distances from the baked along-trail km, so the strip's tick
+      // labels and end-to-end total agree with the measured stretch (rather than
+      // stripMapHtml's crow-flies fallback, which winds badly on a footpath).
+      const legKms = wp.map((p, i) => (i === 0 ? 0 : (p[3] || 0) - (wp[i - 1][3] || 0)));
+      const totalKm = wp.length ? (wp[wp.length - 1][3] || 0) : 0;
+      body.style.setProperty("--line-col", col);
+      body.innerHTML = `<div class="sl-strip line-diagram"></div><div class="sl-measure ls-measure" aria-live="polite"></div><div class="sl-actions"><div class="sl-dl"></div></div>`;
+      const picks = card._loopPicks || (card._loopPicks = { a: -1, b: -1 });
+      const seq = (card._loopSeq = (card._loopSeq || 0) + 1);
+      attachStripMeasure({
+        picks,
+        stripEl: body.querySelector(".sl-strip"),
+        measEl: body.querySelector(".sl-measure"),
+        wp,
+        emptyHint: "Tap two stations to measure a shorter stretch — or drag an end in.",
+        isStale: () => card._loopSeq !== seq,
+        renderStripHtml: (sel) => stripMapHtml(null, col, `Section ${s.n}`, {
+          wp, bannerLabel: `Section ${s.n} · ${s.from} → ${s.to}`,
+          interactive: true, a: sel.a, b: sel.b, from: sel.from, to: sel.to,
+          legKms, totalKm, // baked along-trail distances (see above)
+          geoInterchange: true, // stations carry Tube/rail names, but coord-match is robust
+        }),
+        // Winding-trail distance from the baked along-km, so a stretch reads true.
+        measureKm: (i, j) => Math.abs((wp[j][3] || 0) - (wp[i][3] || 0)),
+        persist: () => {}, redraw: () => {}, centreOnTap: () => {}, showPopup: () => {},
+      });
+      // Watch export: the whole section footpath (its OSM geometry), built on click.
+      const track = (s.geom || []).filter((p) => Array.isArray(p) && Number.isFinite(p[0]) && Number.isFinite(p[1]));
+      const dlBox = body.querySelector(".sl-dl");
+      if (dlBox && track.length > 1) {
+        dlBox.innerHTML = `<a class="gpx-dl loop-gpx" href="#" title="Download LOOP Section ${s.n} as a GPX file for your watch">↓ GPX route</a><a class="gpx-dl loop-tcx" href="#" title="Download as a Garmin TCX course — Virtual Partner pacing at your site pace">⌚ TCX</a>`;
+        dlBox.querySelector(".loop-gpx").addEventListener("click", (ev) => {
+          ev.preventDefault();
+          const text = gpxFromPoints(track, `London LOOP Section ${s.n} · ${s.from} → ${s.to}`);
+          if (text) downloadBlob(`london-loop-${s.n}.gpx`, new Blob([text], { type: "application/gpx+xml" }));
+        });
+        dlBox.querySelector(".loop-tcx").addEventListener("click", (ev) => {
+          ev.preventDefault();
+          const doc = tcxFromPoints(track, `LOOP ${s.n}`, false);
+          if (doc) downloadBlob(`london-loop-${s.n}.tcx`, new Blob([doc], { type: "application/vnd.garmin.tcx+xml" }));
+        });
+      }
+      body.dataset.built = "1";
+    };
+    el.querySelectorAll(".sl-route-head").forEach((btn) => btn.addEventListener("click", () => {
+      const card = btn.closest(".sl-route"), body = card.querySelector(".sl-route-body");
+      const open = btn.getAttribute("aria-expanded") === "true";
+      btn.setAttribute("aria-expanded", open ? "false" : "true");
+      card.classList.toggle("open", !open);
+      if (open) { body.hidden = true; return; }
+      if (!body.dataset.built) build(card);
+      body.hidden = false;
     }));
-    el.querySelectorAll(".loop-tcx").forEach((a) => a.addEventListener("click", (ev) => {
-      ev.preventDefault();
-      const s = sections[+a.dataset.i];
-      const doc = tcxFromPoints(geomOf(s), `LOOP ${s.n}`, false);
-      if (doc) downloadBlob(`london-loop-${s.n}.tcx`, new Blob([doc], { type: "application/vnd.garmin.tcx+xml" }));
-    }));
-    // Unit toggle: refresh the total and each section's distance in place.
+    // km/mi toggle: refresh the total + each section's figure, rebuilding open strips.
     loopSectionsRefresh = () => {
       const p = el.querySelector(".loop-total");
       if (p) p.innerHTML = totalHtml();
-      el.querySelectorAll(".loop-sec").forEach((row) => {
-        const meta = row.querySelector(".loop-meta");
-        if (meta) meta.textContent = fmtKm(sections[+row.dataset.i].km, 1);
+      el.querySelectorAll(".sl-route").forEach((card) => {
+        const meta = card.querySelector(".sl-route-meta");
+        if (meta) meta.textContent = fmtKm(sections[+card.dataset.i].km, 1);
+        if (card.classList.contains("open")) { build(card); card.querySelector(".sl-route-body").hidden = false; }
       });
     };
+    // Interchange tags match against the tube network; if a strip was opened before
+    // it loaded, rebuild it once so the Underground/rail tags fill in.
+    loadNetwork().catch(() => null).then(() => {
+      el.querySelectorAll(".sl-route.open").forEach((card) => { build(card); card.querySelector(".sl-route-body").hidden = false; });
+    });
   }
 
   // The Superloop section: every route listed with a coloured SLn badge that

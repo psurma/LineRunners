@@ -16,12 +16,36 @@ import { dirname, join } from "node:path";
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const OUT = join(ROOT, "data", "london-loop.json");
 const COLOUR = "#3C8C40"; // walking-route green — the LOOP's waymark colour
-const OVERPASS = "https://overpass-api.de/api/interpreter";
+// Overpass mirrors, tried in order — the main endpoint rate-limits heavy sessions.
+const ENDPOINTS = ["https://overpass-api.de/api/interpreter", "https://overpass.kumi.systems/api/interpreter"];
 // The 24 section route relations (type=route, ref=LOOP), not the superroute
 // wrappers or the unsigned alternatives/diversions (those carry no ref).
 const QUERY = `[out:json][timeout:180];
 rel["ref"="LOOP"]["type"="route"]["network"="rwn"];
 out geom;`;
+// Rail/Tube/Overground/DLR stations across the LOOP's bounding box — the join/
+// leave points that become the strip's ticks. Bounds bracket the outer orbital.
+const STATIONS_QUERY = `[out:json][timeout:180];
+(node["railway"="station"](51.28,-0.52,51.69,0.27);node["railway"="halt"](51.28,-0.52,51.69,0.27););
+out;`;
+
+async function overpassJson(query) {
+  let lastErr;
+  for (const url of ENDPOINTS) {
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded", "User-Agent": "TubeRun/1.0 (running club map)" },
+        body: "data=" + encodeURIComponent(query),
+      });
+      if (!res.ok) { lastErr = new Error(`${url} ${res.status}`); continue; }
+      const text = await res.text();
+      if (!text.trim().startsWith("{")) { lastErr = new Error(`${url} returned non-JSON`); continue; }
+      return JSON.parse(text);
+    } catch (e) { lastErr = e; }
+  }
+  throw lastErr || new Error("all Overpass endpoints failed");
+}
 
 const R = 6371;
 const rad = (d) => (d * Math.PI) / 180;
@@ -70,14 +94,69 @@ function sectionNo(name) {
   return m ? parseInt(m[1], 10) : 0;
 }
 
+const norm = (x) => String(x || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+// Tidy an OSM station name to a clean tick label: drop the "(for …)" notes and
+// the " Underground/Rail/DLR/Tram Station" suffixes.
+function tidyStation(name) {
+  return String(name || "")
+    .replace(/\s*\((?:for )?[^)]*\)\s*$/i, "")
+    .replace(/\s+(?:Underground|Rail|DLR|Tram|Railway)?\s*Station$/i, "")
+    .trim();
+}
+// Cumulative trail distance (km) at each geom vertex.
+function cumKm(geom) {
+  const cum = [0];
+  for (let i = 1; i < geom.length; i++) cum[i] = cum[i - 1] + haversineKm(geom[i - 1], geom[i]);
+  return cum;
+}
+// Nearest geom vertex to a point → { i, d(metres) }.
+function nearestVertex(geom, lat, lon) {
+  let bi = 0, best = Infinity;
+  for (let i = 0; i < geom.length; i++) { const d = haversineKm(geom[i], [lat, lon]) * 1000; if (d < best) { best = d; bi = i; } }
+  return { i: bi, d: best };
+}
+// Attach an ordered `stops` list to a section: its from/to endpoints plus every
+// railway station within ~500 m of the path, in path order. Each stop carries
+// its along-trail distance (km) so the strip measures a real winding sub-stretch,
+// not a crow-flies underestimate. The geom is first oriented from → to.
+function attachStops(s, stations) {
+  const geom = s.geom;
+  const byName = new Map();
+  for (const st of stations) { const k = norm(tidyStation(st.name)); if (!byName.has(k)) byName.set(k, st); }
+  const fromSt = byName.get(norm(s.from)), toSt = byName.get(norm(s.to));
+  const anchor = fromSt || toSt;
+  if (anchor) {
+    const dStart = haversineKm([anchor.lat, anchor.lon], geom[0]);
+    const dEnd = haversineKm([anchor.lat, anchor.lon], geom[geom.length - 1]);
+    if ((fromSt && dEnd < dStart) || (!fromSt && dStart < dEnd)) geom.reverse();
+  }
+  const cum = cumKm(geom);
+  const total = cum[cum.length - 1];
+  const seen = new Set([norm(s.from), norm(s.to)]);
+  const inter = [];
+  for (const st of stations) {
+    const name = tidyStation(st.name), k = norm(name);
+    if (!k || seen.has(k)) continue;
+    const nv = nearestVertex(geom, st.lat, st.lon);
+    if (nv.d > 500) continue;
+    const alongKm = cum[nv.i];
+    // Skip a station sitting on an endpoint — it's the from/to under another
+    // name (e.g. "Rainham" vs "Rainham rail station"), not a real intermediate.
+    if (alongKm < 0.15 || alongKm > total - 0.15) continue;
+    seen.add(k);
+    inter.push({ name, lat: st.lat, lon: st.lon, alongKm });
+  }
+  inter.sort((a, b) => a.alongKm - b.alongKm);
+  const stop = (name, lat, lon, alongKm) => [name, +lat.toFixed(5), +lon.toFixed(5), +alongKm.toFixed(2)];
+  s.stops = [
+    stop(s.from, geom[0][0], geom[0][1], 0),
+    ...inter.map((h) => stop(h.name, h.lat, h.lon, h.alongKm)),
+    stop(s.to, geom[geom.length - 1][0], geom[geom.length - 1][1], cum[geom.length - 1]),
+  ];
+}
+
 async function main() {
-  const res = await fetch(OVERPASS, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded", "User-Agent": "TubeRun/1.0 (running club map)" },
-    body: "data=" + encodeURIComponent(QUERY),
-  });
-  if (!res.ok) { console.error(`Overpass ${res.status} — aborting. Existing data/london-loop.json left untouched.`); process.exit(1); }
-  const j = await res.json();
+  const j = await overpassJson(QUERY).catch((e) => { console.error(`Overpass (routes) failed: ${e.message} — aborting. Existing data/london-loop.json left untouched.`); process.exit(1); });
   const rels = (j.elements || []).filter((e) => e.type === "relation" && sectionNo(e.tags && e.tags.name) >= 1);
 
   const sections = [];
@@ -96,10 +175,17 @@ async function main() {
   sections.sort((a, b) => a.n - b.n);
   if (sections.length < 20) { console.error(`Only ${sections.length} sections fetched — aborting (bad Overpass response?).`); process.exit(1); }
 
+  // Fetch stations and attach the strip ticks (orients each section's geom too).
+  const sj = await overpassJson(STATIONS_QUERY).catch((e) => { console.error(`Overpass (stations) failed: ${e.message}`); return { elements: [] }; });
+  const stations = (sj.elements || [])
+    .filter((e) => e.tags && e.tags.name && Number.isFinite(e.lat) && Number.isFinite(e.lon))
+    .map((e) => ({ name: e.tags.name, lat: e.lat, lon: e.lon }));
+  sections.forEach((s) => attachStops(s, stations));
+
   const data = {
     generated: new Date().toISOString().slice(0, 10),
     colour: COLOUR,
-    source: "OpenStreetMap (London LOOP route relations)",
+    source: "OpenStreetMap (London LOOP route relations + stations)",
     name: "London LOOP",
     sections,
   };
@@ -107,8 +193,8 @@ async function main() {
   const totalKm = sections.reduce((a, s) => a + s.km, 0);
   const pts = sections.reduce((a, s) => a + s.geom.length, 0);
   console.log(`Wrote ${OUT}`);
-  console.log(`  ${sections.length} sections, ${totalKm.toFixed(0)} km total, ${pts} points.`);
-  sections.forEach((s) => console.log(`    ${String(s.n).padStart(2)}. ${s.from} → ${s.to}  (${s.km} km)`));
+  console.log(`  ${sections.length} sections, ${totalKm.toFixed(0)} km total, ${pts} points, ${stations.length} stations available.`);
+  sections.forEach((s) => console.log(`    ${String(s.n).padStart(2)}. ${s.from} → ${s.to}  (${s.km} km, ${s.stops.length} stops: ${s.stops.map((x) => x[0]).join(" · ").slice(0, 70)})`));
 }
 
 main().catch((e) => { console.error(e); process.exit(1); });

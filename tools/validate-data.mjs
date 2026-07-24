@@ -356,12 +356,14 @@ try {
       const inLondon = (lat, lon) => lat > 51.2 && lat < 51.8 && lon > -0.7 && lon < 0.4;
       const secs = ll && Array.isArray(ll.sections) ? ll.sections : null;
       const okSec = (s) =>
-        has(s, ["n", "from", "to", "geom"]) && typeof s.n === "number" &&
+        has(s, ["n", "from", "to", "geom", "stops"]) && typeof s.n === "number" &&
         typeof s.from === "string" && typeof s.to === "string" &&
         Array.isArray(s.geom) && s.geom.length > 1 &&
-        s.geom.every((p) => Array.isArray(p) && p.length === 2 && inLondon(p[0], p[1]));
-      if (secs && secs.length >= 20 && secs.every(okSec)) ok(`london-loop.json: ${secs.length} sections, each with in-bounds geom`);
-      else fail(`london-loop.json: must be { sections:[{ n, from, to, geom:[[lat,lon],…] }] } (>=20 sections) with all coords inside Greater London — re-run tools/generate-london-loop.mjs`);
+        s.geom.every((p) => Array.isArray(p) && p.length === 2 && inLondon(p[0], p[1])) &&
+        Array.isArray(s.stops) && s.stops.length >= 2 &&
+        s.stops.every((p) => Array.isArray(p) && p.length === 4 && typeof p[0] === "string" && inLondon(p[1], p[2]) && typeof p[3] === "number");
+      if (secs && secs.length >= 20 && secs.every(okSec)) ok(`london-loop.json: ${secs.length} sections, each with in-bounds geom + stops`);
+      else fail(`london-loop.json: must be { sections:[{ n, from, to, geom:[[lat,lon],…], stops:[[name,lat,lon,alongKm],…] }] } (>=20 sections) inside Greater London — re-run tools/generate-london-loop.mjs`);
     }
 
     // Remaining fetched artifacts are consumed as plain top-level arrays:
