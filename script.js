@@ -5424,7 +5424,7 @@
       const rt = routes[+card.dataset.i], wp = rt.stops, c = colOf(rt);
       const body = card.querySelector(".sl-route-body");
       body.style.setProperty("--line-col", c);
-      body.innerHTML = `<div class="sl-strip line-diagram"></div><div class="sl-measure ls-measure" aria-live="polite"></div>`;
+      body.innerHTML = `<div class="sl-strip line-diagram"></div><div class="sl-measure ls-measure" aria-live="polite"></div><div class="sl-dl"></div>`;
       const picks = card._slPicks || (card._slPicks = { a: -1, b: -1 });
       const seq = (card._slSeq = (card._slSeq || 0) + 1);
       attachStripMeasure({
@@ -5445,6 +5445,26 @@
         measureKm: (i, j) => { let km = 0; for (let k = i + 1; k <= j; k++) km += haversineKm(wp[k - 1], wp[k]) * ROAD_FACTOR; return km; },
         persist: () => {}, redraw: () => {}, centreOnTap: () => {}, showPopup: () => {},
       });
+      // Watch export: the route's whole traced geometry (each route is one
+      // continuous TfL line, so segs flatten to a single ordered track). Built on
+      // click so no object URL leaks across unit-toggle rebuilds; downloadBlob
+      // revokes its own URL. GPX is bare geometry; TCX carries site-pace timing.
+      const track = (rt.segs || []).flat();
+      const dlBox = body.querySelector(".sl-dl");
+      if (dlBox && track.length > 1) {
+        const slug = `superloop-${lineSlug(rt.id)}`;
+        dlBox.innerHTML = `<a class="gpx-dl sl-gpx" href="#" title="Download the whole ${escapeAttr(rt.id)} route as a GPX file for your watch">↓ GPX route</a><a class="gpx-dl sl-tcx" href="#" title="Download as a Garmin TCX course — Virtual Partner pacing at your site pace">⌚ TCX</a>`;
+        dlBox.querySelector(".sl-gpx").addEventListener("click", (ev) => {
+          ev.preventDefault();
+          const text = gpxFromPoints(track, `TubeRun ${rt.id} · ${rt.from} → ${rt.to}`);
+          if (text) downloadBlob(`${slug}.gpx`, new Blob([text], { type: "application/gpx+xml" }));
+        });
+        dlBox.querySelector(".sl-tcx").addEventListener("click", (ev) => {
+          ev.preventDefault();
+          const doc = tcxFromPoints(track, `TubeRun ${rt.id}`, false);
+          if (doc) downloadBlob(`${slug}.tcx`, new Blob([doc], { type: "application/vnd.garmin.tcx+xml" }));
+        });
+      }
       body.dataset.built = "1";
     };
     el.querySelectorAll(".sl-route-head").forEach((btn) => btn.addEventListener("click", () => {

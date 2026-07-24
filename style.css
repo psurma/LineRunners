@@ -1127,6 +1127,8 @@ tr.ls-open .ls-caret { transform: rotate(90deg); }
 .sl-route-body[hidden] { display: none; }
 .sl-route-body .sl-strip { margin: 0; }
 .sl-measure { width: 100%; }
+.sl-dl { margin: 10px 0 2px; display: flex; flex-wrap: wrap; gap: 8px; }
+.sl-dl:empty { margin: 0; }
 @media (max-width: 560px) { .sl-route-meta { display: none; } }
 
 /* Download-GPX links (line-by-line, planner, journey board, network map) */
