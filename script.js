@@ -5587,7 +5587,15 @@
     // unit-toggle rebuild). Ticks are the section's stations; the measured stretch
     // uses the baked along-trail km (index 3), not crow-flies.
     const build = (card) => {
-      const s = sections[+card.dataset.i], wp = s.stops, body = card.querySelector(".sl-route-body");
+      const s = sections[+card.dataset.i], body = card.querySelector(".sl-route-body");
+      // Per-card running direction, kept on the card so it survives a rebuild.
+      // Reverse flips the stops + geometry; the along-trail km are re-measured from
+      // the new start (total − original) so leg labels and the measure stay positive.
+      const rev = !!card._trailRev;
+      const fwd = s.stops;
+      const total = fwd.length ? (fwd[fwd.length - 1][3] || 0) : 0;
+      const wp = rev ? fwd.slice().reverse().map((st) => [st[0], st[1], st[2], +(total - (st[3] || 0)).toFixed(2)]) : fwd;
+      const from = wp[0][0], to = wp[wp.length - 1][0];
       // Leg + total distances from the baked along-trail km, so the strip's tick
       // labels and end-to-end total agree with the measured stretch (rather than
       // stripMapHtml's crow-flies fallback, which winds badly on a footpath).
@@ -5595,7 +5603,7 @@
       const totKm = wp.length ? (wp[wp.length - 1][3] || 0) : 0;
       body.style.setProperty("--line-col", col);
       if (card._trailMap) { card._trailMap.remove(); card._trailMap = null; } // drop the previous map before a rebuild
-      body.innerHTML = `<div class="sl-strip line-diagram"></div><div class="sl-measure ls-measure" aria-live="polite"></div><div class="trail-map"></div><div class="sl-actions"><div class="sl-dl"></div></div>`;
+      body.innerHTML = `<div class="sl-strip line-diagram"></div><div class="sl-measure ls-measure" aria-live="polite"></div><div class="trail-map"></div><div class="sl-actions"><div class="sl-dl"></div><button type="button" class="sl-reverse${rev ? " on" : ""}" title="${rev ? "Showing the section reversed — tap to flip back" : "Flip the section to run it the other way"}">⇄ Reverse</button></div>`;
       const picks = card._trailPicks || (card._trailPicks = { a: -1, b: -1 });
       const seq = (card._trailSeq = (card._trailSeq || 0) + 1);
       // Geographic map of the section, below the strip: the whole footpath, or just
@@ -5610,8 +5618,8 @@
         if (!(picks.a >= 0 && picks.b >= 0)) {
           drawFlowSegments(map, holder, [geomLL.map((p) => [p[0], p[1]])], col, {
             stops: wp,
-            start: { at: [geomLL[0][0], geomLL[0][1]], label: escapeHtml(s.from) },
-            finish: { at: [geomLL[geomLL.length - 1][0], geomLL[geomLL.length - 1][1]], label: escapeHtml(s.to) },
+            start: { at: [wp[0][1], wp[0][2]], label: escapeHtml(from) },
+            finish: { at: [wp[wp.length - 1][1], wp[wp.length - 1][2]], label: escapeHtml(to) },
             tubeConns: true,
           }, [24, 24]);
           return;
@@ -5635,7 +5643,7 @@
         emptyHint: "Tap two stations to measure a shorter stretch — or drag an end in.",
         isStale: () => card._trailSeq !== seq,
         renderStripHtml: (sel) => stripMapHtml(null, col, `Section ${s.n}`, {
-          wp, bannerLabel: `Section ${s.n} · ${s.from} → ${s.to}`,
+          wp, bannerLabel: `Section ${s.n} · ${from} → ${to}`,
           interactive: true, a: sel.a, b: sel.b, from: sel.from, to: sel.to,
           legKms, totalKm: totKm, // baked along-trail distances (see above)
           geoInterchange: true, // stations carry Tube/rail names, but coord-match is robust
@@ -5656,22 +5664,30 @@
       // On first open the panel is still hidden, so this initial fitBounds runs at
       // zero size and maxes out the zoom — re-fit on the next frame, once visible.
       requestAnimationFrame(() => { if (card._trailMap) { card._trailMap.invalidateSize(false); drawMap(); } });
-      // Watch export: the whole section footpath (its OSM geometry), built on click.
-      const track = (s.geom || []).filter((p) => Array.isArray(p) && Number.isFinite(p[0]) && Number.isFinite(p[1]));
+      // Watch export: the whole section footpath in the running direction, on click.
+      const track = rev ? geomLL.slice().reverse() : geomLL;
       const dlBox = body.querySelector(".sl-dl");
       if (dlBox && track.length > 1) {
+        const slug = `${opts.slug}-${s.n}${rev ? "-reverse" : ""}`;
         dlBox.innerHTML = `<a class="gpx-dl loop-gpx" href="#" title="Download ${escapeAttr(opts.trailShort)} Section ${s.n} as a GPX file for your watch">↓ GPX route</a><a class="gpx-dl loop-tcx" href="#" title="Download as a Garmin TCX course — Virtual Partner pacing at your site pace">⌚ TCX</a>`;
         dlBox.querySelector(".loop-gpx").addEventListener("click", (ev) => {
           ev.preventDefault();
-          const text = gpxFromPoints(track, `${opts.trailFull} Section ${s.n} · ${s.from} → ${s.to}`);
-          if (text) downloadBlob(`${opts.slug}-${s.n}.gpx`, new Blob([text], { type: "application/gpx+xml" }));
+          const text = gpxFromPoints(track, `${opts.trailFull} Section ${s.n} · ${from} → ${to}`);
+          if (text) downloadBlob(`${slug}.gpx`, new Blob([text], { type: "application/gpx+xml" }));
         });
         dlBox.querySelector(".loop-tcx").addEventListener("click", (ev) => {
           ev.preventDefault();
           const doc = tcxFromPoints(track, `${opts.trailShort} ${s.n}`, false);
-          if (doc) downloadBlob(`${opts.slug}-${s.n}.tcx`, new Blob([doc], { type: "application/vnd.garmin.tcx+xml" }));
+          if (doc) downloadBlob(`${slug}.tcx`, new Blob([doc], { type: "application/vnd.garmin.tcx+xml" }));
         });
       }
+      // Reverse — flip the running direction; remap any measured stretch's ends.
+      body.querySelector(".sl-reverse").addEventListener("click", () => {
+        card._trailRev = !rev;
+        const p = card._trailPicks;
+        if (p) { if (p.a >= 0) p.a = fwd.length - 1 - p.a; if (p.b >= 0) p.b = fwd.length - 1 - p.b; }
+        build(card);
+      });
       body.dataset.built = "1";
     };
     el.querySelectorAll(".sl-route-head").forEach((btn) => btn.addEventListener("click", () => {
