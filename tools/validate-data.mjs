@@ -366,6 +366,23 @@ try {
       else fail(`london-loop.json: must be { sections:[{ n, from, to, geom:[[lat,lon],…], stops:[[name,lat,lon,alongKm],…] }] } (>=20 sections) inside Greater London — re-run tools/generate-london-loop.mjs`);
     }
 
+    // capital-ring.json: same shape as london-loop.json (renderTrailSections reads
+    // both). The Capital Ring is the LOOP's inner sibling — 15 sections.
+    const cr = parsed["capital-ring.json"];
+    if (cr !== undefined) {
+      const inLondon = (lat, lon) => lat > 51.2 && lat < 51.8 && lon > -0.7 && lon < 0.4;
+      const secs = cr && Array.isArray(cr.sections) ? cr.sections : null;
+      const okSec = (s) =>
+        has(s, ["n", "from", "to", "geom", "stops"]) && typeof s.n === "number" &&
+        typeof s.from === "string" && typeof s.to === "string" &&
+        Array.isArray(s.geom) && s.geom.length > 1 &&
+        s.geom.every((p) => Array.isArray(p) && p.length === 2 && inLondon(p[0], p[1])) &&
+        Array.isArray(s.stops) && s.stops.length >= 2 &&
+        s.stops.every((p) => Array.isArray(p) && p.length === 4 && typeof p[0] === "string" && inLondon(p[1], p[2]) && typeof p[3] === "number");
+      if (secs && secs.length >= 12 && secs.every(okSec)) ok(`capital-ring.json: ${secs.length} sections, each with in-bounds geom + stops`);
+      else fail(`capital-ring.json: must be { sections:[{ n, from, to, geom:[[lat,lon],…], stops:[[name,lat,lon,alongKm],…] }] } (>=12 sections) inside Greater London — re-run tools/generate-capital-ring.mjs`);
+    }
+
     // Remaining fetched artifacts are consumed as plain top-level arrays:
     // station-toilets → new Set(ids), facilities-water → [[lat,lon],…], bus-routes → id list.
     for (const f of ["station-toilets.json", "facilities-water.json", "bus-routes.json"]) {

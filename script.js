@@ -3828,6 +3828,7 @@
     { key: "connections", file: "img/connections-map.png", label: "Rail connections", kind: "img" },
     { key: "trams", label: "Trams", kind: "tram" },
     { key: "loop", label: "London LOOP", kind: "loop" },
+    { key: "capring", label: "Capital Ring", kind: "capring" },
     { key: "superloop", label: "Superloop", kind: "superloop" },
     { key: "superloopmap", file: "img/superloop-diagram.png", label: "Superloop diagram", kind: "img" },
   ];
@@ -3837,10 +3838,12 @@
   const TRAM_COL = "#5FA524";
   // London LOOP waymark green — the fallback if data/london-loop.json omits it.
   const LOOP_COL = "#3C8C40";
+  // Capital Ring waymark blue — the fallback if data/capital-ring.json omits it.
+  const CAPRING_COL = "#2166AC";
   // The map kinds that are live Leaflet surfaces (Leaflet owns pan/zoom, and they
   // share the tmMap holder + the tm-map-active body class). The holder's own
   // drag-to-pan / wheel-zoom and the teardown in loadMap key off this set.
-  const LEAFLET_KINDS = new Set(["geo", "superloop", "tram", "loop"]);
+  const LEAFLET_KINDS = new Set(["geo", "superloop", "tram", "loop", "capring"]);
   // Lettered end-of-line discs for the "Classic ends" tab — the terminus
   // letters of the old printed pocket maps (a Tokyo habit on London ends),
   // hand-placed on the December 2013 diagram. [letter, colour, x, y] in the
@@ -4593,6 +4596,7 @@
       superloop: `TfL's Superloop — the express-bus orbital ringing outer London, drawn from live TfL route data. Tap any stop.`,
       trams: `London Trams — the Croydon Tramlink network, drawn from live TfL route data. Tap any stop.`,
       loop: `The London LOOP — the ~150-mile walking orbital around outer London, its 24 signed sections drawn from OpenStreetMap. Tap a section.`,
+      capring: `The Capital Ring — the ~78-mile walking orbital through inner London, its 15 signed sections drawn from OpenStreetMap. Tap a section.`,
       superloopmap: `The whole network at a glance — TfL's official Superloop diagram: all 12 express-bus routes (SL1–SL11 plus the BL1 Bakerloop).`,
     };
     if (cap) cap.innerHTML = CAPTIONS[cfg.key] || "";
@@ -4616,6 +4620,9 @@
 
     // The London LOOP — the outer-orbital walking path (data/london-loop.json).
     if (cfg.kind === "loop") { renderLondonLoop(holder, cap, stale).catch(() => { if (!stale()) holder.innerHTML = `<p class="diagram-empty">Couldn't load the London LOOP right now.</p>`; }); return; }
+
+    // The Capital Ring — the inner-orbital walking path (data/capital-ring.json).
+    if (cfg.kind === "capring") { renderCapitalRing(holder, cap, stale).catch(() => { if (!stale()) holder.innerHTML = `<p class="diagram-empty">Couldn't load the Capital Ring right now.</p>`; }); return; }
 
     // Data view: a computed per-station running-time table (no image).
     if (cfg.kind === "data") { renderRunningTimes(holder); return; }
@@ -5485,19 +5492,19 @@
     loadNetwork().catch(() => null);
   }
 
-  // The London LOOP on its own live Leaflet surface — the 24 signed sections of
-  // the outer-orbital walking path, drawn in LOOP green from data/london-loop.json,
-  // each wearing a numbered roundel you can tap for its endpoints and length.
-  async function renderLondonLoop(holder, cap, stale) {
+  // A signed walking orbital (the London LOOP or the Capital Ring) on its own live
+  // Leaflet surface — every section's footpath drawn in the trail's colour, each
+  // wearing a numbered roundel you can tap for its endpoints and length.
+  async function renderTrailMap(holder, cap, stale, opts) {
     if (typeof L === "undefined") { mapUnavailable(holder); return; }
-    const res = await vfetch("data/london-loop.json").catch(() => null);
+    const res = await vfetch(opts.url).catch(() => null);
     if (stale && stale()) return;
-    if (!res || !res.ok) { holder.innerHTML = `<p class="diagram-empty">Couldn't load the London LOOP right now.</p>`; return; }
+    if (!res || !res.ok) { holder.innerHTML = `<p class="diagram-empty">Couldn't load ${escapeHtml(opts.label)} right now.</p>`; return; }
     const data = await res.json();
     if (stale && stale()) return;
     const sections = Array.isArray(data && data.sections) ? data.sections : [];
-    if (!sections.length) { holder.innerHTML = `<p class="diagram-empty">No LOOP sections to show.</p>`; return; }
-    const col = safeColour(data.colour || LOOP_COL);
+    if (!sections.length) { holder.innerHTML = `<p class="diagram-empty">No sections to show.</p>`; return; }
+    const col = safeColour(data.colour || opts.col);
 
     document.body.classList.add("tm-map-active");
     holder.innerHTML = `<div id="tmMap"></div>`;
@@ -5507,7 +5514,7 @@
     const grp = L.layerGroup().addTo(map);
     const all = [];
 
-    // Each section's footpath, drawn in LOOP green.
+    // Each section's footpath, in the trail's colour.
     sections.forEach((s) => {
       const ll = (s.geom || []).map((p) => [p[0], p[1]]);
       if (ll.length < 2) return;
@@ -5533,28 +5540,38 @@
 
     if (all.length) map.fitBounds(L.latLngBounds(all), { padding: [28, 28] });
     requestAnimationFrame(() => map.invalidateSize(false));
-    if (cap) {
-      const totalKm = sections.reduce((a, s) => a + s.km, 0);
-      cap.innerHTML = `The London LOOP — the ~<strong>${Math.round(totalKm)} km</strong> walking orbital around outer London, <strong>${sections.length}</strong> signed sections, from OpenStreetMap. Tap a section for its endpoints.`;
-    }
+    if (cap) cap.innerHTML = opts.caption(sections.length, Math.round(sections.reduce((a, s) => a + s.km, 0)));
+  }
+  function renderLondonLoop(holder, cap, stale) {
+    return renderTrailMap(holder, cap, stale, {
+      url: "data/london-loop.json", col: LOOP_COL, label: "the London LOOP",
+      caption: (n, km) => `The London LOOP — the ~<strong>${km} km</strong> walking orbital around outer London, <strong>${n}</strong> signed sections, from OpenStreetMap. Tap a section for its endpoints.`,
+    });
+  }
+  function renderCapitalRing(holder, cap, stale) {
+    return renderTrailMap(holder, cap, stale, {
+      url: "data/capital-ring.json", col: CAPRING_COL, label: "the Capital Ring",
+      caption: (n, km) => `The Capital Ring — the ~<strong>${km} km</strong> walking orbital through inner London, <strong>${n}</strong> signed sections, from OpenStreetMap. Tap a section for its endpoints.`,
+    });
   }
 
-  let loopSectionsRefresh = null; // set below — refreshes section distances on unit toggle
-  // The London LOOP section: all 24 signed sections, each expanding to a horizontal
-  // stop strip (the shared stripMapHtml) between the stations it links, with the
-  // two-tap / drag measure and a GPX/TCX export — the walking-trail equivalent of
-  // the tube and bus route strips. Reuses the Superloop section's card structure.
-  async function renderLondonLoopSections() {
-    const el = document.getElementById("loopSections");
+  const trailRefreshers = []; // section-distance refreshers (LOOP + Ring), run on the km/mi toggle
+  // A signed walking orbital's section list (London LOOP or Capital Ring): every
+  // section expands to a horizontal stop strip (the shared stripMapHtml) between the
+  // stations it links, with the two-tap / drag measure and a GPX/TCX export — the
+  // walking-trail equivalent of the tube and bus route strips. Reuses the Superloop
+  // section's card structure. `opts` names the trail (url, colour, slug, labels).
+  async function renderTrailSections(opts) {
+    const el = document.getElementById(opts.containerId);
     if (!el) return;
-    const res = await vfetch("data/london-loop.json").catch(() => null);
-    if (!res || !res.ok) { el.innerHTML = `<p class="diagram-empty">Couldn't load the London LOOP right now.</p>`; return; }
+    const res = await vfetch(opts.url).catch(() => null);
+    if (!res || !res.ok) { el.innerHTML = `<p class="diagram-empty">Couldn't load ${escapeHtml(opts.label)} right now.</p>`; return; }
     const data = await res.json();
     const sections = Array.isArray(data && data.sections) ? data.sections : [];
-    if (!sections.length) { el.innerHTML = `<p class="diagram-empty">No LOOP sections to show.</p>`; return; }
-    const col = safeColour(data.colour || LOOP_COL), tc = contrastText(col);
+    if (!sections.length) { el.innerHTML = `<p class="diagram-empty">No sections to show.</p>`; return; }
+    const col = safeColour(data.colour || opts.col), tc = contrastText(col);
     const totalKm = sections.reduce((a, s) => a + s.km, 0);
-    const totalHtml = () => `<strong>${sections.length}</strong> sections · <strong>${fmtKm(totalKm, 0)}</strong> right around London`;
+    const totalHtml = () => `<strong>${sections.length}</strong> sections · <strong>${fmtKm(totalKm, 0)}</strong> ${opts.tagline}`;
     el.innerHTML = `<p class="loop-total">${totalHtml()}</p>` + sections.map((s, i) => `
       <div class="sl-route loop-route" data-i="${i}">
         <button type="button" class="sl-route-head" aria-expanded="false">
@@ -5575,22 +5592,22 @@
       // labels and end-to-end total agree with the measured stretch (rather than
       // stripMapHtml's crow-flies fallback, which winds badly on a footpath).
       const legKms = wp.map((p, i) => (i === 0 ? 0 : (p[3] || 0) - (wp[i - 1][3] || 0)));
-      const totalKm = wp.length ? (wp[wp.length - 1][3] || 0) : 0;
+      const totKm = wp.length ? (wp[wp.length - 1][3] || 0) : 0;
       body.style.setProperty("--line-col", col);
       body.innerHTML = `<div class="sl-strip line-diagram"></div><div class="sl-measure ls-measure" aria-live="polite"></div><div class="sl-actions"><div class="sl-dl"></div></div>`;
-      const picks = card._loopPicks || (card._loopPicks = { a: -1, b: -1 });
-      const seq = (card._loopSeq = (card._loopSeq || 0) + 1);
+      const picks = card._trailPicks || (card._trailPicks = { a: -1, b: -1 });
+      const seq = (card._trailSeq = (card._trailSeq || 0) + 1);
       attachStripMeasure({
         picks,
         stripEl: body.querySelector(".sl-strip"),
         measEl: body.querySelector(".sl-measure"),
         wp,
         emptyHint: "Tap two stations to measure a shorter stretch — or drag an end in.",
-        isStale: () => card._loopSeq !== seq,
+        isStale: () => card._trailSeq !== seq,
         renderStripHtml: (sel) => stripMapHtml(null, col, `Section ${s.n}`, {
           wp, bannerLabel: `Section ${s.n} · ${s.from} → ${s.to}`,
           interactive: true, a: sel.a, b: sel.b, from: sel.from, to: sel.to,
-          legKms, totalKm, // baked along-trail distances (see above)
+          legKms, totalKm: totKm, // baked along-trail distances (see above)
           geoInterchange: true, // stations carry Tube/rail names, but coord-match is robust
         }),
         // Winding-trail distance from the baked along-km, so a stretch reads true.
@@ -5601,16 +5618,16 @@
       const track = (s.geom || []).filter((p) => Array.isArray(p) && Number.isFinite(p[0]) && Number.isFinite(p[1]));
       const dlBox = body.querySelector(".sl-dl");
       if (dlBox && track.length > 1) {
-        dlBox.innerHTML = `<a class="gpx-dl loop-gpx" href="#" title="Download LOOP Section ${s.n} as a GPX file for your watch">↓ GPX route</a><a class="gpx-dl loop-tcx" href="#" title="Download as a Garmin TCX course — Virtual Partner pacing at your site pace">⌚ TCX</a>`;
+        dlBox.innerHTML = `<a class="gpx-dl loop-gpx" href="#" title="Download ${escapeAttr(opts.trailShort)} Section ${s.n} as a GPX file for your watch">↓ GPX route</a><a class="gpx-dl loop-tcx" href="#" title="Download as a Garmin TCX course — Virtual Partner pacing at your site pace">⌚ TCX</a>`;
         dlBox.querySelector(".loop-gpx").addEventListener("click", (ev) => {
           ev.preventDefault();
-          const text = gpxFromPoints(track, `London LOOP Section ${s.n} · ${s.from} → ${s.to}`);
-          if (text) downloadBlob(`london-loop-${s.n}.gpx`, new Blob([text], { type: "application/gpx+xml" }));
+          const text = gpxFromPoints(track, `${opts.trailFull} Section ${s.n} · ${s.from} → ${s.to}`);
+          if (text) downloadBlob(`${opts.slug}-${s.n}.gpx`, new Blob([text], { type: "application/gpx+xml" }));
         });
         dlBox.querySelector(".loop-tcx").addEventListener("click", (ev) => {
           ev.preventDefault();
-          const doc = tcxFromPoints(track, `LOOP ${s.n}`, false);
-          if (doc) downloadBlob(`london-loop-${s.n}.tcx`, new Blob([doc], { type: "application/vnd.garmin.tcx+xml" }));
+          const doc = tcxFromPoints(track, `${opts.trailShort} ${s.n}`, false);
+          if (doc) downloadBlob(`${opts.slug}-${s.n}.tcx`, new Blob([doc], { type: "application/vnd.garmin.tcx+xml" }));
         });
       }
       body.dataset.built = "1";
@@ -5625,7 +5642,7 @@
       body.hidden = false;
     }));
     // km/mi toggle: refresh the total + each section's figure, rebuilding open strips.
-    loopSectionsRefresh = () => {
+    trailRefreshers.push(() => {
       const p = el.querySelector(".loop-total");
       if (p) p.innerHTML = totalHtml();
       el.querySelectorAll(".sl-route").forEach((card) => {
@@ -5633,11 +5650,25 @@
         if (meta) meta.textContent = fmtKm(sections[+card.dataset.i].km, 1);
         if (card.classList.contains("open")) { build(card); card.querySelector(".sl-route-body").hidden = false; }
       });
-    };
+    });
     // Interchange tags match against the tube network; if a strip was opened before
     // it loaded, rebuild it once so the Underground/rail tags fill in.
     loadNetwork().catch(() => null).then(() => {
       el.querySelectorAll(".sl-route.open").forEach((card) => { build(card); card.querySelector(".sl-route-body").hidden = false; });
+    });
+  }
+  function renderLondonLoopSections() {
+    return renderTrailSections({
+      containerId: "loopSections", url: "data/london-loop.json", col: LOOP_COL,
+      label: "the London LOOP", slug: "london-loop", trailShort: "LOOP",
+      trailFull: "London LOOP", tagline: "right around London",
+    });
+  }
+  function renderCapitalRingSections() {
+    return renderTrailSections({
+      containerId: "capringSections", url: "data/capital-ring.json", col: CAPRING_COL,
+      label: "the Capital Ring", slug: "capital-ring", trailShort: "Ring",
+      trailFull: "Capital Ring", tagline: "through inner London",
     });
   }
 
@@ -7071,6 +7102,7 @@
     ["setupUnitToggle", setupUnitToggle], ["setupLiveClock", setupLiveClock],
     ["renderSuperloopRoutes", renderSuperloopRoutes],
     ["renderLondonLoopSections", renderLondonLoopSections],
+    ["renderCapitalRingSections", renderCapitalRingSections],
     ["loadLiveNow", loadLiveNow],
   ].forEach(([name, fn]) => {
     try { fn(); } catch (e) { console.error("init " + name + " failed:", e); }
@@ -7138,7 +7170,7 @@
       if (typeof geoRefresh === "function") geoRefresh(); // live network-map labels
       if (typeof journeyRefresh === "function") journeyRefresh(); // A→B planner result
       if (typeof superloopRefresh === "function") superloopRefresh(); // Superloop section strips
-      if (typeof loopSectionsRefresh === "function") loopSectionsRefresh(); // London LOOP section distances
+      trailRefreshers.forEach((fn) => { try { fn(); } catch (_) { /* skip a broken refresher */ } }); // LOOP + Capital Ring section distances
       if (curMap === "running") loadMap();                // running-times table
     }));
   }
