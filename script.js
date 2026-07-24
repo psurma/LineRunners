@@ -3826,15 +3826,18 @@
     { key: "classic", file: "img/tube-map.svg", label: "Classic ends", kind: "svg", roundels: true },
     { key: "overground", file: "img/overground-map.png", label: "Overground", kind: "img" },
     { key: "connections", file: "img/connections-map.png", label: "Rail connections", kind: "img" },
+    { key: "trams", label: "Trams", kind: "tram" },
     { key: "superloop", label: "Superloop", kind: "superloop" },
     { key: "superloopmap", file: "img/superloop-diagram.png", label: "Superloop diagram", kind: "img" },
   ];
   // Superloop teal — the fallback if data/superloop.json omits its own colour.
   const SUPERLOOP_COL = "#12ABB6";
+  // TfL tram green — the fallback if data/tramlink.json omits its own colour.
+  const TRAM_COL = "#5FA524";
   // The map kinds that are live Leaflet surfaces (Leaflet owns pan/zoom, and they
   // share the tmMap holder + the tm-map-active body class). The holder's own
   // drag-to-pan / wheel-zoom and the teardown in loadMap key off this set.
-  const LEAFLET_KINDS = new Set(["geo", "superloop"]);
+  const LEAFLET_KINDS = new Set(["geo", "superloop", "tram"]);
   // Lettered end-of-line discs for the "Classic ends" tab — the terminus
   // letters of the old printed pocket maps (a Tokyo habit on London ends),
   // hand-placed on the December 2013 diagram. [letter, colour, x, y] in the
@@ -4585,6 +4588,7 @@
       overground: `The London Overground network — great for orbital, out-of-centre routes.`,
       connections: `The geographic rail-connections map — every line where it really runs.`,
       superloop: `TfL's Superloop — the express-bus orbital ringing outer London, drawn from live TfL route data. Tap any stop.`,
+      trams: `London Trams — the Croydon Tramlink network, drawn from live TfL route data. Tap any stop.`,
       superloopmap: `The whole network at a glance — TfL's official Superloop diagram: all 12 express-bus routes (SL1–SL11 plus the BL1 Bakerloop).`,
     };
     if (cap) cap.innerHTML = CAPTIONS[cfg.key] || "";
@@ -4602,6 +4606,9 @@
 
     // The Superloop orbital — its own lightweight Leaflet surface (data/superloop.json).
     if (cfg.kind === "superloop") { renderSuperloop(holder, cap, stale).catch(() => { if (!stale()) holder.innerHTML = `<p class="diagram-empty">Couldn't load the Superloop right now.</p>`; }); return; }
+
+    // London Trams (Croydon Tramlink) — its own lightweight Leaflet surface (data/tramlink.json).
+    if (cfg.kind === "tram") { renderTramlink(holder, cap, stale).catch(() => { if (!stale()) holder.innerHTML = `<p class="diagram-empty">Couldn't load the tram network right now.</p>`; }); return; }
 
     // Data view: a computed per-station running-time table (no image).
     if (cfg.kind === "data") { renderRunningTimes(holder); return; }
@@ -5407,6 +5414,68 @@
     if (cap) {
       cap.innerHTML = `TfL's Superloop — <strong>${routes.length}</strong> express-bus routes ringing outer London, <strong>${byName.size}</strong> stops, drawn from live TfL data. Tap any stop.`;
     }
+  }
+
+  // London Trams (Croydon Tramlink) on its own live Leaflet surface — the whole
+  // network drawn in TfL tram green from data/tramlink.json, every stop tappable
+  // with its Underground / rail interchanges (matched by coordinates like buses).
+  async function renderTramlink(holder, cap, stale) {
+    if (typeof L === "undefined") { mapUnavailable(holder); return; }
+    const res = await vfetch("data/tramlink.json").catch(() => null);
+    if (stale && stale()) return;
+    if (!res || !res.ok) { holder.innerHTML = `<p class="diagram-empty">Couldn't load the tram network right now.</p>`; return; }
+    const data = await res.json();
+    if (stale && stale()) return;
+    const segs = Array.isArray(data && data.segs) ? data.segs : [];
+    const stops = Array.isArray(data && data.stops) ? data.stops : [];
+    if (!segs.length || !stops.length) { holder.innerHTML = `<p class="diagram-empty">No tram network to show.</p>`; return; }
+    const col = safeColour(data.colour || TRAM_COL);
+
+    document.body.classList.add("tm-map-active");
+    holder.innerHTML = `<div id="tmMap"></div>`;
+    if (tmMap.map) { tmMap.map.remove(); tmMap.map = null; }
+    const map = createSiteMap("tmMap", { zoomHint: true });
+    tmMap.map = map;
+    const grp = L.layerGroup().addTo(map);
+    const all = [];
+
+    // The whole branched network, drawn in tram green.
+    segs.forEach((seg) => {
+      const ll = seg.map((p) => [p[0], p[1]]);
+      if (ll.length < 2) return;
+      addFlowLine(grp, ll, col, { baseWeight: 5, flowWeight: 5 });
+      ll.forEach((p) => all.push(p));
+    });
+
+    // A stop is a terminus if it names one end of a service pattern ("A ↔ B").
+    const termini = new Set();
+    (data.routes || []).forEach((r) => String(r).split("↔").forEach((s) => termini.add(norm(s))));
+    const centreOn = (lat, lon, html) => {
+      map.setView([lat, lon], Math.max(map.getZoom(), 14), { animate: true });
+      L.popup({ offset: [0, -2], autoPan: false }).setLatLng([lat, lon]).setContent(html).openOn(map);
+    };
+    stops.forEach((s) => {
+      const n = s[0], lat = s[1], lon = s[2];
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
+      const term = termini.has(norm(n));
+      // Neutral tube-map ticks; termini a touch larger. Interchanges are matched
+      // at click time (by coordinate) once the tube network has loaded.
+      const mk = term
+        ? L.circleMarker([lat, lon], { radius: 5, color: "#33383f", weight: 2, fillColor: "#fff", fillOpacity: 1 })
+        : L.circleMarker([lat, lon], { radius: 3.2, color: "#5b616b", weight: 1.3, fillColor: "#fff", fillOpacity: 1 });
+      mk.bindTooltip(escapeHtml(n), { direction: "top" })
+        .on("click", () => centreOn(lat, lon, `<strong>${escapeHtml(n)}</strong>${geoInterchangeTags(lat, lon)}`))
+        .addTo(grp);
+    });
+
+    if (all.length) map.fitBounds(L.latLngBounds(all), { padding: [28, 28] });
+    requestAnimationFrame(() => map.invalidateSize(false));
+    if (cap) {
+      cap.innerHTML = `London Trams — the Croydon Tramlink network, <strong>${stops.length}</strong> stops across <strong>${(data.routes || []).length}</strong> routes, drawn from live TfL data. Tap any stop.`;
+    }
+    // Interchanges match by coordinate against the tube network — if it hasn't
+    // landed yet, load it so the first stop tap already shows its connections.
+    loadNetwork().catch(() => null);
   }
 
   // The Superloop section: every route listed with a coloured SLn badge that

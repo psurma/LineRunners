@@ -334,6 +334,20 @@ try {
       else fail(`superloop.json: must be { routes: [ { id, segs:[[[lat,lon],…]], stops:[[name,lat,lon],…] } ] } with all coords inside Greater London — re-run tools/generate-superloop.mjs`);
     }
 
+    // tramlink.json: renderTramlink reads .segs ([[lat,lon],…] polylines) + .stops
+    // ([name,lat,lon]) for the whole Croydon Tramlink network. Assert shape + bounds
+    // so a malformed regen can't draw an empty or mislocated network.
+    const tl = parsed["tramlink.json"];
+    if (tl !== undefined) {
+      const inLondon = (lat, lon) => lat > 51.2 && lat < 51.8 && lon > -0.7 && lon < 0.4;
+      const segsOk = Array.isArray(tl && tl.segs) && tl.segs.length > 0 &&
+        tl.segs.every((s) => Array.isArray(s) && s.length > 1 && s.every((p) => Array.isArray(p) && p.length === 2 && inLondon(p[0], p[1])));
+      const stopsOk = Array.isArray(tl && tl.stops) && tl.stops.length >= 2 &&
+        tl.stops.every((s) => Array.isArray(s) && s.length === 3 && typeof s[0] === "string" && inLondon(s[1], s[2]));
+      if (segsOk && stopsOk) ok(`tramlink.json: ${tl.stops.length} stops + ${tl.segs.length} segments, all in-bounds`);
+      else fail(`tramlink.json: must be { segs:[[[lat,lon],…]], stops:[[name,lat,lon],…] } with all coords inside Greater London — re-run tools/generate-tramlink.mjs`);
+    }
+
     // Remaining fetched artifacts are consumed as plain top-level arrays:
     // station-toilets → new Set(ids), facilities-water → [[lat,lon],…], bus-routes → id list.
     for (const f of ["station-toilets.json", "facilities-water.json", "bus-routes.json"]) {
