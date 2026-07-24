@@ -1135,6 +1135,17 @@ tr.ls-open .ls-caret { transform: rotate(90deg); }
 .sl-mark, .sl-reverse { flex: 0 0 auto; border: 1.5px solid var(--line); border-radius: 999px; background: #fff; color: #2b3140; font-weight: 700; font-size: 13px; padding: 5px 14px; cursor: pointer; white-space: nowrap; transition: background 0.15s, color 0.15s, border-color 0.15s, filter 0.15s; }
 .sl-mark:hover, .sl-reverse:hover { filter: brightness(0.97); border-color: var(--tfl-blue); color: var(--tfl-blue); }
 .sl-reverse.on { border-color: var(--tfl-blue); color: var(--tfl-blue); background: rgba(0, 25, 168, 0.07); }
+
+/* London LOOP section — a flat list of the 24 sections with inline GPX export. */
+.loop-secs { margin-top: 8px; }
+.loop-total { color: var(--muted); font-size: 15px; margin: 0 0 12px; }
+.loop-sec { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 10px 4px; border-bottom: 1px solid var(--line); }
+.loop-sec:last-child { border-bottom: 0; }
+.loop-badge { flex: 0 0 auto; width: 30px; height: 30px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; font-weight: 800; font-size: 14px; }
+.loop-name { flex: 1 1 auto; font-weight: 700; color: var(--ink); min-width: 150px; }
+.loop-name .loop-arrow { color: var(--muted); font-weight: 700; padding: 0 3px; }
+.loop-meta { flex: 0 0 auto; font-size: 13px; font-weight: 600; color: var(--muted); white-space: nowrap; }
+.loop-dl { flex: 0 0 auto; display: flex; gap: 8px; }
 /* Challenge progress panel reuses the line-collector vocabulary (.lc-*, .badge). */
 .sl-challenge { margin: 4px 0 22px; }
 .sl-challenge:empty { margin: 0; }

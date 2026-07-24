@@ -5539,6 +5539,55 @@
     }
   }
 
+  let loopSectionsRefresh = null; // set below — refreshes section distances on unit toggle
+  // The London LOOP section: all 24 signed sections listed with a GPX/TCX export
+  // each, built on click from the section's OpenStreetMap footpath. No stop strip
+  // — the LOOP runs between stations, not along a stop sequence.
+  async function renderLondonLoopSections() {
+    const el = document.getElementById("loopSections");
+    if (!el) return;
+    const res = await vfetch("data/london-loop.json").catch(() => null);
+    if (!res || !res.ok) { el.innerHTML = `<p class="diagram-empty">Couldn't load the London LOOP right now.</p>`; return; }
+    const data = await res.json();
+    const sections = Array.isArray(data && data.sections) ? data.sections : [];
+    if (!sections.length) { el.innerHTML = `<p class="diagram-empty">No LOOP sections to show.</p>`; return; }
+    const col = safeColour(data.colour || LOOP_COL), tc = contrastText(col);
+    const totalKm = sections.reduce((a, s) => a + s.km, 0);
+    const totalHtml = () => `<strong>${sections.length}</strong> sections · <strong>${fmtKm(totalKm, 0)}</strong> right around London`;
+    el.innerHTML = `<p class="loop-total">${totalHtml()}</p>` + sections.map((s, i) => `
+      <div class="loop-sec" data-i="${i}">
+        <span class="loop-badge" style="background:${col};color:${tc}">${s.n}</span>
+        <span class="loop-name">${escapeHtml(s.from)} <span class="loop-arrow" aria-hidden="true">→</span> ${escapeHtml(s.to)}</span>
+        <span class="loop-meta">${fmtKm(s.km, 1)}</span>
+        <span class="loop-dl">
+          <a class="gpx-dl loop-gpx" href="#" data-i="${i}" title="Download LOOP Section ${s.n} as a GPX file for your watch">↓ GPX</a>
+          <a class="gpx-dl loop-tcx" href="#" data-i="${i}" title="Download as a Garmin TCX course — Virtual Partner pacing at your site pace">⌚ TCX</a>
+        </span>
+      </div>`).join("");
+    const geomOf = (s) => (s.geom || []).filter((p) => Array.isArray(p) && Number.isFinite(p[0]) && Number.isFinite(p[1]));
+    el.querySelectorAll(".loop-gpx").forEach((a) => a.addEventListener("click", (ev) => {
+      ev.preventDefault();
+      const s = sections[+a.dataset.i];
+      const text = gpxFromPoints(geomOf(s), `London LOOP Section ${s.n} · ${s.from} → ${s.to}`);
+      if (text) downloadBlob(`london-loop-${s.n}.gpx`, new Blob([text], { type: "application/gpx+xml" }));
+    }));
+    el.querySelectorAll(".loop-tcx").forEach((a) => a.addEventListener("click", (ev) => {
+      ev.preventDefault();
+      const s = sections[+a.dataset.i];
+      const doc = tcxFromPoints(geomOf(s), `LOOP ${s.n}`, false);
+      if (doc) downloadBlob(`london-loop-${s.n}.tcx`, new Blob([doc], { type: "application/vnd.garmin.tcx+xml" }));
+    }));
+    // Unit toggle: refresh the total and each section's distance in place.
+    loopSectionsRefresh = () => {
+      const p = el.querySelector(".loop-total");
+      if (p) p.innerHTML = totalHtml();
+      el.querySelectorAll(".loop-sec").forEach((row) => {
+        const meta = row.querySelector(".loop-meta");
+        if (meta) meta.textContent = fmtKm(sections[+row.dataset.i].km, 1);
+      });
+    };
+  }
+
   // The Superloop section: every route listed with a coloured SLn badge that
   // expands to a horizontal stop strip (the shared stripMapHtml) in that route's
   // own colour. Strips build on first open; open ones re-render on the unit toggle.
@@ -6968,6 +7017,7 @@
     ["loadWeather", loadWeather], ["setupScrollSpy", setupScrollSpy],
     ["setupUnitToggle", setupUnitToggle], ["setupLiveClock", setupLiveClock],
     ["renderSuperloopRoutes", renderSuperloopRoutes],
+    ["renderLondonLoopSections", renderLondonLoopSections],
     ["loadLiveNow", loadLiveNow],
   ].forEach(([name, fn]) => {
     try { fn(); } catch (e) { console.error("init " + name + " failed:", e); }
@@ -7035,6 +7085,7 @@
       if (typeof geoRefresh === "function") geoRefresh(); // live network-map labels
       if (typeof journeyRefresh === "function") journeyRefresh(); // A→B planner result
       if (typeof superloopRefresh === "function") superloopRefresh(); // Superloop section strips
+      if (typeof loopSectionsRefresh === "function") loopSectionsRefresh(); // London LOOP section distances
       if (curMap === "running") loadMap();                // running-times table
     }));
   }

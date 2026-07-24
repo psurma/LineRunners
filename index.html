@@ -29,10 +29,10 @@
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-title" content="Tube Run" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-  <link rel="stylesheet" href="vendor/fonts/fonts.css?v=326" />
-  <link rel="stylesheet" href="vendor/leaflet/leaflet.css?v=326" />
-  <script src="vendor/leaflet/leaflet.js?v=326" defer></script>
-  <link rel="stylesheet" href="style.css?v=326" />
+  <link rel="stylesheet" href="vendor/fonts/fonts.css?v=327" />
+  <link rel="stylesheet" href="vendor/leaflet/leaflet.css?v=327" />
+  <script src="vendor/leaflet/leaflet.js?v=327" defer></script>
+  <link rel="stylesheet" href="style.css?v=327" />
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
@@ -75,6 +75,7 @@
       <a href="#routes">Routes</a>
       <a href="#busrun">Buses</a>
       <a href="#superloop">Superloop</a>
+      <a href="#loop">LOOP</a>
       <a href="#collector">Progress</a>
       <a href="#clubs">Clubs</a>
       <a href="#join">Come run</a>
@@ -376,6 +377,13 @@
       <div id="superloopRoutes" class="sl-routes" aria-live="polite"></div>
     </section>
 
+    <!-- LONDON LOOP -->
+    <section id="loop" class="loop-section">
+      <h2 class="section-title">The London LOOP</h2>
+      <p class="section-sub">The London Outer Orbital Path &mdash; a ~150-mile (240&nbsp;km) signed walking route right around the edge of London, in 24 sections between the outer-suburb stations. Grab a GPX for any section for your watch, or see the whole orbital on the interactive <a href="#network">map</a> (London LOOP tab). Route data from OpenStreetMap.</p>
+      <div id="loopSections" class="loop-secs" aria-live="polite"></div>
+    </section>
+
     <!-- LINE COLLECTOR -->
     <section id="collector" class="collector">
       <h2 class="section-title">The line collector</h2>
@@ -477,6 +485,6 @@
     <p class="fine"><span id="pageVersion" class="page-version"></span></p>
   </footer>
 
-  <script src="script.js?v=326" defer></script>
+  <script src="script.js?v=327" defer></script>
 </body>
 </html>
