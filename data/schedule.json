@@ -140,6 +140,36 @@
    "routeLink": null,
    "notes": null,
    "exits": null
+  },
+  {
+   "date": "2027-02-07",
+   "days": 1,
+   "status": "suggested",
+   "kind": "superloop",
+   "name": "SL6",
+   "line": null,
+   "leg": "West Croydon → Russell Square",
+   "start": "West Croydon stn",
+   "distance": "~22 km",
+   "location": "London",
+   "routeLink": null,
+   "notes": "One of the Superloop's longest arcs — right across the south of the city and up into Bloomsbury. Trace every stop, with the Underground interchanges and a GPX for your watch, in the Superloop section.",
+   "exits": null
+  },
+  {
+   "date": "2027-03-07",
+   "days": 1,
+   "status": "suggested",
+   "kind": "superloop",
+   "name": "BL1",
+   "line": null,
+   "leg": "Lewisham → Waterloo",
+   "start": "Lewisham town centre",
+   "distance": "~11 km",
+   "location": "London",
+   "routeLink": null,
+   "notes": "The Bakerloop — the Superloop's central BL1 express, Lewisham up to Waterloo, all on this side of the river. Full stop-by-stop route and GPX in the Superloop section.",
+   "exits": null
   }
  ]
 }

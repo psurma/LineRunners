@@ -97,6 +97,7 @@
     river: { colour: "#1CA6C4", label: "River run" },
     canal: { colour: "#2E8B57", label: "Canal run" },
     bus:   { colour: "#E2231A", label: "Bus route" },
+    superloop: { colour: "#12ABB6", label: "Superloop" },
     trail: { colour: "#5A7D2A", label: "Trail run" },
     adventure: { colour: "#5A7D2A", label: "Adventure" },
     other: { colour: "#0019A8", label: "Special run" },
@@ -155,6 +156,16 @@
     { type: "tube", line: "Central", leg: "Liverpool St → Ealing Broadway", start: "Liverpool Street stn (main entrance)", distance: "~22 km" },
     { type: "river", name: "Thames Path", leg: "Putney Bridge → Tower Bridge", start: "Putney Bridge stn", distance: "~16 km" },
     { type: "bus", name: "Route 38", leg: "Clapton Pond → Victoria", start: "Clapton Pond", distance: "~11 km" },
+    {
+      type: "superloop", name: "SL6", colour: "#F942A0",
+      leg: "West Croydon → Russell Square", start: "West Croydon stn", distance: "~22 km",
+      notes: "One of the Superloop's longest arcs — right across the south of the city and up into Bloomsbury. Trace every stop, with the Underground interchanges and a GPX for your watch, in the Superloop section.",
+    },
+    {
+      type: "superloop", name: "BL1", colour: "#7F5535",
+      leg: "Lewisham → Waterloo", start: "Lewisham town centre", distance: "~11 km",
+      notes: "The Bakerloop — the Superloop's central BL1 express, Lewisham up to Waterloo, all on this side of the river. Full stop-by-stop route and GPX in the Superloop section.",
+    },
   ];
 
   // Ordered stops/waypoints for the planner + map. Keyed by tube line name or
@@ -745,10 +756,14 @@
       `<li><a href="${escapeAttr(s.url)}" target="_blank" rel="noopener">${escapeHtml(s.name)} ↗</a></li>`).join("")}</ul></div>` : "";
     const link = routeLinksHtml(r);
     const notes = r.notes ? `<p class="d-notes">${escapeHtml(r.notes)}</p>` : "";
+    // Superloop runs carry no WAYPOINTS strip of their own — the full coloured
+    // route, interchanges and GPX live in the Superloop section, so link there.
+    const slSee = r.type === "superloop"
+      ? `<a class="route-link" href="#superloop">Trace ${escapeHtml(r.key)} stop by stop in the Superloop section ↓</a>` : "";
     const stripLabel = r.type === "tube" ? `${r.key} line` : (r.badge || r.key);
     const strip = WAYPOINTS[r.key]
       ? `<div class="line-diagram strip run-strip" style="--line-col:${safeColour(r.colour)}">${stripMapHtml(r.key, r.colour, r.key, { bannerLabel: stripLabel })}</div>` : "";
-    return `<div class="run-details">${notes}${strip}${days}${exits}${stay}${link}</div>`;
+    return `<div class="run-details">${notes}${strip}${days}${exits}${stay}${link}${slSee}</div>`;
   }
 
   // --- Add-to-calendar (.ics) -----------------------------------------------
@@ -1064,6 +1079,11 @@
       if (nextRun.exits || nextRun.routeLink) {
         // Show escape points + route link instead of the tube-style planner.
         if (diagram) diagram.innerHTML = adventurePlanHtml(nextRun);
+      } else if (nextRun.type === "superloop" && diagram) {
+        // Superloop routes live in their own section (coloured strip, interchanges,
+        // GPX) rather than WAYPOINTS — point there instead of the tube planner.
+        diagram.innerHTML =
+          `<p class="diagram-empty">This month we're running the <strong>${escapeHtml(nextRun.key)}</strong> Superloop route — ${escapeHtml(nextRun.leg)}. Trace it stop by stop, with the Underground interchanges and a GPX for your watch, in the <a href="#superloop">Superloop section</a>.</p>`;
       } else if (diagram) {
         diagram.innerHTML =
           `<p class="diagram-empty">Route map for <strong>${escapeHtml(nextRun.key)}</strong>
