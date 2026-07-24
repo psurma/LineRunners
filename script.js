@@ -5392,6 +5392,73 @@
   // The Superloop section: every route listed with a coloured SLn badge that
   // expands to a horizontal stop strip (the shared stripMapHtml) in that route's
   // own colour. Strips build on first open; open ones re-render on the unit toggle.
+  // --- Superloop challenge: tick off the routes you've run -----------------
+  // Same per-visitor idiom as the line collector (loadSet/saveSet + achievement
+  // badges): a summary panel above the list tracks how much of the loop you've
+  // run, and each route card carries a "Mark as run" toggle.
+  const SL_KEY = "tuberun_superloop";
+  let slDone = loadSet(SL_KEY);
+  let slRoutes = []; // filled by renderSuperloopRoutes once data/superloop.json loads
+  const slKm = (rt) => waypointsKm(rt.stops) * ROAD_FACTOR;
+  const SL_BADGES = [
+    { icon: "🥾", name: "First Loop", desc: "Run any Superloop route", test: (c) => c.count >= 1 },
+    { icon: "🧭", name: "Loop Explorer", desc: "Run three routes", test: (c) => c.count >= 3 },
+    { icon: "🌗", name: "Half the Loop", desc: "Run six routes", test: (c) => c.count >= 6 },
+    { icon: "🟤", name: "Bakerloop", desc: "Run the BL1 Bakerloop", test: (c) => c.has("BL1") },
+    { icon: "🏅", name: "Marathon Loop", desc: "Run 42.2 km of it", test: (c) => c.km >= 42.195 },
+    { icon: "💯", name: "Century Loop", desc: "Run 100 km of it", test: (c) => c.km >= 100 },
+    { icon: "🔵", name: "Full Orbital", desc: "Run all eleven SL routes", test: (c) => c.slCount >= 11 },
+    { icon: "👑", name: "Superlooper", desc: "Run all twelve routes", test: (c) => c.count >= c.total },
+  ];
+  // Reflect a route's run-state onto its "Mark as run" button and its card.
+  function syncSlMark(btn, rt, c) {
+    const on = slDone.has(rt.id);
+    btn.classList.toggle("done", on);
+    btn.setAttribute("aria-pressed", on ? "true" : "false");
+    btn.textContent = on ? "✓ Run — done" : "Mark as run";
+    btn.style.background = on ? c : "";
+    btn.style.color = on ? contrastText(c) : "";
+    btn.style.borderColor = on ? c : "";
+    const card = btn.closest(".sl-route");
+    if (card) card.classList.toggle("done", on);
+  }
+  function renderSuperloopChallenge() {
+    const el = document.getElementById("superloopChallenge");
+    if (!el || !slRoutes.length) return;
+    const total = slRoutes.length;
+    const done = slRoutes.filter((r) => slDone.has(r.id));
+    const n = done.length;
+    const doneKm = done.reduce((s, r) => s + slKm(r), 0);
+    const totalKm = slRoutes.reduce((s, r) => s + slKm(r), 0);
+    const slCount = done.filter((r) => /^SL/i.test(r.id)).length;
+    const ctx = { count: n, km: doneKm, slCount, total, has: (id) => slDone.has(id) };
+    const got = SL_BADGES.filter((b) => b.test(ctx)).length;
+    const pct = total ? Math.round((n / total) * 100) : 0;
+    const complete = n === total;
+    el.innerHTML = `
+      <div class="lc-head">
+        <span class="lc-count">${n} / ${total} routes run${complete ? " · the whole Superloop! 🎉" : ""}</span>
+        <div class="lc-bar"><div class="lc-fill" style="width:${pct}%"></div></div>
+        ${n ? `<button type="button" class="lc-reset" id="slReset">Reset</button>` : ""}
+      </div>
+      <p class="lc-hint"><strong>Run the Superloop.</strong> Open a route below and mark it once you&rsquo;ve run it — your tally is saved in this browser. ${total} routes, ${fmtKm(totalKm, 0)} to run the whole loop.</p>
+      <div class="lc-dist"><span class="lc-dist-big">${fmtKm(doneKm, 1)}</span> run so far <small>of ${fmtKm(totalKm, 1)} around the loop</small></div>
+      ${badgesHeadHtml("Superloop badges", `${got} / ${SL_BADGES.length} earned`)}
+      <div class="lc-badges">${badgeCardsHtml(SL_BADGES, ctx)}</div>`;
+    const reset = document.getElementById("slReset");
+    if (reset) reset.addEventListener("click", () => {
+      slDone = new Set();
+      saveSet(SL_KEY, slDone);
+      // Un-mark every card in place — closed cards clear their class, built ones
+      // reset their toggle button too.
+      document.querySelectorAll("#superloopRoutes .sl-route").forEach((card) => {
+        card.classList.remove("done");
+        const b = card.querySelector(".sl-mark");
+        if (b) { const rt = slRoutes[+card.dataset.i]; syncSlMark(b, rt, safeColour(rt.colour || SUPERLOOP_COL)); }
+      });
+      renderSuperloopChallenge();
+    });
+  }
   let superloopRefresh = null; // set below — re-renders open strips at the current unit
   async function renderSuperloopRoutes() {
     const el = document.getElementById("superloopRoutes");
@@ -5401,21 +5468,24 @@
     const data = await res.json();
     const routes = Array.isArray(data && data.routes) ? data.routes : [];
     if (!routes.length) { el.innerHTML = `<p class="diagram-empty">No Superloop routes to show.</p>`; return; }
+    slRoutes = routes; // share with the challenge panel (route count + km totals)
     const fallback = safeColour(data.colour || SUPERLOOP_COL);
     const colOf = (rt) => safeColour(rt.colour || fallback);
     el.innerHTML = routes.map((rt, i) => {
       const c = colOf(rt);
       const km = waypointsKm(rt.stops) * ROAD_FACTOR;
-      return `<div class="sl-route" data-i="${i}">
+      return `<div class="sl-route${slDone.has(rt.id) ? " done" : ""}" data-i="${i}">
         <button type="button" class="sl-route-head" aria-expanded="false">
           <span class="sl-caret" aria-hidden="true">▸</span>
           <span class="sl-badge" style="background:${c};color:${contrastText(c)}">${escapeHtml(rt.id)}</span>
+          <span class="sl-done-flag" aria-hidden="true">✓ run</span>
           <span class="sl-route-name">${escapeHtml(rt.from)} <span class="sl-arrow" aria-hidden="true">→</span> ${escapeHtml(rt.to)}</span>
           <span class="sl-route-meta">${rt.stops.length} stops · ${fmtKm(km, 1)}</span>
         </button>
         <div class="sl-route-body" hidden></div>
       </div>`;
     }).join("");
+    renderSuperloopChallenge(); // draw the progress panel now the routes are known
     // Build (or rebuild, at the current unit) one route's strip + measure row,
     // wiring the shared two-tap / drag-to-resize gesture so a shorter start→end
     // stretch can be carved out, exactly as on the Lines table and bus routes.
@@ -5424,7 +5494,7 @@
       const rt = routes[+card.dataset.i], wp = rt.stops, c = colOf(rt);
       const body = card.querySelector(".sl-route-body");
       body.style.setProperty("--line-col", c);
-      body.innerHTML = `<div class="sl-strip line-diagram"></div><div class="sl-measure ls-measure" aria-live="polite"></div><div class="sl-dl"></div>`;
+      body.innerHTML = `<div class="sl-strip line-diagram"></div><div class="sl-measure ls-measure" aria-live="polite"></div><div class="sl-actions"><div class="sl-dl"></div><button type="button" class="sl-mark"></button></div>`;
       const picks = card._slPicks || (card._slPicks = { a: -1, b: -1 });
       const seq = (card._slSeq = (card._slSeq || 0) + 1);
       attachStripMeasure({
@@ -5465,6 +5535,15 @@
           if (doc) downloadBlob(`${slug}.tcx`, new Blob([doc], { type: "application/vnd.garmin.tcx+xml" }));
         });
       }
+      // Challenge tick — mark this route run (saved per-visitor); updates the panel.
+      const markBtn = body.querySelector(".sl-mark");
+      syncSlMark(markBtn, rt, c);
+      markBtn.addEventListener("click", () => {
+        if (slDone.has(rt.id)) slDone.delete(rt.id); else slDone.add(rt.id);
+        saveSet(SL_KEY, slDone);
+        syncSlMark(markBtn, rt, c);
+        renderSuperloopChallenge();
+      });
       body.dataset.built = "1";
     };
     el.querySelectorAll(".sl-route-head").forEach((btn) => btn.addEventListener("click", () => {
@@ -5479,12 +5558,15 @@
     }));
     // km/mi toggle: refresh every row's end-to-end figure and rebuild any open
     // strips in place, so distances follow the unit without collapsing them.
-    superloopRefresh = () => el.querySelectorAll(".sl-route").forEach((card) => {
-      const rt = routes[+card.dataset.i];
-      const meta = card.querySelector(".sl-route-meta");
-      if (meta) meta.textContent = `${rt.stops.length} stops · ${fmtKm(waypointsKm(rt.stops) * ROAD_FACTOR, 1)}`;
-      if (card.classList.contains("open")) { build(card); card.querySelector(".sl-route-body").hidden = false; }
-    });
+    superloopRefresh = () => {
+      el.querySelectorAll(".sl-route").forEach((card) => {
+        const rt = routes[+card.dataset.i];
+        const meta = card.querySelector(".sl-route-meta");
+        if (meta) meta.textContent = `${rt.stops.length} stops · ${fmtKm(waypointsKm(rt.stops) * ROAD_FACTOR, 1)}`;
+        if (card.classList.contains("open")) { build(card); card.querySelector(".sl-route-body").hidden = false; }
+      });
+      renderSuperloopChallenge(); // the panel's distances follow the unit too
+    };
     // The interchange tags match by coordinates against the tube network, which
     // loads a moment after boot. If a strip was opened before it landed, rebuild
     // it once so the Underground tags fill in without needing a re-open.
