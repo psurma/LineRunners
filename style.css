@@ -1129,10 +1129,12 @@ tr.ls-open .ls-caret { transform: rotate(90deg); }
 .sl-measure { width: 100%; }
 .sl-dl { margin: 10px 0 2px; display: flex; flex-wrap: wrap; gap: 8px; }
 .sl-dl:empty { margin: 0; }
-.sl-actions { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-top: 10px; }
+.sl-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-top: 10px; }
 .sl-actions .sl-dl { margin: 0; }
-.sl-mark { flex: 0 0 auto; border: 1.5px solid var(--line); border-radius: 999px; background: #fff; color: #2b3140; font-weight: 700; font-size: 13px; padding: 5px 14px; cursor: pointer; white-space: nowrap; transition: background 0.15s, color 0.15s, border-color 0.15s, filter 0.15s; }
-.sl-mark:hover { filter: brightness(0.97); border-color: var(--tfl-blue); color: var(--tfl-blue); }
+.sl-actions .sl-mark { margin-left: auto; }
+.sl-mark, .sl-reverse { flex: 0 0 auto; border: 1.5px solid var(--line); border-radius: 999px; background: #fff; color: #2b3140; font-weight: 700; font-size: 13px; padding: 5px 14px; cursor: pointer; white-space: nowrap; transition: background 0.15s, color 0.15s, border-color 0.15s, filter 0.15s; }
+.sl-mark:hover, .sl-reverse:hover { filter: brightness(0.97); border-color: var(--tfl-blue); color: var(--tfl-blue); }
+.sl-reverse.on { border-color: var(--tfl-blue); color: var(--tfl-blue); background: rgba(0, 25, 168, 0.07); }
 /* Challenge progress panel reuses the line-collector vocabulary (.lc-*, .badge). */
 .sl-challenge { margin: 4px 0 22px; }
 .sl-challenge:empty { margin: 0; }

@@ -5511,10 +5511,18 @@
     // stretch can be carved out, exactly as on the Lines table and bus routes.
     // The pick-state lives on the card so it survives a unit-toggle rebuild.
     const build = (card) => {
-      const rt = routes[+card.dataset.i], wp = rt.stops, c = colOf(rt);
+      const rt = routes[+card.dataset.i], c = colOf(rt);
+      // Per-card running direction, kept on the card so it survives a rebuild
+      // (unit toggle, interchange arrival). Reverse flips the stops + geometry so
+      // the strip, measured stretch and watch exports all run the other way.
+      const rev = !!card._slRev;
+      const fwd = rt.stops;
+      const wp = rev ? fwd.slice().reverse() : fwd;
+      const from = wp[0][0], to = wp[wp.length - 1][0];
+      const banner = `${rt.id} · ${from} → ${to}`;
       const body = card.querySelector(".sl-route-body");
       body.style.setProperty("--line-col", c);
-      body.innerHTML = `<div class="sl-strip line-diagram"></div><div class="sl-measure ls-measure" aria-live="polite"></div><div class="sl-actions"><div class="sl-dl"></div><button type="button" class="sl-mark"></button></div>`;
+      body.innerHTML = `<div class="sl-strip line-diagram"></div><div class="sl-measure ls-measure" aria-live="polite"></div><div class="sl-actions"><div class="sl-dl"></div><button type="button" class="sl-reverse${rev ? " on" : ""}" title="${rev ? "Showing the route reversed — tap to flip back" : "Flip the route to run it the other way"}">⇄ Reverse</button><button type="button" class="sl-mark"></button></div>`;
       const picks = card._slPicks || (card._slPicks = { a: -1, b: -1 });
       const seq = (card._slSeq = (card._slSeq || 0) + 1);
       attachStripMeasure({
@@ -5525,7 +5533,7 @@
         emptyHint: "Tap two stops to measure a shorter stretch — or drag an end in.",
         isStale: () => card._slSeq !== seq,
         renderStripHtml: (sel) => stripMapHtml(null, c, rt.id, {
-          wp, bannerLabel: `${rt.id} · ${rt.from} → ${rt.to}`,
+          wp, bannerLabel: banner,
           interactive: true, a: sel.a, b: sel.b, from: sel.from, to: sel.to,
           // Match tube/rail interchanges by coordinates, not name — Superloop stops
           // carry bus names ("Elephant & Castle / New Kent Road") that never match a
@@ -5539,14 +5547,15 @@
       // continuous TfL line, so segs flatten to a single ordered track). Built on
       // click so no object URL leaks across unit-toggle rebuilds; downloadBlob
       // revokes its own URL. GPX is bare geometry; TCX carries site-pace timing.
-      const track = (rt.segs || []).flat();
+      const flat = (rt.segs || []).flat();
+      const track = rev ? flat.slice().reverse() : flat; // watch export in the running direction
       const dlBox = body.querySelector(".sl-dl");
       if (dlBox && track.length > 1) {
-        const slug = `superloop-${lineSlug(rt.id)}`;
+        const slug = `superloop-${lineSlug(rt.id)}${rev ? "-reverse" : ""}`;
         dlBox.innerHTML = `<a class="gpx-dl sl-gpx" href="#" title="Download the whole ${escapeAttr(rt.id)} route as a GPX file for your watch">↓ GPX route</a><a class="gpx-dl sl-tcx" href="#" title="Download as a Garmin TCX course — Virtual Partner pacing at your site pace">⌚ TCX</a>`;
         dlBox.querySelector(".sl-gpx").addEventListener("click", (ev) => {
           ev.preventDefault();
-          const text = gpxFromPoints(track, `TubeRun ${rt.id} · ${rt.from} → ${rt.to}`);
+          const text = gpxFromPoints(track, `TubeRun ${rt.id} · ${from} → ${to}`);
           if (text) downloadBlob(`${slug}.gpx`, new Blob([text], { type: "application/gpx+xml" }));
         });
         dlBox.querySelector(".sl-tcx").addEventListener("click", (ev) => {
@@ -5563,6 +5572,14 @@
         saveSet(SL_KEY, slDone);
         syncSlMark(markBtn, rt, c);
         renderSuperloopChallenge();
+      });
+      // Reverse — flip the running direction. A pure flip keeps a measured
+      // stretch's physical ends, so remap the picked indices then rebuild.
+      body.querySelector(".sl-reverse").addEventListener("click", () => {
+        card._slRev = !rev;
+        const p = card._slPicks;
+        if (p) { if (p.a >= 0) p.a = fwd.length - 1 - p.a; if (p.b >= 0) p.b = fwd.length - 1 - p.b; }
+        build(card);
       });
       body.dataset.built = "1";
     };
