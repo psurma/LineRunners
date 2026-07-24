@@ -5594,9 +5594,39 @@
       const legKms = wp.map((p, i) => (i === 0 ? 0 : (p[3] || 0) - (wp[i - 1][3] || 0)));
       const totKm = wp.length ? (wp[wp.length - 1][3] || 0) : 0;
       body.style.setProperty("--line-col", col);
-      body.innerHTML = `<div class="sl-strip line-diagram"></div><div class="sl-measure ls-measure" aria-live="polite"></div><div class="sl-actions"><div class="sl-dl"></div></div>`;
+      if (card._trailMap) { card._trailMap.remove(); card._trailMap = null; } // drop the previous map before a rebuild
+      body.innerHTML = `<div class="sl-strip line-diagram"></div><div class="sl-measure ls-measure" aria-live="polite"></div><div class="trail-map"></div><div class="sl-actions"><div class="sl-dl"></div></div>`;
       const picks = card._trailPicks || (card._trailPicks = { a: -1, b: -1 });
       const seq = (card._trailSeq = (card._trailSeq || 0) + 1);
+      // Geographic map of the section, below the strip: the whole footpath, or just
+      // the measured stretch (sliced from the geometry between the two picked
+      // stations) once both ends are set — mirroring the bus route tracer.
+      const geomLL = (s.geom || []).filter((p) => Array.isArray(p) && Number.isFinite(p[0]) && Number.isFinite(p[1]));
+      const holder = { layer: null };
+      const nearestIdx = (lat, lon) => { let bi = 0, bd = Infinity; for (let i = 0; i < geomLL.length; i++) { const dx = geomLL[i][0] - lat, dy = geomLL[i][1] - lon, d = dx * dx + dy * dy; if (d < bd) { bd = d; bi = i; } } return bi; };
+      const drawMap = () => {
+        const map = card._trailMap;
+        if (!map || geomLL.length < 2) return;
+        if (!(picks.a >= 0 && picks.b >= 0)) {
+          drawFlowSegments(map, holder, [geomLL.map((p) => [p[0], p[1]])], col, {
+            stops: wp,
+            start: { at: [geomLL[0][0], geomLL[0][1]], label: escapeHtml(s.from) },
+            finish: { at: [geomLL[geomLL.length - 1][0], geomLL[geomLL.length - 1][1]], label: escapeHtml(s.to) },
+            tubeConns: true,
+          }, [24, 24]);
+          return;
+        }
+        const i = Math.min(picks.a, picks.b), j = Math.max(picks.a, picks.b);
+        const lo = Math.min(nearestIdx(wp[i][1], wp[i][2]), nearestIdx(wp[j][1], wp[j][2]));
+        const hi = Math.max(nearestIdx(wp[i][1], wp[i][2]), nearestIdx(wp[j][1], wp[j][2]));
+        const sub = geomLL.slice(lo, hi + 1).map((p) => [p[0], p[1]]);
+        drawFlowSegments(map, holder, sub.length > 1 ? [sub] : [[[wp[i][1], wp[i][2]], [wp[j][1], wp[j][2]]]], col, {
+          stops: wp.slice(i, j + 1),
+          start: { at: [wp[i][1], wp[i][2]], label: escapeHtml(wp[i][0]) },
+          finish: { at: [wp[j][1], wp[j][2]], label: escapeHtml(wp[j][0]) },
+          tubeConns: true,
+        }, [28, 28]);
+      };
       attachStripMeasure({
         picks,
         stripEl: body.querySelector(".sl-strip"),
@@ -5612,8 +5642,17 @@
         }),
         // Winding-trail distance from the baked along-km, so a stretch reads true.
         measureKm: (i, j) => Math.abs((wp[j][3] || 0) - (wp[i][3] || 0)),
-        persist: () => {}, redraw: () => {}, centreOnTap: () => {}, showPopup: () => {},
+        persist: () => {},
+        redraw: drawMap,
+        centreOnTap: (pt) => { if (card._trailMap) card._trailMap.setView([pt[1], pt[2]], Math.max(card._trailMap.getZoom(), 14), { animate: true }); },
+        showPopup: (pt) => { if (card._trailMap) L.popup({ offset: [0, -2], autoPan: false }).setLatLng([pt[1], pt[2]]).setContent(`<strong>${escapeHtml(pt[0])}</strong>${geoInterchangeTags(pt[1], pt[2])}`).openOn(card._trailMap); },
       });
+      // Build the section's Leaflet surface now its container exists; observeMapSize
+      // (inside createSiteMap) corrects the size once the hidden panel is shown.
+      const mapEl = body.querySelector(".trail-map");
+      card._trailMap = (typeof L !== "undefined" && mapEl) ? createSiteMap(mapEl, {}) : null;
+      drawMap();
+      requestAnimationFrame(() => { if (card._trailMap) card._trailMap.invalidateSize(false); });
       // Watch export: the whole section footpath (its OSM geometry), built on click.
       const track = (s.geom || []).filter((p) => Array.isArray(p) && Number.isFinite(p[0]) && Number.isFinite(p[1]));
       const dlBox = body.querySelector(".sl-dl");
@@ -5637,9 +5676,16 @@
       const open = btn.getAttribute("aria-expanded") === "true";
       btn.setAttribute("aria-expanded", open ? "false" : "true");
       card.classList.toggle("open", !open);
-      if (open) { body.hidden = true; return; }
+      if (open) {
+        // Collapse: free the section's map and reset so it rebuilds clean on reopen.
+        body.hidden = true;
+        if (card._trailMap) { card._trailMap.remove(); card._trailMap = null; }
+        body.dataset.built = ""; body.innerHTML = "";
+        return;
+      }
       if (!body.dataset.built) build(card);
       body.hidden = false;
+      if (card._trailMap) card._trailMap.invalidateSize(false);
     }));
     // km/mi toggle: refresh the total + each section's figure, rebuilding open strips.
     trailRefreshers.push(() => {

@@ -1141,6 +1141,8 @@ tr.ls-open .ls-caret { transform: rotate(90deg); }
 .loop-secs { margin-top: 8px; }
 .loop-total { color: var(--muted); font-size: 15px; margin: 0 0 14px; }
 .loop-badge { min-width: 30px; width: 30px; height: 30px; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
+/* Per-section geographic map (London LOOP / Capital Ring cards). */
+.trail-map { height: 300px; margin: 12px 0 4px; border-radius: 14px; overflow: hidden; border: 1px solid var(--line); }
 /* Challenge progress panel reuses the line-collector vocabulary (.lc-*, .badge). */
 .sl-challenge { margin: 4px 0 22px; }
 .sl-challenge:empty { margin: 0; }
