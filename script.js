@@ -3827,6 +3827,7 @@
     { key: "overground", file: "img/overground-map.png", label: "Overground", kind: "img" },
     { key: "connections", file: "img/connections-map.png", label: "Rail connections", kind: "img" },
     { key: "trams", label: "Trams", kind: "tram" },
+    { key: "loop", label: "London LOOP", kind: "loop" },
     { key: "superloop", label: "Superloop", kind: "superloop" },
     { key: "superloopmap", file: "img/superloop-diagram.png", label: "Superloop diagram", kind: "img" },
   ];
@@ -3834,10 +3835,12 @@
   const SUPERLOOP_COL = "#12ABB6";
   // TfL tram green — the fallback if data/tramlink.json omits its own colour.
   const TRAM_COL = "#5FA524";
+  // London LOOP waymark green — the fallback if data/london-loop.json omits it.
+  const LOOP_COL = "#3C8C40";
   // The map kinds that are live Leaflet surfaces (Leaflet owns pan/zoom, and they
   // share the tmMap holder + the tm-map-active body class). The holder's own
   // drag-to-pan / wheel-zoom and the teardown in loadMap key off this set.
-  const LEAFLET_KINDS = new Set(["geo", "superloop", "tram"]);
+  const LEAFLET_KINDS = new Set(["geo", "superloop", "tram", "loop"]);
   // Lettered end-of-line discs for the "Classic ends" tab — the terminus
   // letters of the old printed pocket maps (a Tokyo habit on London ends),
   // hand-placed on the December 2013 diagram. [letter, colour, x, y] in the
@@ -4589,6 +4592,7 @@
       connections: `The geographic rail-connections map — every line where it really runs.`,
       superloop: `TfL's Superloop — the express-bus orbital ringing outer London, drawn from live TfL route data. Tap any stop.`,
       trams: `London Trams — the Croydon Tramlink network, drawn from live TfL route data. Tap any stop.`,
+      loop: `The London LOOP — the ~150-mile walking orbital around outer London, its 24 signed sections drawn from OpenStreetMap. Tap a section.`,
       superloopmap: `The whole network at a glance — TfL's official Superloop diagram: all 12 express-bus routes (SL1–SL11 plus the BL1 Bakerloop).`,
     };
     if (cap) cap.innerHTML = CAPTIONS[cfg.key] || "";
@@ -4609,6 +4613,9 @@
 
     // London Trams (Croydon Tramlink) — its own lightweight Leaflet surface (data/tramlink.json).
     if (cfg.kind === "tram") { renderTramlink(holder, cap, stale).catch(() => { if (!stale()) holder.innerHTML = `<p class="diagram-empty">Couldn't load the tram network right now.</p>`; }); return; }
+
+    // The London LOOP — the outer-orbital walking path (data/london-loop.json).
+    if (cfg.kind === "loop") { renderLondonLoop(holder, cap, stale).catch(() => { if (!stale()) holder.innerHTML = `<p class="diagram-empty">Couldn't load the London LOOP right now.</p>`; }); return; }
 
     // Data view: a computed per-station running-time table (no image).
     if (cfg.kind === "data") { renderRunningTimes(holder); return; }
@@ -5476,6 +5483,60 @@
     // Interchanges match by coordinate against the tube network — if it hasn't
     // landed yet, load it so the first stop tap already shows its connections.
     loadNetwork().catch(() => null);
+  }
+
+  // The London LOOP on its own live Leaflet surface — the 24 signed sections of
+  // the outer-orbital walking path, drawn in LOOP green from data/london-loop.json,
+  // each wearing a numbered roundel you can tap for its endpoints and length.
+  async function renderLondonLoop(holder, cap, stale) {
+    if (typeof L === "undefined") { mapUnavailable(holder); return; }
+    const res = await vfetch("data/london-loop.json").catch(() => null);
+    if (stale && stale()) return;
+    if (!res || !res.ok) { holder.innerHTML = `<p class="diagram-empty">Couldn't load the London LOOP right now.</p>`; return; }
+    const data = await res.json();
+    if (stale && stale()) return;
+    const sections = Array.isArray(data && data.sections) ? data.sections : [];
+    if (!sections.length) { holder.innerHTML = `<p class="diagram-empty">No LOOP sections to show.</p>`; return; }
+    const col = safeColour(data.colour || LOOP_COL);
+
+    document.body.classList.add("tm-map-active");
+    holder.innerHTML = `<div id="tmMap"></div>`;
+    if (tmMap.map) { tmMap.map.remove(); tmMap.map = null; }
+    const map = createSiteMap("tmMap", { zoomHint: true });
+    tmMap.map = map;
+    const grp = L.layerGroup().addTo(map);
+    const all = [];
+
+    // Each section's footpath, drawn in LOOP green.
+    sections.forEach((s) => {
+      const ll = (s.geom || []).map((p) => [p[0], p[1]]);
+      if (ll.length < 2) return;
+      addFlowLine(grp, ll, col, { baseWeight: 5, flowWeight: 5 });
+      ll.forEach((p) => all.push(p));
+    });
+
+    // A numbered roundel mid-section, tappable for its endpoints + length.
+    const centreOn = (lat, lon, html) => {
+      map.setView([lat, lon], Math.max(map.getZoom(), 13), { animate: true });
+      L.popup({ offset: [0, -2], autoPan: false }).setLatLng([lat, lon]).setContent(html).openOn(map);
+    };
+    sections.forEach((s) => {
+      const g = s.geom || [];
+      if (g.length < 2) return;
+      const mid = g[Math.floor(g.length / 2)];
+      const html = `<strong>Section ${s.n}</strong><br><span class="stn-tags">${escapeHtml(s.from)} → ${escapeHtml(s.to)} · ${fmtKm(s.km, 1)}</span>`;
+      L.marker([mid[0], mid[1]], { icon: roundelIcon(String(s.n), col), keyboard: false, zIndexOffset: 600 })
+        .bindTooltip(`Section ${s.n}: ${escapeHtml(s.from)} → ${escapeHtml(s.to)}`, { direction: "top" })
+        .on("click", () => centreOn(mid[0], mid[1], html))
+        .addTo(grp);
+    });
+
+    if (all.length) map.fitBounds(L.latLngBounds(all), { padding: [28, 28] });
+    requestAnimationFrame(() => map.invalidateSize(false));
+    if (cap) {
+      const totalKm = sections.reduce((a, s) => a + s.km, 0);
+      cap.innerHTML = `The London LOOP — the ~<strong>${Math.round(totalKm)} km</strong> walking orbital around outer London, <strong>${sections.length}</strong> signed sections, from OpenStreetMap. Tap a section for its endpoints.`;
+    }
   }
 
   // The Superloop section: every route listed with a coloured SLn badge that

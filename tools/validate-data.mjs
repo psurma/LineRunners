@@ -348,6 +348,22 @@ try {
       else fail(`tramlink.json: must be { segs:[[[lat,lon],…]], stops:[[name,lat,lon],…] } with all coords inside Greater London — re-run tools/generate-tramlink.mjs`);
     }
 
+    // london-loop.json: renderLondonLoop reads .sections[], each with n + from/to
+    // + geom ([[lat,lon],…] footpath). Assert shape + London bounds so a malformed
+    // regen can't draw an empty or mislocated orbital.
+    const ll = parsed["london-loop.json"];
+    if (ll !== undefined) {
+      const inLondon = (lat, lon) => lat > 51.2 && lat < 51.8 && lon > -0.7 && lon < 0.4;
+      const secs = ll && Array.isArray(ll.sections) ? ll.sections : null;
+      const okSec = (s) =>
+        has(s, ["n", "from", "to", "geom"]) && typeof s.n === "number" &&
+        typeof s.from === "string" && typeof s.to === "string" &&
+        Array.isArray(s.geom) && s.geom.length > 1 &&
+        s.geom.every((p) => Array.isArray(p) && p.length === 2 && inLondon(p[0], p[1]));
+      if (secs && secs.length >= 20 && secs.every(okSec)) ok(`london-loop.json: ${secs.length} sections, each with in-bounds geom`);
+      else fail(`london-loop.json: must be { sections:[{ n, from, to, geom:[[lat,lon],…] }] } (>=20 sections) with all coords inside Greater London — re-run tools/generate-london-loop.mjs`);
+    }
+
     // Remaining fetched artifacts are consumed as plain top-level arrays:
     // station-toilets → new Set(ids), facilities-water → [[lat,lon],…], bus-routes → id list.
     for (const f of ["station-toilets.json", "facilities-water.json", "bus-routes.json"]) {
