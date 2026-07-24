@@ -5609,7 +5609,8 @@
       // Geographic map of the section, below the strip: the whole footpath, or just
       // the measured stretch (sliced from the geometry between the two picked
       // stations) once both ends are set — mirroring the bus route tracer.
-      const geomLL = (s.geom || []).filter((p) => Array.isArray(p) && Number.isFinite(p[0]) && Number.isFinite(p[1]));
+      const geomFwd = (s.geom || []).filter((p) => Array.isArray(p) && Number.isFinite(p[0]) && Number.isFinite(p[1]));
+      const geomLL = rev ? geomFwd.slice().reverse() : geomFwd; // draw in the running direction so the flow animation reverses too
       const holder = { layer: null };
       const nearestIdx = (lat, lon) => { let bi = 0, bd = Infinity; for (let i = 0; i < geomLL.length; i++) { const dx = geomLL[i][0] - lat, dy = geomLL[i][1] - lon, d = dx * dx + dy * dy; if (d < bd) { bd = d; bi = i; } } return bi; };
       const drawMap = () => {
@@ -5665,7 +5666,7 @@
       // zero size and maxes out the zoom — re-fit on the next frame, once visible.
       requestAnimationFrame(() => { if (card._trailMap) { card._trailMap.invalidateSize(false); drawMap(); } });
       // Watch export: the whole section footpath in the running direction, on click.
-      const track = rev ? geomLL.slice().reverse() : geomLL;
+      const track = geomLL; // already in the running direction
       const dlBox = body.querySelector(".sl-dl");
       if (dlBox && track.length > 1) {
         const slug = `${opts.slug}-${s.n}${rev ? "-reverse" : ""}`;
@@ -5857,7 +5858,8 @@
       // Geographic map of the route below the strip — the whole traced line, or just
       // the measured stretch (sliced from the geometry) once two stops are picked.
       const flat = (rt.segs || []).flat();
-      const geomLL = flat.filter((p) => Array.isArray(p) && Number.isFinite(p[0]) && Number.isFinite(p[1]));
+      const geomFwd = flat.filter((p) => Array.isArray(p) && Number.isFinite(p[0]) && Number.isFinite(p[1]));
+      const geomLL = rev ? geomFwd.slice().reverse() : geomFwd; // running direction, so the flow animation reverses too
       const holder = { layer: null };
       const nearestIdx = (lat, lon) => { let bi = 0, bd = Infinity; for (let i = 0; i < geomLL.length; i++) { const dx = geomLL[i][0] - lat, dy = geomLL[i][1] - lon, d = dx * dx + dy * dy; if (d < bd) { bd = d; bi = i; } } return bi; };
       const drawMap = () => {
@@ -5914,7 +5916,7 @@
       // continuous TfL line, so segs flatten to a single ordered track). Built on
       // click so no object URL leaks across unit-toggle rebuilds; downloadBlob
       // revokes its own URL. GPX is bare geometry; TCX carries site-pace timing.
-      const track = rev ? flat.slice().reverse() : flat; // watch export in the running direction
+      const track = geomLL; // watch export in the running direction (geomLL is already directional)
       const dlBox = body.querySelector(".sl-dl");
       if (dlBox && track.length > 1) {
         const slug = `superloop-${lineSlug(rt.id)}${rev ? "-reverse" : ""}`;
