@@ -5651,8 +5651,11 @@
       // (inside createSiteMap) corrects the size once the hidden panel is shown.
       const mapEl = body.querySelector(".trail-map");
       card._trailMap = (typeof L !== "undefined" && mapEl) ? createSiteMap(mapEl, {}) : null;
+      card._trailRedraw = drawMap;
       drawMap();
-      requestAnimationFrame(() => { if (card._trailMap) card._trailMap.invalidateSize(false); });
+      // On first open the panel is still hidden, so this initial fitBounds runs at
+      // zero size and maxes out the zoom — re-fit on the next frame, once visible.
+      requestAnimationFrame(() => { if (card._trailMap) { card._trailMap.invalidateSize(false); drawMap(); } });
       // Watch export: the whole section footpath (its OSM geometry), built on click.
       const track = (s.geom || []).filter((p) => Array.isArray(p) && Number.isFinite(p[0]) && Number.isFinite(p[1]));
       const dlBox = body.querySelector(".sl-dl");
@@ -5685,7 +5688,7 @@
       }
       if (!body.dataset.built) build(card);
       body.hidden = false;
-      if (card._trailMap) card._trailMap.invalidateSize(false);
+      if (card._trailMap) { card._trailMap.invalidateSize(false); if (card._trailRedraw) card._trailRedraw(); }
     }));
     // km/mi toggle: refresh the total + each section's figure, rebuilding open strips.
     trailRefreshers.push(() => {
@@ -5831,9 +5834,39 @@
       const banner = `${rt.id} · ${from} → ${to}`;
       const body = card.querySelector(".sl-route-body");
       body.style.setProperty("--line-col", c);
-      body.innerHTML = `<div class="sl-strip line-diagram"></div><div class="sl-measure ls-measure" aria-live="polite"></div><div class="sl-actions"><div class="sl-dl"></div><button type="button" class="sl-reverse${rev ? " on" : ""}" title="${rev ? "Showing the route reversed — tap to flip back" : "Flip the route to run it the other way"}">⇄ Reverse</button><button type="button" class="sl-mark"></button></div>`;
+      if (card._slMap) { card._slMap.remove(); card._slMap = null; } // drop the previous map before a rebuild
+      body.innerHTML = `<div class="sl-strip line-diagram"></div><div class="sl-measure ls-measure" aria-live="polite"></div><div class="trail-map"></div><div class="sl-actions"><div class="sl-dl"></div><button type="button" class="sl-reverse${rev ? " on" : ""}" title="${rev ? "Showing the route reversed — tap to flip back" : "Flip the route to run it the other way"}">⇄ Reverse</button><button type="button" class="sl-mark"></button></div>`;
       const picks = card._slPicks || (card._slPicks = { a: -1, b: -1 });
       const seq = (card._slSeq = (card._slSeq || 0) + 1);
+      // Geographic map of the route below the strip — the whole traced line, or just
+      // the measured stretch (sliced from the geometry) once two stops are picked.
+      const flat = (rt.segs || []).flat();
+      const geomLL = flat.filter((p) => Array.isArray(p) && Number.isFinite(p[0]) && Number.isFinite(p[1]));
+      const holder = { layer: null };
+      const nearestIdx = (lat, lon) => { let bi = 0, bd = Infinity; for (let i = 0; i < geomLL.length; i++) { const dx = geomLL[i][0] - lat, dy = geomLL[i][1] - lon, d = dx * dx + dy * dy; if (d < bd) { bd = d; bi = i; } } return bi; };
+      const drawMap = () => {
+        const map = card._slMap;
+        if (!map || geomLL.length < 2) return;
+        if (!(picks.a >= 0 && picks.b >= 0)) {
+          drawFlowSegments(map, holder, [geomLL.map((p) => [p[0], p[1]])], c, {
+            stops: wp,
+            start: { at: [wp[0][1], wp[0][2]], label: escapeHtml(from) },
+            finish: { at: [wp[wp.length - 1][1], wp[wp.length - 1][2]], label: escapeHtml(to) },
+            tubeConns: true,
+          }, [24, 24]);
+          return;
+        }
+        const i = Math.min(picks.a, picks.b), j = Math.max(picks.a, picks.b);
+        const lo = Math.min(nearestIdx(wp[i][1], wp[i][2]), nearestIdx(wp[j][1], wp[j][2]));
+        const hi = Math.max(nearestIdx(wp[i][1], wp[i][2]), nearestIdx(wp[j][1], wp[j][2]));
+        const sub = geomLL.slice(lo, hi + 1).map((p) => [p[0], p[1]]);
+        drawFlowSegments(map, holder, sub.length > 1 ? [sub] : [[[wp[i][1], wp[i][2]], [wp[j][1], wp[j][2]]]], c, {
+          stops: wp.slice(i, j + 1),
+          start: { at: [wp[i][1], wp[i][2]], label: escapeHtml(wp[i][0]) },
+          finish: { at: [wp[j][1], wp[j][2]], label: escapeHtml(wp[j][0]) },
+          tubeConns: true,
+        }, [28, 28]);
+      };
       attachStripMeasure({
         picks,
         stripEl: body.querySelector(".sl-strip"),
@@ -5850,13 +5883,21 @@
           geoInterchange: true,
         }),
         measureKm: (i, j) => { let km = 0; for (let k = i + 1; k <= j; k++) km += haversineKm(wp[k - 1], wp[k]) * ROAD_FACTOR; return km; },
-        persist: () => {}, redraw: () => {}, centreOnTap: () => {}, showPopup: () => {},
+        persist: () => {},
+        redraw: drawMap,
+        centreOnTap: (pt) => { if (card._slMap) card._slMap.setView([pt[1], pt[2]], Math.max(card._slMap.getZoom(), 14), { animate: true }); },
+        showPopup: (pt) => { if (card._slMap) L.popup({ offset: [0, -2], autoPan: false }).setLatLng([pt[1], pt[2]]).setContent(`<strong>${escapeHtml(pt[0])}</strong>${geoInterchangeTags(pt[1], pt[2])}`).openOn(card._slMap); },
       });
+      // Build the route's Leaflet surface; re-fit once the hidden panel is shown.
+      const mapEl = body.querySelector(".trail-map");
+      card._slMap = (typeof L !== "undefined" && mapEl) ? createSiteMap(mapEl, {}) : null;
+      card._slRedraw = drawMap;
+      drawMap();
+      requestAnimationFrame(() => { if (card._slMap) { card._slMap.invalidateSize(false); drawMap(); } });
       // Watch export: the route's whole traced geometry (each route is one
       // continuous TfL line, so segs flatten to a single ordered track). Built on
       // click so no object URL leaks across unit-toggle rebuilds; downloadBlob
       // revokes its own URL. GPX is bare geometry; TCX carries site-pace timing.
-      const flat = (rt.segs || []).flat();
       const track = rev ? flat.slice().reverse() : flat; // watch export in the running direction
       const dlBox = body.querySelector(".sl-dl");
       if (dlBox && track.length > 1) {
@@ -5898,9 +5939,16 @@
       const open = btn.getAttribute("aria-expanded") === "true";
       btn.setAttribute("aria-expanded", open ? "false" : "true");
       card.classList.toggle("open", !open);
-      if (open) { body.hidden = true; return; }
+      if (open) {
+        // Collapse: free the route's map and reset so it rebuilds clean on reopen.
+        body.hidden = true;
+        if (card._slMap) { card._slMap.remove(); card._slMap = null; }
+        body.dataset.built = ""; body.innerHTML = "";
+        return;
+      }
       if (!body.dataset.built) build(card);
       body.hidden = false;
+      if (card._slMap) { card._slMap.invalidateSize(false); if (card._slRedraw) card._slRedraw(); }
     }));
     // km/mi toggle: refresh every row's end-to-end figure and rebuild any open
     // strips in place, so distances follow the unit without collapsing them.
