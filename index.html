@@ -29,10 +29,10 @@
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-title" content="Overland" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-  <link rel="stylesheet" href="vendor/fonts/fonts.css?v=337" />
-  <link rel="stylesheet" href="vendor/leaflet/leaflet.css?v=337" />
-  <script src="vendor/leaflet/leaflet.js?v=337" defer></script>
-  <link rel="stylesheet" href="style.css?v=337" />
+  <link rel="stylesheet" href="vendor/fonts/fonts.css?v=338" />
+  <link rel="stylesheet" href="vendor/leaflet/leaflet.css?v=338" />
+  <script src="vendor/leaflet/leaflet.js?v=338" defer></script>
+  <link rel="stylesheet" href="style.css?v=338" />
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
@@ -58,6 +58,7 @@
   </script>
 </head>
 <body>
+  <a class="skip-link" href="#top">Skip to content</a>
   <header class="site-header">
     <a class="brand" href="#top" aria-label="Overland — home">
       <img class="brand-icon" src="img/logo.svg" alt="" width="42" height="42" />
@@ -95,7 +96,7 @@
     </div>
   </header>
 
-  <main id="top">
+  <main id="top" tabindex="-1">
     <div id="liveBanner" class="live-banner" hidden></div>
     <div id="featureBanner" class="feature-banner" hidden></div>
 
@@ -232,10 +233,10 @@
       <h2 class="section-title">Plan a run &mdash; anywhere to anywhere</h2>
       <p class="section-sub">Pick any two stations on the network and we&rsquo;ll trace the shortest above-ground running route between them &mdash; hopping across lines wherever they meet, just like a Tube journey planner. Distance and rough run, cycle and walk times included.</p>
       <div class="journey-mode" role="tablist" aria-label="Route type">
-        <button type="button" id="modePtp" class="jm-tab is-on" role="tab" aria-selected="true">Point to point</button>
-        <button type="button" id="modeLoop" class="jm-tab" role="tab" aria-selected="false">&#8635; Loop from a spot</button>
+        <button type="button" id="modePtp" class="jm-tab is-on" role="tab" aria-selected="true" aria-controls="ptpControls">Point to point</button>
+        <button type="button" id="modeLoop" class="jm-tab" role="tab" aria-selected="false" aria-controls="loopControls">&#8635; Loop from a spot</button>
       </div>
-      <div class="journey-controls" id="ptpControls">
+      <div class="journey-controls" id="ptpControls" role="tabpanel" aria-labelledby="modePtp">
         <div class="field">
           <label for="abFrom">From</label>
           <input id="abFrom" class="ab-input" list="abStations" placeholder="e.g. Brixton" autocomplete="off" />
@@ -253,7 +254,7 @@
         <button type="button" id="abRandom" class="btn ab-random" title="Surprise me with a random route">&#127922; Random</button>
       </div>
       <datalist id="abStations"></datalist>
-      <div class="loop-controls" id="loopControls" hidden>
+      <div class="loop-controls" id="loopControls" role="tabpanel" aria-labelledby="modeLoop" hidden>
         <div class="field">
           <label for="loopStart">Start</label>
           <input id="loopStart" class="ab-input" list="abStations" placeholder="e.g. Brixton" autocomplete="off" />
@@ -364,21 +365,21 @@
       <h2 class="section-title">The Superloop</h2>
       <p class="section-sub">London&rsquo;s orbital express-bus network &mdash; 12 routes (SL1&ndash;SL11 and the BL1 Bakerloop) ringing the outer boroughs. Tap any route to trace its stops end to end in its own colour. See the whole loop on the interactive <a href="#network">map</a> (Superloop tab), with TfL&rsquo;s official diagram beside it.</p>
       <div id="superloopChallenge" class="sl-challenge" aria-live="polite"></div>
-      <div id="superloopRoutes" class="sl-routes" aria-live="polite"></div>
+      <div id="superloopRoutes" class="sl-routes"></div>
     </section>
 
     <!-- LONDON LOOP -->
     <section id="loop" class="loop-section">
       <h2 class="section-title">The London LOOP</h2>
       <p class="section-sub">The London Outer Orbital Path &mdash; a ~150-mile (240&nbsp;km) signed walking route right around the edge of London, in 24 sections between the outer-suburb stations. Grab a GPX for any section for your watch, or see the whole orbital on the interactive <a href="#network">map</a> (London LOOP tab). Route data from OpenStreetMap.</p>
-      <div id="loopSections" class="loop-secs" aria-live="polite"></div>
+      <div id="loopSections" class="loop-secs"></div>
     </section>
 
     <!-- CAPITAL RING -->
     <section id="capring" class="loop-section">
       <h2 class="section-title">The Capital Ring</h2>
       <p class="section-sub">The London LOOP&rsquo;s inner sibling &mdash; a ~78-mile (125&nbsp;km) signed walking orbital through inner London&rsquo;s parks, rivers and backstreets, in 15 sections between the stations. Grab a GPX for any section for your watch, or see the whole ring on the interactive <a href="#network">map</a> (Capital Ring tab). Route data from OpenStreetMap.</p>
-      <div id="capringSections" class="loop-secs" aria-live="polite"></div>
+      <div id="capringSections" class="loop-secs"></div>
     </section>
 
     <!-- LINE COLLECTOR -->
@@ -477,6 +478,6 @@
     <p class="fine"><span id="pageVersion" class="page-version"></span></p>
   </footer>
 
-  <script src="script.js?v=337" defer></script>
+  <script src="script.js?v=338" defer></script>
 </body>
 </html>

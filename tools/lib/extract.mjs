@@ -6,9 +6,12 @@
 // (generate-schedule.mjs's) now lives here.
 //
 // The scan balances only the literal's own bracket kind and skips over string
-// bodies ('…', "…", `…`, with \ escapes), which is safe because these literals
-// hold plain data: strings, numbers, arrays and nested objects — no comments
-// with stray brackets, no regex literals, no template interpolation.
+// bodies ('…', "…", `…`, with \ escapes) and comments (// to end of line, /* to
+// */), which is safe because these literals hold plain data: strings, numbers,
+// arrays, nested objects and the odd annotating comment — no regex literals, no
+// template interpolation. Comments have to be skipped before strings, or an
+// apostrophe in a `// each line's main route` comment opens a "string" that
+// swallows the literal's closing bracket.
 
 import vm from "node:vm";
 
@@ -26,7 +29,9 @@ export function sliceLiteral(src, name) {
   let depth = 0, i = start;
   for (; i < src.length; i++) {
     const c = src[i];
-    if (c === open) depth++;
+    if (c === "/" && src[i + 1] === "/") { while (i < src.length && src[i] !== "\n") i++; }
+    else if (c === "/" && src[i + 1] === "*") { const end = src.indexOf("*/", i + 2); if (end === -1) break; i = end + 1; }
+    else if (c === open) depth++;
     else if (c === close) { if (!--depth) return src.slice(start, i + 1); }
     else if (c === '"' || c === "'" || c === "`") { const q = c; for (i++; i < src.length && src[i] !== q; i++) if (src[i] === "\\") i++; }
   }

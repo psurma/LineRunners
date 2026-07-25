@@ -26,6 +26,8 @@
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { overpassJson } from "./lib/overpass.mjs";
+import { distKm as dKm } from "./lib/geo.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const GEOJSON = join(ROOT, "data/routes.geojson");
@@ -34,14 +36,19 @@ const OVERPASS = process.argv[2] || join(ROOT, "tools/data/shoreditch-streets.js
 
 const QUERY = `[out:json][timeout:60];(way[highway][name~"^(Bridport Place|Shepperton Road|Rotherfield Street|Ecclesbourne Road|Elmore Street|Cleveland Road|Downham Road|Southgate Road|Mildmay Park|Newington Green|Newington Green Road|Matthias Road|Boleyn Road|Mildmay Road|Wolsey Road|Mildmay Grove North|Balls Pond Road|Culford Road|Culford Grove|Tottenham Road|Ufton Road|Ufton Grove|Buckingham Road|Stamford Road|Englefield Road|De Beauvoir Square|Lawford Road|Hertford Road|De Beauvoir Crescent|Whitmore Road|Whitmore Bridge|Hoxton Street|Fanshaw Street|Pitfield Street|Mintern Street)$"](51.528,-0.097,51.556,-0.072););out geom;`;
 
+// The extract is committed, so this normally reads from disk. When it isn't
+// there, fetch it through the shared client and cache it — the hand-rolled curl
+// this used to print had no retry, and a rate-limited response would land as a
+// file that parses to no ways and silently builds a course out of nothing.
 if (!existsSync(OVERPASS)) {
-  console.error(`Overpass extract not found at ${OVERPASS}.\nFetch it with:\n  curl -s https://overpass.kumi.systems/api/interpreter --data-urlencode 'data=${QUERY}' -o ${OVERPASS}`);
-  process.exit(1);
+  console.log(`Overpass extract not found at ${OVERPASS} — fetching…`);
+  const fetched = await overpassJson(QUERY);
+  if (!(fetched.elements || []).length) { console.error("Overpass returned no elements for the street query — aborting."); process.exit(1); }
+  writeFileSync(OVERPASS, JSON.stringify(fetched));
+  console.log(`  cached ${fetched.elements.length} elements`);
 }
 
 const osm = JSON.parse(readFileSync(OVERPASS, "utf8"));
-const toR = Math.PI / 180;
-const dKm = (a, b) => 12742 * Math.asin(Math.sqrt(Math.sin((b[0] - a[0]) * toR / 2) ** 2 + Math.cos(a[0] * toR) * Math.cos(b[0] * toR) * Math.sin((b[1] - a[1]) * toR / 2) ** 2));
 
 // Graph over OSM nodes; edges carry the street name so legs can be restricted.
 const nodes = new Map(); // id -> [lat, lon]

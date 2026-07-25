@@ -12,12 +12,12 @@
 import { writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { overpassJson } from "./lib/overpass.mjs";
+import { distKm as haversineKm } from "./lib/geo.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const OUT = join(ROOT, "data", "london-loop.json");
 const COLOUR = "#3C8C40"; // walking-route green — the LOOP's waymark colour
-// Overpass mirrors, tried in order — the main endpoint rate-limits heavy sessions.
-const ENDPOINTS = ["https://overpass-api.de/api/interpreter", "https://overpass.kumi.systems/api/interpreter"];
 // The 24 section route relations (type=route, ref=LOOP), not the superroute
 // wrappers or the unsigned alternatives/diversions (those carry no ref).
 const QUERY = `[out:json][timeout:180];
@@ -29,31 +29,6 @@ const STATIONS_QUERY = `[out:json][timeout:180];
 (node["railway"="station"](51.28,-0.52,51.69,0.27);node["railway"="halt"](51.28,-0.52,51.69,0.27););
 out;`;
 
-async function overpassJson(query) {
-  let lastErr;
-  for (const url of ENDPOINTS) {
-    try {
-      const res = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded", "User-Agent": "Overland/1.0 (running club map)" },
-        body: "data=" + encodeURIComponent(query),
-      });
-      if (!res.ok) { lastErr = new Error(`${url} ${res.status}`); continue; }
-      const text = await res.text();
-      if (!text.trim().startsWith("{")) { lastErr = new Error(`${url} returned non-JSON`); continue; }
-      return JSON.parse(text);
-    } catch (e) { lastErr = e; }
-  }
-  throw lastErr || new Error("all Overpass endpoints failed");
-}
-
-const R = 6371;
-const rad = (d) => (d * Math.PI) / 180;
-function haversineKm(a, b) {
-  const dLat = rad(b[0] - a[0]), dLon = rad(b[1] - a[1]);
-  const s = Math.sin(dLat / 2) ** 2 + Math.cos(rad(a[0])) * Math.cos(rad(b[0])) * Math.sin(dLon / 2) ** 2;
-  return R * 2 * Math.asin(Math.sqrt(s));
-}
 const dist2 = (a, b) => (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2;
 const near = (a, b) => dist2(a, b) < 1e-8; // ~1e-4 deg ≈ 11 m
 

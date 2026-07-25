@@ -32,6 +32,29 @@ body {
 
 a { color: inherit; text-decoration: none; }
 
+/* Skip link — the header puts 15 nav links, the search box and four toggles
+   ahead of <main>, so keyboard and screen-reader users get a way past them.
+   Off-screen until focused, then pinned above the fixed header (z-index 20). */
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 100;
+  padding: 12px 18px;
+  background: var(--tfl-blue);
+  color: #fff;
+  font: 700 15px Inter, sans-serif;
+  border-radius: 0 0 10px 0;
+  box-shadow: 0 6px 20px -8px rgba(13, 18, 32, 0.5);
+}
+.skip-link:focus, .skip-link:focus-visible {
+  left: 0;
+  outline: 3px solid #fff;
+  outline-offset: -6px;
+}
+/* focus target only — never reached by tabbing, so no visible ring is owed */
+main:focus { outline: none; }
+
 /* ---------- Header ---------- */
 .site-header {
   /* fixed, not sticky: a sticky header's inputs keep their layout position at
@@ -1274,7 +1297,7 @@ tr.ls-open .ls-caret { transform: rotate(90deg); }
 /* Line filter — chips to restrict a journey to preferred lines */
 .journey-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin: -4px 0 18px; }
 .jf-label { font: 700 13px Inter, sans-serif; color: #33425c; }
-.jf-hint { font-weight: 500; color: #6a7890; }
+.jf-hint { font-weight: 500; color: var(--muted); }
 .ab-lines { display: flex; flex-wrap: wrap; gap: 8px; }
 .ab-line { display: inline-flex; align-items: center; gap: 7px; font: 700 12.5px Inter, sans-serif; padding: 6px 13px; border-radius: 999px; border: 1.5px solid var(--line); color: #2b3a52; background: #fff; cursor: pointer; transition: background 0.12s, color 0.12s, border-color 0.12s; }
 .ab-line-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--lc); flex: 0 0 auto; }
@@ -1377,11 +1400,14 @@ body.map-fullwindow-open .site-header { display: none !important; }
 .lc-badges-head h3 { font-size: 20px; font-weight: 800; }
 .lc-badges-count { font-size: 14px; font-weight: 700; color: var(--tfl-blue); }
 .lc-badges { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; margin-top: 8px; }
-.badge { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 5px; padding: 16px 10px; border: 1px solid var(--line); border-radius: 14px; background: #fff; opacity: 0.5; filter: grayscale(1); transition: opacity 0.15s, filter 0.15s, box-shadow 0.15s, border-color 0.15s; }
+.badge { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 5px; padding: 16px 10px; border: 1px solid var(--line); border-radius: 14px; background: #fff; opacity: 0.75; filter: grayscale(1); transition: opacity 0.15s, filter 0.15s, box-shadow 0.15s, border-color 0.15s; }
 .badge.got { opacity: 1; filter: none; border-color: var(--tfl-blue); box-shadow: var(--shadow); }
 .badge-ic { font-size: 30px; line-height: 1; }
 .badge-nm { font-size: 13px; font-weight: 800; }
 .badge-ds { font-size: 11px; color: var(--muted); line-height: 1.35; }
+/* an unearned badge is dimmed, but its description explains what to run for —
+   darken it so it still clears AA once the 0.75 opacity is composited */
+.badge:not(.got) .badge-ds { color: #33425c; }
 
 /* Planner ETA (group arrival time) */
 .cr-eta { margin-top: 10px; padding: 10px 14px; background: #eef1ff; border-left: 4px solid var(--tfl-blue); border-radius: 8px; font-size: 15px; color: var(--ink); }
@@ -1893,7 +1919,7 @@ body.follow-lock { overflow: hidden; }
 .fh-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-top: 12px; text-align: center; }
 .fh-grid > div { background: #f2f4f8; border-radius: 10px; padding: 8px 4px; }
 .fh-grid b { display: block; font: 800 18px Inter, sans-serif; color: var(--ink); }
-.fh-grid span { font: 600 11px Inter, sans-serif; color: #6b7280; }
+.fh-grid span { font: 600 11px Inter, sans-serif; color: #5d6472; }
 .fh-msg { margin-top: 10px; font: 600 13px Inter, sans-serif; color: #6b7280; }
 .fh-msg:empty { display: none; }
 .fh-msg.off { color: var(--tfl-red); }

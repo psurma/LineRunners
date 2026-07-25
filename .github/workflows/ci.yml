@@ -9,12 +9,20 @@ on:
   push:
   pull_request:
 
+# Read-only: nothing here writes to the repo, and the default token scope is wider.
+permissions:
+  contents: read
+
 jobs:
   checks:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      # Actions are pinned to commit SHAs — a mutable v4 tag can be repointed at
+      # any commit by whoever controls the action.
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0 # the schedule check dates data/schedule.json from git history
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "20"
 
@@ -36,7 +44,20 @@ jobs:
       - name: Regenerate schedule
         # Keeps the validator's date-sensitive schedule-freshness check stable in
         # CI regardless of the run date; not committed, just to satisfy the check.
-        run: node tools/generate-schedule.mjs
+        # SOURCE_DATE_EPOCH pins it to the day data/schedule.json was last committed,
+        # so the rebuild is reproducible and can be diffed against the committed file
+        # below. The date is read in the committer's own timezone (that's the calendar
+        # day the generator saw) and handed over as midday UTC, so a late-evening BST
+        # commit doesn't rebuild as the day before.
+        run: |
+          day=$(git log -1 --format=%cd --date=format:%Y-%m-%d -- data/schedule.json)
+          SOURCE_DATE_EPOCH=$(date -u -d "${day:-$(date -u +%F)} 12:00:00" +%s) node tools/generate-schedule.mjs
+
+      - name: Committed schedule is in step with RUN_PLAN
+        # Without this the validator below only ever compares freshly generated output
+        # against itself, so a `git commit --no-verify` carrying a stale schedule.json
+        # sailed through green. The regenerated file must match what's committed.
+        run: git diff --exit-code data/schedule.json
 
       - name: Validate derived data
         run: node tools/validate-data.mjs

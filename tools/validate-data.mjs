@@ -15,6 +15,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join, basename } from "node:path";
 import { extractLiteral } from "./lib/extract.mjs";
+import { distM } from "./lib/geo.mjs";
 import { computeRuns } from "./generate-schedule.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -25,9 +26,6 @@ const warnings = [];
 const ok = (msg) => console.log(`ok    ${msg}`);
 const fail = (msg) => failures.push(msg);
 const warn = (msg) => warnings.push(msg);
-
-const toR = Math.PI / 180;
-const distM = (a, b) => 12742000 * Math.asin(Math.sqrt(Math.sin((b[0] - a[0]) * toR / 2) ** 2 + Math.cos(a[0] * toR) * Math.cos(b[0] * toR) * Math.sin((b[1] - a[1]) * toR / 2) ** 2));
 
 try {
   const src = readFileSync(process.env.TUBERUN_SCRIPT || join(ROOT, "script.js"), "utf8");
@@ -210,8 +208,25 @@ try {
       if (!wp) { warn(`${label}: no WAYPOINTS entry for line — drift check skipped`); continue; }
       const legEnds = String(r.leg || "").split(/\s*(?:→|->)\s*/);
       if (legEnds.length !== 2) { warn(`${label}: leg is not "A → B" — drift check skipped`); continue; }
-      const idxOf = (name) => wp.findIndex((w) => norm(w[0]).includes(norm(name)) || norm(name).includes(norm(w[0])));
-      const ia = idxOf(legEnds[0]), ib = idxOf(legEnds[1]);
+      // Endpoint → waypoint index. Exact name first; the loose substring form is
+      // only trusted when exactly one waypoint matches, because it collides on
+      // real data ("Kenton" also matches "South Kenton", "Northwood" also matches
+      // "Northwood Hills") and findIndex would silently take whichever came first.
+      const idxOf = (name) => {
+        const n = norm(name);
+        const exact = wp.findIndex((w) => norm(w[0]) === n);
+        if (exact >= 0) return { i: exact, hits: [wp[exact][0]] };
+        const hits = wp.filter((w) => norm(w[0]).includes(n) || n.includes(norm(w[0])));
+        return { i: hits.length === 1 ? wp.indexOf(hits[0]) : -1, hits: hits.map((w) => w[0]) };
+      };
+      const ends = [idxOf(legEnds[0]), idxOf(legEnds[1])];
+      const ambiguous = ends.findIndex((e) => e.i < 0 && e.hits.length > 1);
+      if (ambiguous >= 0) {
+        fail(`${label}: endpoint "${legEnds[ambiguous]}" matches ${ends[ambiguous].hits.length} WAYPOINTS entries (${ends[ambiguous].hits.join(", ")}) — ambiguous, so the leg could be measured between the wrong stations; name the station exactly as WAYPOINTS spells it`);
+        bad = true;
+        continue;
+      }
+      const ia = ends[0].i, ib = ends[1].i;
       if (ia < 0 || ib < 0) { warn(`${label}: endpoint "${legEnds[ia < 0 ? 0 : 1]}" not found in WAYPOINTS — drift check skipped`); continue; }
       const slice = wp.slice(Math.min(ia, ib), Math.max(ia, ib) + 1);
       let km = 0;
@@ -228,10 +243,57 @@ try {
     if (!bad) ok(`run-plan distances: ${checked} tube leg(s) within 25% of waypoint-computed km`);
   }
 
-  // --- g. GPX contract: one trk, one trkseg, ends at the line's termini --------
-  // Same main-route derivation as the site's rtStations: WAYPOINTS by line name
-  // first, else the network entry's route, else its longest branch.
+  // --- g. GPX contract: one trk, one trkseg, ends at the line's termini, and no
+  // hole in the middle. Same main-route derivation as the site's rtStations:
+  // WAYPOINTS by line name first, else the network entry's route, else its
+  // longest branch.
   {
+    // Consecutive trkpts further apart than this mean the track jumps: a
+    // waypoint the tracer couldn't route through leaves a straight line across
+    // whatever is in between, and every importer draws it as real. Checking only
+    // the two termini (below) never saw those.
+    const MAX_GAP_M = 600;
+    // Gaps that are genuinely in the data, keyed by the gap's START point rather
+    // than its index so re-simplifying a file can't silently invalidate an entry
+    // — a moved crossing stops matching and fails loudly instead.
+    //   [lat, lon, maxMetres, why]
+    const GAP_ALLOW = {
+      // Under the northern runway into the Central Terminal Area; there is no
+      // surface route across a live runway, so the tunnel is the real geometry.
+      "heathrow-express.gpx": [
+        [51.479771, -0.452846, 700, "Heathrow runway tunnel, southbound"],
+        [51.474094, -0.453106, 700, "Heathrow runway tunnel, northbound"],
+      ],
+      "piccadilly.gpx": [
+        [51.479771, -0.452846, 700, "Heathrow runway tunnel, southbound"],
+        [51.474094, -0.453106, 700, "Heathrow runway tunnel, northbound"],
+      ],
+      // Brunel's Thames Tunnel: Wapping to Rotherhithe, under the river.
+      "windrush.gpx": [
+        [51.511282, -0.056929, 800, "Thames Tunnel, Wapping to Rotherhithe"],
+      ],
+      // TODO: not water crossings — one contiguous stretch (Farningham Road to
+      // Sole Street, over the North Downs) was spliced in at 5-decimal precision
+      // and ~245 m point spacing, against ~32 m for the rest of the file. The
+      // alignment looks right, the sampling doesn't. Re-trace that stretch.
+      "southeastern.gpx": [
+        [51.3894, 0.03525, 900, "TODO coarse spliced stretch"],
+        [51.36489, 0.11072, 1150, "TODO coarse spliced stretch"],
+        [51.35573, 0.12601, 800, "TODO coarse spliced stretch"],
+        [51.34508, 0.13887, 700, "TODO coarse spliced stretch"],
+        [51.33925, 0.14535, 650, "TODO coarse spliced stretch"],
+        [51.33214, 0.14849, 1150, "TODO coarse spliced stretch"],
+      ],
+      // TODO: not water crossings either — dense (1-60 m) geometry either side
+      // of each, so these are skipped waypoints leaving a straight-line jump,
+      // not sparse sampling. Re-trace those four legs.
+      "southern.gpx": [
+        [51.431804, -0.103927, 1700, "TODO skipped waypoint, Streatham to Penge"],
+        [51.42445, -0.08384, 1100, "TODO skipped waypoint, Penge to Birkbeck"],
+        [50.841766, -0.85518, 750, "TODO skipped waypoint, Chichester to Fishbourne"],
+        [50.841216, -1.025612, 650, "TODO skipped waypoint, Havant"],
+      ],
+    };
     function termini(id) {
       const ln = tube[id] || nrNet[id];
       if (!ln) return null;
@@ -247,19 +309,29 @@ try {
       const trks = (text.match(/<trk>/g) || []).length;
       const segs = (text.match(/<trkseg>/g) || []).length;
       if (trks !== 1 || segs !== 1) { fail(`routes/${f}: ${trks} <trk> / ${segs} <trkseg> — must be exactly 1/1 (importers treat extra segments as extra routes); run tools/trim-gpx.mjs`); bad = true; continue; }
-      const pt = /<trkpt lat="([-\d.]+)" lon="([-\d.]+)"/g;
-      const first = pt.exec(text);
-      pt.lastIndex = text.lastIndexOf("<trkpt");
-      const last = pt.exec(text);
-      if (!first || !last || first.index === last.index) { fail(`routes/${f}: fewer than 2 trkpts`); bad = true; continue; }
+      const pts = [...text.matchAll(/<trkpt lat="([-\d.]+)" lon="([-\d.]+)"/g)].map((m) => [+m[1], +m[2]]);
+      if (pts.length < 2) { fail(`routes/${f}: fewer than 2 trkpts`); bad = true; continue; }
       const ends = termini(basename(f, ".gpx"));
       if (!ends) { fail(`routes/${f}: no matching line in the network files to check termini against`); bad = true; continue; }
-      const d0 = distM([+first[1], +first[2]], ends[0]);
-      const d1 = distM([+last[1], +last[2]], ends[1]);
+      const d0 = distM(pts[0], ends[0]);
+      const d1 = distM(pts[pts.length - 1], ends[1]);
       if (d0 > 500 || d1 > 500) { fail(`routes/${f}: track ends ${Math.round(d0)} m / ${Math.round(d1)} m from the line's termini — wrong segment kept or stale route`); bad = true; continue; }
+      const allow = GAP_ALLOW[f] || [];
+      const gaps = [];
+      for (let i = 1; i < pts.length; i++) {
+        const d = distM(pts[i - 1], pts[i]);
+        if (d <= MAX_GAP_M) continue;
+        if (allow.some((a) => d <= a[2] && distM(pts[i - 1], [a[0], a[1]]) < 250)) continue;
+        gaps.push(`${Math.round(d)} m at point ${i} ([${pts[i - 1]}] → [${pts[i]}])`);
+      }
+      if (gaps.length) {
+        fail(`routes/${f}: ${gaps.length} gap(s) over ${MAX_GAP_M} m between consecutive trkpts — the track jumps, so importers draw a straight line through whatever is in between: ${gaps.slice(0, 3).join("; ")}${gaps.length > 3 ? ", …" : ""}. Re-trace the leg, or add it to GAP_ALLOW if it is a genuine tunnel/water crossing`);
+        bad = true;
+        continue;
+      }
       checked++;
     }
-    if (!bad) ok(`routes/*.gpx: ${checked} files are single-trk/single-trkseg and end within 500 m of their termini`);
+    if (!bad) ok(`routes/*.gpx: ${checked} files are single-trk/single-trkseg, end within 500 m of their termini and have no unlisted gap over ${MAX_GAP_M} m`);
   }
 
   // --- h. runtime JSON: every data/*.json|geojson parses, plus the shapes ------

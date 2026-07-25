@@ -2,7 +2,7 @@
 
 **▶ Live site: [psurma.github.io/Overland](https://psurma.github.io/Overland/)**
 
-Website for **London Overland** — a free, social running club that runs London's transport network above ground: Underground, Overground and Elizabeth lines once a month (sometimes more), plus the National Rail commuter lines, bus routes, and river/canal, park, landmark and out-of-town adventure routes.
+Website for **Overland** — a free, self-guided guide to running London's whole transport network above ground: every Tube, Overground, DLR and Elizabeth line, the National Rail commuter routes out of town, the trams and the Superloop, plus bus routes, the London LOOP, the Capital Ring and a library of river, canal, park and landmark routes. Pick a line, see the distance and the route, then follow it end to end — on foot or by bike, at your own pace, whenever you like. Nothing to join, nothing to pay.
 
 Plain HTML/CSS/JS. No build step.
 
@@ -26,26 +26,27 @@ Then open http://localhost:8000 (opening `index.html` via `file://` is blocked b
 
 ## Features
 
-- **Next run** card with live weather (Open-Meteo) and a Google Maps meeting-point link
-- **Plan** — station-to-station distance/time planner with run + walk times and a km/miles toggle
-- **Map** — tabbed viewer led by our own real geographic Leaflet map (next line lit up with running times), plus Running times, Walking times, Toilets, official Tube map, Overground and Rail connections
-- **Lines** — every line ranked by length with run/walk times: Underground, Overground, Elizabeth and the ten National Rail commuter operators
-- **Schedule** — monthly runs, auto-dated to first Sundays, plus multi-day adventures
-- **Route ideas** — a library of group-friendly London routes, each traced on an interactive Leaflet map (tap a card to draw its route)
-- **Line collector** — gamified progress (both directions of every line)
-- Live-now banner, photo gallery, new-runner guide, friends/other clubs, join form, socials
+- **Plan** — pick your start and finish on the next route for running distance, pace-adjusted finish time and a km/miles toggle, then follow the run live with the GPS tracker
+- **Map** — tabbed viewer led by our own real geographic Leaflet map (the next line lit up with running times and toilet pins), plus Running/Walking times, Tube map, Overground, Rail connections, Trams, Superloop, London LOOP and Capital Ring views
+- **Time machine** — scrub 190 years of London's railways and watch the network appear and creep outward, era by era
+- **Journey** — shortest above-ground route between any two stations, hopping lines wherever they meet, or a loop generated from a spot; distance plus run, cycle and walk times
+- **Lines** — every line ranked by length with run/walk times: Underground, Overground, Elizabeth, DLR, trams and the ten National Rail commuter operators
+- **Schedule** — a suggested calendar of runs, auto-dated to first Sundays, plus multi-day adventures; also emitted as `data/schedule.json` and downloadable as .ics
+- **Route ideas** — a library of London routes (parks, rivers, canals, disused railways, landmark tours), each traced on an interactive Leaflet map (tap a card to draw its route)
+- **Buses** — all 676 London bus routes as runs, both directions, traced live from the TfL API, plus the 12 Superloop orbital routes
+- **London LOOP / Capital Ring** — both signed orbitals section by section, with a GPX per section for your watch
+- **Progress** — line collector (both directions of every line) and borough bagger
+- Site-wide search, nearest-station lookup, per-line GPX downloads, live-now banner, new-runner guide and friends/other London clubs
 
 ## Editing
 
 Everything data-driven lives at the top of `script.js`:
 
-- `CONNECT` — social links
-- `RUN_PLAN` — the monthly schedule (tube / river / canal / bus / adventure)
+- `RUN_PLAN` — the suggested run calendar (tube / river / canal / bus / adventure)
 - `WAYPOINTS` — ordered stations (with coords) for the planner + running-times
 - `LINE_DIRS` — line-collector progress
 - `LIVE` — live-now banner (flip `active` on run day, paste Garmin/Strava links)
 - `ROUTES` — the route-ideas library
-- `GALLERY` — photos
 
 The `?v=` cache-buster on the `style.css` / `script.js` links in `index.html` is bumped automatically by the pre-commit hook whenever a commit touches the files it references — no hand-editing needed. The hook also syntax-checks `script.js`, regenerates `data/schedule.json` and runs `tools/validate-data.mjs` over the derived data. It lives tracked at `tools/pre-commit`; install it after a fresh clone with:
 
@@ -70,6 +71,5 @@ The map viewer (`#network`) has several tabs:
 - `data/boroughs.json` — station/route → London borough tagging for the Borough bagger, from [ONS Open Geography](https://geoportal.statistics.gov.uk/) boundaries (OGL) via `tools/generate-boroughs.mjs`.
 - `data/route-pubs.json` — well-rated pubs near each curated route's ends, from the [Food Standards Agency API](https://ratings.food.gov.uk) (open data) via `tools/generate-pubs.mjs`.
 - Basemap tiles © [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors, © [CARTO](https://carto.com/attributions); Leaflet is BSD-2-licensed.
-- `data/schematic.json` — Beck-style schematic coordinates (seeded from [`d3-tube-map`](https://github.com/johnwalley/d3-tube-map) by John Walley, **MIT licence**); retained for reference, not currently shown.
 
 Static image maps in `img/` were converted from PDFs with `pdftocairo`. TfL map artwork is © Transport for London — fine for club use, but a public deployment should prefer the openly-licensed / own-drawn maps above.

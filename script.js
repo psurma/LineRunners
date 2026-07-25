@@ -1,23 +1,12 @@
-/* Overland — schedule, distance planner, route map, weather, socials.
+/* Overland — schedule, distance planner, route map, live follow.
    ---------------------------------------------------------------------------
-   EDIT THESE to run the group:
-     • CONNECT      — your Strava + WhatsApp links
+   EDIT THESE to change the guide:
      • RUN_PLAN     — the rolling monthly plan (tube OR river/canal/bus routes)
      • WAYPOINTS    — ordered points (with coords) for any route you want to
                       show on the map / use in the distance planner
    Dates auto-assign to upcoming first-Sundays, so you never type a date. */
 (() => {
   "use strict";
-
-  // --- Your links --------------------------------------------------------
-  const CONNECT = {
-    strava: "",
-    instagram: "",
-    facebook: "",
-    twitter: "",
-    eventbrite: "",
-    whatsapp: "", // TODO: paste the WhatsApp group invite link when ready
-  };
 
   // --- LIVE NOW ----------------------------------------------------------
   // On run day, set active:true and paste the share links a runner generates
@@ -79,7 +68,6 @@
   const GROUP_PACE = 6.5;    // min/km — the group's steady no-drop pace (the "6:30/km" in copy)
   const WALK_MIN_PER_KM = 12; // ~5 km/h walking pace
   const CYCLE_MIN_PER_KM = 4; // ~15 km/h city cycling pace
-  const LONDON = { lat: 51.5033, lon: -0.1145 };
 
   // Official-ish TfL line colours. Not static: computeNrStats adds the NR and
   // DLR lines' colours at runtime once the network data loads.
@@ -274,9 +262,6 @@
     const w = Math.round(d / 7);
     return `In ${w} week${w > 1 ? "s" : ""}`;
   }
-  function isoDate(date) {
-    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-  }
 
   // --- Live run phase (timezone-correct) ---------------------------------
   // Runs happen on UK time, but a viewer can be in any timezone — so anything
@@ -363,18 +348,6 @@
   // The meeting point / meet time / leg the card should show *right now*. For a
   // multi-day run this follows the active day once day 1 is done, so the card
   // stops advertising a leg the group has already run.
-  function stripTime(s) { return (s || "").replace(/,\s*\d{1,2}(:\d{2})?\s*[ap]m.*$/i, "").trim(); }
-  function dayLeg(d) {
-    if (d.title && /[—–]/.test(d.title)) return d.title.split(/[—–]/).slice(1).join("–").trim();
-    const from = stripTime(d.start);
-    return d.finish ? `${from} → ${d.finish}` : from;
-  }
-  function runMeet(run, ph) {
-    const days = run.days && run.days.length > 1 ? run.days : null;
-    if (!days) return { place: run.start, clock: MEET_TIME, leg: run.leg };
-    const d = days[ph.day] || days[0];
-    return { place: stripTime(d.start) || run.start, clock: parseClock(d.start), leg: ph.day > 0 ? dayLeg(d) : run.leg };
-  }
 
   // --- Route normalisation ----------------------------------------------
   // Turn a RUN_PLAN entry into a uniform shape the UI can render.
@@ -397,12 +370,22 @@
     const style = TYPE_STYLE[entry.type] || TYPE_STYLE.other;
     return { ...rich, key: entry.name, badge: `${entry.name} · ${style.label}`, colour: entry.colour || style.colour };
   }
-  function isDark(hex) {
-    const c = hex.replace("#", "");
-    const r = parseInt(c.slice(0, 2), 16), g = parseInt(c.slice(2, 4), 16), b = parseInt(c.slice(4, 6), 16);
-    return (r * 299 + g * 587 + b * 114) / 1000 < 140;
+  // WCAG relative luminance, the basis for every contrast decision below.
+  function relLum(hex) {
+    let c = String(hex).replace("#", "");
+    if (c.length < 6) c = c.split("").map((ch) => ch + ch).join(""); // #fff -> #ffffff
+    const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; };
+    return 0.2126 * f(parseInt(c.slice(0, 2), 16)) + 0.7152 * f(parseInt(c.slice(2, 4), 16)) + 0.0722 * f(parseInt(c.slice(4, 6), 16));
   }
-  function contrastText(hex) { return hex === "#FFD300" ? "#10131c" : (isDark(hex) ? "#fff" : "#10131c"); }
+  // Readable foreground for a line colour used as a background. Picks whichever
+  // of white / near-black actually scores higher, rather than the old YIQ
+  // brightness guess — that put white on DLR teal (3.06:1) and Victoria blue
+  // (3.26:1), both below the 4.5:1 AA floor.
+  const INK = "#10131c";
+  function contrastText(hex) {
+    const l = relLum(hex);
+    return 1.05 / (l + 0.05) >= (l + 0.05) / (relLum(INK) + 0.05) ? "#fff" : INK;
+  }
   // Line colour as *text/border* on a light background: darken light colours
   // (Circle yellow, H&C pink, W&C green, Jubilee grey, Victoria blue…) until
   // they hit ~4.5:1 (WCAG AA) contrast against white. Raw line colours stay
@@ -422,15 +405,6 @@
     const h = (v) => v.toString(16).padStart(2, "0");
     return (lineTextCache[hex] = `#${h(r)}${h(g)}${h(b)}`);
   }
-  // Google Maps link for a run's meeting point — explicit `map` URL if given,
-  // otherwise a search built from the start point + its location.
-  function meetMapUrl(r, place) {
-    if (r.map && /^https?:\/\//i.test(r.map)) return r.map;
-    const where = r.location && r.location !== "London" ? r.location : "London";
-    const q = `${place || r.start}, ${where}`;
-    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`;
-  }
-
   // --- Build schedule ----------------------------------------------------
   // Entries with an explicit `date` are pinned; the rest fill the upcoming
   // first-Sundays in listed order. Everything is then sorted chronologically.
@@ -440,7 +414,10 @@
   // Don't auto-schedule a first-Sunday run on a weekend already taken by a dated special.
   // +3 headroom (matching tools/generate-schedule.mjs) so a pinned-heavy month
   // can't exhaust the candidate pool before the near-pinned filter runs.
-  const nearPinned = (sun) => pinned.some((p) => Math.abs(p - sun) <= 2 * 86400000);
+  // Compare whole calendar days via Date.UTC (which has no DST) — two local
+  // midnights spanning a BST change are 47 or 49 hours apart, not 48.
+  const calDay = (d) => Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 86400000;
+  const nearPinned = (sun) => pinned.some((p) => Math.abs(calDay(p) - calDay(sun)) <= 2);
   const sundays = upcomingSundays(autoCount + pinned.length + 3).filter((s) => !nearPinned(s)).slice(0, autoCount);
   let si = 0;
   // Runs from the start of next month on are tentative "suggestions" — the plan is
@@ -450,7 +427,10 @@
     .map((r) => ({ ...normalise(r), date: r.date ? parseISO(r.date) : sundays[si++], pinned: !!r.date }))
     .sort((a, b) => a.date - b.date);
   runs.forEach((r) => { r.suggested = !r.pinned && r.date >= suggestFrom; });
-  const runEnd = (r) => new Date(r.date.getTime() + ((r.days ? r.days.length : 1) - 1) * 86400000);
+  // Calendar-day arithmetic, not +n*86400000: the clocks-back Sunday in October
+  // is 25 hours long, so adding a fixed day in ms lands on the wrong date.
+  const addDays = (d, n) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
+  const runEnd = (r) => addDays(r.date, (r.days ? r.days.length : 1) - 1);
   // "Next" = first run whose final day hasn't passed (a pinned date can be in
   // the past). Recomputed live rather than frozen at page-load, so a tab left
   // open — or restored from bfcache — rolls over on its own.
@@ -481,126 +461,6 @@
   // tracer and A→B journey planner. paceKm defaults to the site-wide run pace.
   function timesRowHtml(km, paceKm = rtPace) {
     return `<div class="cr-times"><span class="cr-run">🏃 run ~${fmtTime(km * paceKm)}</span> <span class="cr-cycle">🚴 cycle ~${fmtTime(km * CYCLE_MIN_PER_KM)}</span> <span class="cr-walk">🚶 walk ~${fmtTime(km * WALK_MIN_PER_KM)}</span></div>`;
-  }
-
-  // Overall run direction as one of the four cardinals (Northbound/Eastbound/…),
-  // start → finish. Compares north/south vs east/west travel and picks the larger.
-  function compassBound(wp) {
-    if (!wp || wp.length < 2) return null;
-    const a = wp[0], b = wp[wp.length - 1];
-    const dNorthKm = (b[1] - a[1]) * 111;                                   // + = north
-    const dEastKm = (b[2] - a[2]) * 111 * Math.cos((a[1] + b[1]) / 2 * Math.PI / 180); // + = east
-    if (Math.abs(dEastKm) > Math.abs(dNorthKm)) return dEastKm >= 0 ? "Eastbound" : "Westbound";
-    return dNorthKm >= 0 ? "Northbound" : "Southbound";
-  }
-
-  // --- Render: Next run card + weather ----------------------------------
-  function renderNext() {
-    const el = document.getElementById("nextCard");
-    if (!el || !nextRun) return;
-    const c = nextRun.colour, tc = contrastText(c);
-    const ph = runPhase(nextRun);
-    const meet = runMeet(nextRun, ph);
-    el.style.borderLeftColor = c;
-    el.style.setProperty("--run-col", c);
-    const md = nextRun.days && nextRun.days.length > 1 ? nextRun.days : null;
-    const bound = nextRun.bound || compassBound(WAYPOINTS[nextRun.key]);
-    const endDate = md ? new Date(nextRun.date.getTime() + (md.length - 1) * 86400000) : null;
-    el.innerHTML = `
-      <div class="date-badge">
-        <div class="dow">${md ? DOW[nextRun.date.getDay()] + "–" + DOW[endDate.getDay()] : DOW[nextRun.date.getDay()]}</div>
-        <div class="day">${md ? nextRun.date.getDate() + "–" + endDate.getDate() : nextRun.date.getDate()}</div>
-        <div class="mon">${md && endDate.getMonth() !== nextRun.date.getMonth()
-          ? (endDate.getFullYear() !== nextRun.date.getFullYear()
-            ? `${MON[nextRun.date.getMonth()]} ${nextRun.date.getFullYear()}–${MON[endDate.getMonth()]} ${endDate.getFullYear()}`
-            : `${MON[nextRun.date.getMonth()]}–${MON[endDate.getMonth()]} ${endDate.getFullYear()}`)
-          : `${MON[nextRun.date.getMonth()]} ${nextRun.date.getFullYear()}`}</div>
-        <div class="cd${ph.live ? " is-live" : ""}">${escapeHtml(ph.label)}</div>
-      </div>
-      <div class="next-body">
-        <span class="line-tag" style="background:${c};color:${tc}">${escapeHtml(nextRun.badge)}</span>
-        ${md ? `<span class="multiday-badge">${md.length}-day run</span>` : ""}
-        ${nextRun.suggested ? `<span class="r-suggest" title="Tentative — the plan is only firmed up about a month ahead">Suggested</span>` : ""}
-        ${bound ? `<span class="run-dir">🧭 ${bound}</span>` : ""}
-        <h3>${escapeHtml(meet.leg)}</h3>
-        <div class="next-meta">
-          <div><strong>Meet</strong> ${escapeHtml(meet.clock)} · <a class="meet-link" href="${escapeAttr(meetMapUrl(nextRun, meet.place))}" target="_blank" rel="noopener">${escapeHtml(meet.place)} ↗</a></div>
-          <div><strong>Distance</strong> ${escapeHtml(distText(nextRun.distance))}</div>
-          ${nextRun.location !== "London" ? `<div><strong>Where</strong> ${escapeHtml(nextRun.location)}</div>` : ""}
-        </div>
-        ${md ? `<ol class="nd-days">${md.map((d) => `<li><strong>${escapeHtml(d.title)}</strong>${
-          [d.start && "Start " + d.start, distText(d.distance), d.finish && "Finish " + d.finish].filter(Boolean).length
-            ? `<span>${[d.start && "Start " + d.start, distText(d.distance), d.finish && "Finish " + d.finish].filter(Boolean).map(escapeHtml).join(" · ")}</span>` : ""
-        }</li>`).join("")}</ol>` : ""}
-        ${routeLinksHtml(nextRun)}
-      </div>`;
-  }
-
-  // --- Render: Next-run card in the hero (compact, above the fold) -------
-  // --- Live "Follow along" link ------------------------------------------
-  // Editable at data/live.json (no code deploy needed — change it from the
-  // GitHub app on run morning). Shape:
-  //   { "date": "YYYY-MM-DD", "name": "Sam", "url": "https://livetrack.garmin.com/..." }
-  // A "Follow <name> live" button then shows on that date, but only while the
-  // group is actually out (until the estimated finish). Blank the fields to
-  // remove it. LiveTrack links are per-activity and expire, hence the hand edit.
-  let liveNow = null;
-  async function loadLiveNow() {
-    try {
-      const res = await vfetch("data/live.json?t=" + Math.floor(Date.now() / 60000));
-      liveNow = res.ok ? await res.json() : null;
-    } catch (_) { liveNow = null; }
-    renderHeroCard();
-  }
-  function todayLondonISO() {
-    const p = londonParts(Date.now());
-    return `${p.y}-${String(p.mo).padStart(2, "0")}-${String(p.d).padStart(2, "0")}`;
-  }
-  function liveTrackBtn(run) {
-    // runPhase().live now means "genuinely out on the road" (the run window ends
-    // at the estimated finish), so it doubles as the button's underway gate.
-    const lt = liveNow;
-    if (!lt || !lt.url || lt.date !== todayLondonISO() || !runPhase(run).live) return "";
-    const who = lt.name ? `${escapeHtml(lt.name)} live` : "live";
-    return `<a class="live-follow" href="${escapeAttr(lt.url)}" target="_blank" rel="noopener">` +
-      `<span class="live-follow-dot" aria-hidden="true"></span>Follow ${who} on Garmin ↗</a>`;
-  }
-
-  function renderHeroCard() {
-    const el = document.getElementById("heroCard");
-    if (!el || !nextRun) return;
-    const c = nextRun.colour, tc = contrastText(c);
-    const ph = runPhase(nextRun);
-    const meet = runMeet(nextRun, ph);
-    const md = nextRun.days && nextRun.days.length > 1 ? nextRun.days : null;
-    const endDate = md ? new Date(nextRun.date.getTime() + (md.length - 1) * 86400000) : null;
-    const when = md && endDate.getMonth() !== nextRun.date.getMonth()
-      ? `${DOW[nextRun.date.getDay()]} ${nextRun.date.getDate()} ${MON[nextRun.date.getMonth()]} – ${DOW[endDate.getDay()]} ${endDate.getDate()} ${MON[endDate.getMonth()]}`
-      : md
-        ? `${DOW[nextRun.date.getDay()]} ${nextRun.date.getDate()}–${endDate.getDate()} ${MON[nextRun.date.getMonth()]}`
-        : `${DOW[nextRun.date.getDay()]} ${nextRun.date.getDate()} ${MON[nextRun.date.getMonth()]}`;
-    const bail = nextRun.type === "tube"
-      ? "No-drop: regroup at every station — bail at any of them and take the train back."
-      : nextRun.exits && nextRun.exits.length
-        ? "Escape points along the way — join for as much as you like."
-        : "All paces welcome — join for as much as you like.";
-    el.style.setProperty("--run-col", c);
-    el.innerHTML = `
-      <div class="hc-top">
-        <span class="line-tag" style="background:${c};color:${tc}">${escapeHtml(nextRun.badge)}</span>
-        <span class="hc-cd${ph.live ? " is-live" : ""}">${escapeHtml(ph.short)}</span>
-      </div>
-      <div class="hc-when">${when} · meet ${escapeHtml(meet.clock)}</div>
-      ${ph.label && ph.label !== ph.short ? `<div class="hc-status${ph.live ? " is-live" : ""}">${escapeHtml(ph.label)}</div>` : ""}
-      <div class="hc-leg">${escapeHtml(meet.leg)}</div>
-      ${liveTrackBtn(nextRun)}
-      <div class="hc-meta">
-        <span>📍 <a href="${escapeAttr(meetMapUrl(nextRun, meet.place))}" target="_blank" rel="noopener">${escapeHtml(meet.place)}</a></span>
-        <span>📏 ${escapeHtml(distText(nextRun.distance))}</span>
-      </div>
-      <p class="hc-bail">${bail}</p>
-      <a class="hc-more" href="#next">Full details &darr;</a>`;
-    el.hidden = false;
   }
 
   // --- Render: Journey board (vertical National-Rail-style calling points) ---
@@ -638,106 +498,6 @@
       return segs;
     }
     return [{ label: null, leg: run.leg, from: 0, to: last, start: MEET_TIME }];
-  }
-
-  function journeyBoardSection(run, wp, seg, c, paceKm, opts = {}) {
-    const rows = [];
-    for (let j = seg.from; j <= seg.to; j++) {
-      const kmFromStart = legDistanceKm(wp, seg.from, j);
-      const legKm = j === seg.from ? 0 : legDistanceKm(wp, j - 1, j);
-      const mins = kmFromStart * paceKm;
-      const isStart = j === seg.from, isEnd = j === seg.to, end = isStart || isEnd;
-      const time = isStart ? `depart ${seg.start}` : (isEnd ? `arrive ~${arrivalWindow(mins, seg.start)}` : `~${arrivalWindow(mins, seg.start)}`);
-      const now = opts.liveIdx === j;
-      rows.push(`<li class="jb-stop${end ? " jb-end" : ""}${now ? " jb-now" : ""}" data-i="${j}">
-        <span class="jb-dot" style="border-color:${c}${end ? `;background:${c}` : ""}"></span>
-        <span class="jb-name">${escapeHtml(wp[j][0])}${interchangeTags(wp[j][0], run.key)}</span>
-        <span class="jb-leg">${isStart ? "—" : "+" + fmtTime(legKm * paceKm)}</span>
-        <span class="jb-elapsed">${isStart ? "start" : fmtTime(mins)}</span>
-        <span class="jb-dist">${fmtKm(kmFromStart, 1)}</span>
-        <span class="jb-time">${time}</span>
-      </li>`);
-    }
-    const cols = `<div class="jb-cols" aria-hidden="true"><span></span><span>Station</span><span>Leg</span><span>Elapsed</span><span>From start</span><span>Group arrives</span></div>`;
-    const list = `<ol class="jb-list${opts.current ? " jb-current" : ""}" style="--jb-col:${c};--jb-text:${lineTextColour(c)}">${rows.join("")}</ol>`;
-    const sub = (t) => `<p class="jb-sub" style="color:${lineTextColour(c)}">${t}</p>`;
-    if (opts.done) {
-      // Finished day: collapse into an expandable summary; the stops stay one click away.
-      return `<details class="jb-section jb-done">
-        <summary class="jb-summary"><span class="jb-day">${escapeHtml(seg.label)}</span>${sub(escapeHtml(seg.leg))}<span class="jb-done-tag">done ✓</span></summary>
-        ${cols}${list}</details>`;
-    }
-    const head = seg.label
-      ? `<p class="jb-day">${escapeHtml(seg.label)}</p>${sub(escapeHtml(seg.leg))}`
-      : sub(`${escapeHtml(run.badge)} · ${escapeHtml(seg.leg)}`);
-    return `<div class="jb-section">${head}${cols}${list}</div>`;
-  }
-
-  // Where the group most likely is right now on the active day: the stop whose
-  // expected arrival time is closest to now (London time). absIdx is null before
-  // the day starts or once they've arrived. Drives the pulsing "you are here" dot.
-  function journeyLivePos(run) {
-    const wp = WAYPOINTS[run.key];
-    if (!wp || wp.length < 2) return null;
-    const segs = journeySegments(run, wp);
-    if (!segs) return null;
-    const tl = runTimeline(run);
-    const di = Math.min(runPhase(run).day, segs.length - 1);
-    const seg = segs[di];
-    const startMs = tl[Math.min(di, tl.length - 1)].start;
-    const elapsed = (Date.now() - startMs) / 60000;
-    const paceKm = GROUP_PACE;
-    const endMin = legDistanceKm(wp, seg.from, seg.to) * paceKm;
-    if (elapsed < 0 || elapsed > endMin + 10) return { dayIdx: di, absIdx: null };
-    let best = seg.from, bestD = Infinity;
-    for (let j = seg.from; j <= seg.to; j++) {
-      const d = Math.abs(legDistanceKm(wp, seg.from, j) * paceKm - elapsed);
-      if (d < bestD) { bestD = d; best = j; }
-    }
-    return { dayIdx: di, absIdx: best };
-  }
-
-  let jbRenderedKey = null, jbRenderedDay = -1;
-  function renderJourneyBoard() {
-    const el = document.getElementById("journeyBoard");
-    if (!el || !nextRun) return;
-    const wp = WAYPOINTS[nextRun.key];
-    if (!wp || wp.length < 2) { el.innerHTML = ""; jbRenderedKey = null; return; }
-    const c = nextRun.colour, paceKm = GROUP_PACE;
-    const segs = journeySegments(nextRun, wp) || [{ label: null, leg: nextRun.leg, from: 0, to: wp.length - 1, start: MEET_TIME }];
-    const multi = segs.length > 1;
-    const tl = runTimeline(nextRun);
-    const now = Date.now();
-    // A day collapses to "done" once its own window has ended; the current day is
-    // the first not-yet-finished one (none once the whole run is over, so both days
-    // collapse into their summaries).
-    const curDay = tl.findIndex((w) => now < w.end);
-    const live = journeyLivePos(nextRun);
-    const sections = segs.map((s, di) => journeyBoardSection(nextRun, wp, s, c, paceKm, {
-      done: multi && tl[di] && now >= tl[di].end,
-      current: di === curDay,
-      liveIdx: live && live.dayIdx === di ? live.absIdx : null,
-    })).join("");
-    el.innerHTML = `
-      <h3 class="jb-title">Journey board ${gpxDownloadHtml(lineSlug(nextRun.key), nextRun.key, "jb-gpx")}</h3>
-      ${sections}
-      <p class="jb-foot">Expected arrival windows at a steady ${fmtPace(GROUP_PACE)}/km from each day's start — add time for regroups and photos.</p>`;
-    jbRenderedKey = nextRun.key; jbRenderedDay = curDay;
-  }
-
-  // Move the live "group ~here now" dot each minute without re-rendering the whole
-  // board (so an expanded finished day stays open). Full re-render only when the
-  // run or the active day changes.
-  function tickJourneyNow() {
-    const el = document.getElementById("journeyBoard");
-    if (!el || !nextRun || jbRenderedKey !== nextRun.key) return;
-    const live = journeyLivePos(nextRun);
-    if (live && live.dayIdx !== jbRenderedDay) { renderJourneyBoard(); return; }
-    const prev = el.querySelector(".jb-stop.jb-now");
-    const target = live && live.absIdx != null
-      ? el.querySelector(`.jb-current .jb-stop[data-i="${live.absIdx}"]`) : null;
-    if (prev && prev !== target) prev.classList.remove("jb-now");
-    if (target) target.classList.add("jb-now");
   }
 
   // --- Render: Schedule --------------------------------------------------
@@ -802,7 +562,7 @@
     const slug = lineSlug(r.key || r.badge);
     let dtStart, dtEnd;
     if (multi) {
-      const end = new Date(r.date.getTime() + r.days.length * 86400000); // DTEND date is exclusive
+      const end = addDays(r.date, r.days.length); // DTEND date is exclusive
       dtStart = `DTSTART;VALUE=DATE:${icsDate(r.date)}`;
       dtEnd = `DTEND;VALUE=DATE:${icsDate(end)}`;
     } else {
@@ -827,7 +587,7 @@
     return lines.map(icsFold).join("\r\n");
   }
   function downloadRunIcs(r) {
-    downloadBlob(`tube-run-${lineSlug(r.key || r.badge)}.ics`, new Blob([runIcs(r)], { type: "text/calendar;charset=utf-8" }));
+    downloadBlob(`Overland-${lineSlug(r.key || r.badge)}.ics`, new Blob([runIcs(r)], { type: "text/calendar;charset=utf-8" }));
   }
 
   function renderList() {
@@ -1122,7 +882,6 @@
       interchangeMap = buildInterchangeMap(net);
       tubeGeo = buildTubeGeo(net);
       renderDiagram();
-      renderJourneyBoard();
       // Re-render the schedule for interchange tags — renderList itself keeps
       // any details panel the user already opened.
       renderList();
@@ -1233,99 +992,6 @@
       <div class="cr-eta">🕒 Starting ${startClock}, the group reaches <strong>${escapeHtml(pts[a][0])}</strong> at <strong>~${etaFrom}</strong>${b > a ? ` and <strong>${escapeHtml(pts[b][0])}</strong> at <strong>~${etaTo}</strong>` : ""}</div>
       <div class="cr-note">Estimate: crow-flies distance × ${ROAD_FACTOR} for streets, running only — add time for regroups, photos and coffee, so arrive a little early.</div>`;
     renderDiagram();
-  }
-
-  // --- Weather (Open-Meteo, no key) --------------------------------------
-  const WMO = {
-    0: ["Clear", "☀️"], 1: ["Mainly clear", "🌤️"], 2: ["Partly cloudy", "⛅"], 3: ["Overcast", "☁️"],
-    45: ["Fog", "🌫️"], 48: ["Rime fog", "🌫️"], 51: ["Light drizzle", "🌦️"], 53: ["Drizzle", "🌦️"],
-    55: ["Heavy drizzle", "🌧️"], 61: ["Light rain", "🌦️"], 63: ["Rain", "🌧️"], 65: ["Heavy rain", "🌧️"],
-    71: ["Light snow", "🌨️"], 73: ["Snow", "🌨️"], 75: ["Heavy snow", "❄️"], 80: ["Rain showers", "🌦️"],
-    81: ["Showers", "🌧️"], 82: ["Violent showers", "⛈️"], 95: ["Thunderstorm", "⛈️"], 96: ["Storm + hail", "⛈️"],
-  };
-  function describe(code) { return WMO[code] || ["—", "🌡️"]; }
-
-  // One forecast target per run day (multi-day events get a chip each).
-  function weatherDays() {
-    if (Array.isArray(nextRun.days) && nextRun.days.length > 1) {
-      return nextRun.days.map((d, i) => {
-        const date = new Date(nextRun.date.getTime() + i * 86400000);
-        const clock = parseClock(d.start).slice(0, 3) + "00"; // hourly buckets sit on the hour
-        return { date, clock, label: `${DOW[date.getDay()]} ${date.getDate()} ${MON[date.getMonth()].slice(0, 3)}` };
-      });
-    }
-    return [{ date: nextRun.date, clock: MEET_TIME, label: `${DOW[nextRun.date.getDay()]} ${MEET_TIME}` }];
-  }
-
-  function weatherChip(data, d) {
-    const dateStr = isoDate(d.date);
-    const hIdx = data.hourly.time.indexOf(`${dateStr}T${d.clock}`);
-    let code, temp, feels, pop, wind;
-    if (hIdx !== -1) {
-      code = data.hourly.weather_code[hIdx];
-      temp = data.hourly.temperature_2m[hIdx];
-      feels = data.hourly.apparent_temperature[hIdx];
-      pop = data.hourly.precipitation_probability[hIdx];
-      wind = data.hourly.wind_speed_10m[hIdx];
-    } else {
-      const dIdx = data.daily.time.indexOf(dateStr);
-      if (dIdx === -1) return "";
-      code = data.daily.weather_code[dIdx];
-      temp = data.daily.temperature_2m_max[dIdx];
-      pop = data.daily.precipitation_probability_max[dIdx];
-    }
-    const [desc, icon] = describe(code);
-    return `<div class="wx-row">
-      <span class="wx-icon">${icon}</span>
-      <span class="wx-main">${Math.round(temp)}°C · ${desc}</span>
-      <span class="wx-sub">${feels != null ? `feels ${Math.round(feels)}° · ` : ""}${pop != null ? `${Math.round(pop)}% rain` : ""}${wind != null ? ` · ${Math.round(wind)} km/h wind` : ""}</span>
-      <span class="wx-tag">${escapeHtml(d.label)}</span>
-    </div>`;
-  }
-
-  async function loadWeather() {
-    const el = document.getElementById("weather");
-    if (!el || !nextRun) return;
-    const days = weatherDays();
-    const url = `https://api.open-meteo.com/v1/forecast?latitude=${LONDON.lat}&longitude=${LONDON.lon}` +
-      `&hourly=temperature_2m,apparent_temperature,precipitation_probability,weather_code,wind_speed_10m` +
-      `&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max` +
-      `&timezone=Europe%2FLondon&forecast_days=16`;
-    try {
-      const res = await fetch(url);
-      if (!res.ok) throw new Error("weather fetch failed");
-      const data = await res.json();
-      const chips = days.map((d) => weatherChip(data, d)).filter(Boolean);
-      if (!chips.length) {
-        el.classList.remove("weather-multi");
-        el.innerHTML = `<span class="wx-soft">Weather forecast will appear closer to the day.</span>`;
-        return;
-      }
-      el.classList.toggle("weather-multi", chips.length > 1);
-      el.innerHTML = chips.join("");
-    } catch (_) {
-      el.classList.remove("weather-multi");
-      el.innerHTML = `<span class="wx-soft">Couldn't load the forecast right now.</span>`;
-    }
-  }
-
-  // --- Socials -----------------------------------------------------------
-  function wireSocials() {
-    const wrap = document.getElementById("socialLinks");
-    if (!wrap) return;
-    const items = [
-      ["Strava", CONNECT.strava, "#FC4C02", "#fff"],
-      ["Instagram", CONNECT.instagram, "#E1306C", "#fff"],
-      ["Facebook", CONNECT.facebook, "#1877F2", "#fff"],
-      ["X / Twitter", CONNECT.twitter, "#111", "#fff"],
-      ["Eventbrite", CONNECT.eventbrite, "#F05537", "#fff"],
-      ["WhatsApp", CONNECT.whatsapp, "#25D366", "#05331a"],
-    ];
-    wrap.innerHTML = items
-      .filter(([, url]) => url && /^https?:\/\//i.test(url))
-      .map(([label, url, bg, fg]) =>
-        `<a class="btn btn-social" style="background:${bg};color:${fg}" href="${escapeAttr(url)}" target="_blank" rel="noopener">${label}</a>`)
-      .join("");
   }
 
   function escapeHtml(s) {
@@ -1481,7 +1147,6 @@
     const btns = [];
     if (LIVE.garmin) btns.push(link(LIVE.garmin, "Follow on Garmin LiveTrack"));
     if (LIVE.strava) btns.push(link(LIVE.strava, "Follow on Strava Beacon"));
-    if (!btns.length && CONNECT.strava) btns.push(link(CONNECT.strava, "Follow on Strava"));
     el.hidden = false;
     el.innerHTML = `
       <span class="live-dot" aria-hidden="true"></span>
@@ -1762,9 +1427,10 @@
   // draw filled, finish ends hollow so a run's direction still reads.
   function roundelIcon(text, colour, opts = {}) {
     const t = String(text || "").slice(0, 4);
+    const c = safeColour(colour); // clamp before it lands in a style attribute
     const style = opts.hollow
-      ? `background:#fff;color:${colour};border-color:${colour}`
-      : `background:${colour};color:${contrastText(colour)};border-color:#fff`;
+      ? `background:#fff;color:${c};border-color:${c}`
+      : `background:${c};color:${contrastText(c)};border-color:#fff`;
     const w = Math.max(19, 9 + t.length * 7);
     return L.divIcon({
       className: "term-roundel",
@@ -2874,20 +2540,34 @@
   // Closest point on a [[lat,lon],...] path to (lat,lon). Planar per-segment
   // projection — fine at running scale. Returns how far along the path that point
   // lies (km) and how far off the path it is (km).
-  function projectOnPath(lat, lon, path, cum) {
-    let best = { off: Infinity, alongKm: 0 };
+  // Optional `hint` is the segment index that won last time. A runner moves
+  // monotonically along the path, so searching a window around it beats
+  // rescanning the whole polyline on every GPS fix (Southern is 6,082 points,
+  // once a second, with the screen awake). Falls back to a full scan whenever
+  // the window's best is too far off to trust, so accuracy is unchanged.
+  const PROJ_BACK = 30, PROJ_FWD = 300, PROJ_TRUST_KM = 0.15;
+  function projectOnPath(lat, lon, path, cum, hint) {
     const kLat = 111.32, kLon = 111.32 * Math.cos((lat * Math.PI) / 180); // km per degree
-    for (let i = 0; i < path.length - 1; i++) {
-      const a = path[i], b = path[i + 1];
-      const bx = (b[1] - a[1]) * kLon, by = (b[0] - a[0]) * kLat;
-      const px = (lon - a[1]) * kLon, py = (lat - a[0]) * kLat;
-      const len2 = bx * bx + by * by || 1e-9;
-      let t = (px * bx + py * by) / len2;
-      t = t < 0 ? 0 : t > 1 ? 1 : t;
-      const off = Math.hypot(px - t * bx, py - t * by);
-      if (off < best.off) best = { off, alongKm: cum[i] + t * (cum[i + 1] - cum[i]) };
+    const scan = (from, to) => {
+      let best = { off: Infinity, alongKm: 0, i: from };
+      for (let i = from; i < to; i++) {
+        const a = path[i], b = path[i + 1];
+        const bx = (b[1] - a[1]) * kLon, by = (b[0] - a[0]) * kLat;
+        const px = (lon - a[1]) * kLon, py = (lat - a[0]) * kLat;
+        const len2 = bx * bx + by * by || 1e-9;
+        let t = (px * bx + py * by) / len2;
+        t = t < 0 ? 0 : t > 1 ? 1 : t;
+        const off = Math.hypot(px - t * bx, py - t * by);
+        if (off < best.off) best = { off, alongKm: cum[i] + t * (cum[i + 1] - cum[i]), i };
+      }
+      return best;
+    };
+    const end = path.length - 1;
+    if (hint != null && hint >= 0) {
+      const near = scan(Math.max(0, hint - PROJ_BACK), Math.min(end, hint + PROJ_FWD));
+      if (near.off <= PROJ_TRUST_KM) return near;
     }
-    return best;
+    return scan(0, end);
   }
 
   // Track any route live. stops = ordered [[name,lat,lon],...] stations, used for
@@ -2899,11 +2579,17 @@
     if (followActive) return;
     if (!stops || stops.length < 2) return;
     if (!("geolocation" in navigator)) { window.alert("This device can't share its location."); return; }
+    // Every other map entry point guards this; follow mode must too, because it
+    // locks the page behind a fullscreen overlay before the map is built.
+    if (typeof L === "undefined") { window.alert("The map didn't load, so follow mode isn't available. Check your connection and reload."); return; }
     followActive = true;
     colour = colour || BUS_COL;
 
     // Prefer the real pavement route (dense, road-following); else station hops.
-    const gpxSegs = slug ? await loadRouteGpx(slug) : null;
+    // A failed fetch must not leave followActive stuck true, or follow mode is
+    // blocked for the rest of the session.
+    let gpxSegs = null;
+    try { if (slug) gpxSegs = await loadRouteGpx(slug); } catch (_) { /* fall back to station hops */ }
     const gpxLine = gpxSegs && gpxSegs[0] && gpxSegs[0].length > 1 ? gpxSegs[0] : null;
     const usingGpx = !!gpxLine;
     let path = usingGpx ? gpxLine.map((p) => [p[0], p[1]]) : stops.map((s) => [s[1], s[2]]);
@@ -2918,14 +2604,21 @@
     const factor = usingGpx ? 1 : ROAD_FACTOR; // GPX is the real road; hops need the fudge
     const totalKm = pathRaw * factor;
     // Distance along the path to each station (clamped monotone), for next-stop logic.
-    const stopAt = []; let acc = 0;
-    for (const s of stops) { acc = Math.max(acc, projectOnPath(s[1], s[2], path, cum).alongKm); stopAt.push(acc); }
+    // Stations are in path order, so each projection can start from the last
+    // winner rather than rescanning the whole polyline (stops x path points).
+    const stopAt = []; let acc = 0, stopHint = -1;
+    for (const s of stops) {
+      const pr = projectOnPath(s[1], s[2], path, cum, stopHint);
+      stopHint = pr.i;
+      acc = Math.max(acc, pr.alongKm);
+      stopAt.push(acc);
+    }
 
     const ov = document.createElement("div");
     ov.className = "follow-overlay";
     ov.innerHTML = `
       <div class="follow-map" id="followMap"></div>
-      <div class="follow-hud" style="--fc:${colour}">
+      <div class="follow-hud" style="--fc:${safeColour(colour)}">
         <button type="button" class="fh-share" id="fhShare" title="Copy a link to follow this run" hidden>Share</button>
         <div class="fh-line" style="color:${contrastText(colour)}">${escapeHtml(label || "Run")}</div>
         <div class="fh-next">
@@ -2944,10 +2637,28 @@
         <div class="fh-splits" id="fhSplits"></div>
       </div>
       <button type="button" class="follow-stop" id="fhStopBtn" aria-label="Stop following the run">✕ Stop</button>`;
+    let map = null, watchId = null, wakeLock = null, onVis = null;
     document.body.appendChild(ov);
     document.body.classList.add("follow-lock");
 
-    const map = createSiteMap(document.getElementById("followMap"));
+    // Wire the exits before anything that can throw. The overlay is fullscreen
+    // and locks body scroll, so a failure while building the map must still
+    // leave Escape and the stop button working rather than stranding the page.
+    const stop = () => {
+      if (watchId != null) navigator.geolocation.clearWatch(watchId);
+      if (wakeLock) { wakeLock.release().catch(() => {}); wakeLock = null; }
+      if (onVis) document.removeEventListener("visibilitychange", onVis);
+      document.removeEventListener("keydown", onKey);
+      if (map) map.remove();
+      ov.remove();
+      document.body.classList.remove("follow-lock");
+      followActive = false;
+    };
+    const onKey = (e) => { if (e.key === "Escape") stop(); };
+    document.addEventListener("keydown", onKey);
+    ov.querySelector("#fhStopBtn").addEventListener("click", stop);
+
+    map = createSiteMap(document.getElementById("followMap"));
     L.polyline(path, { color: colour, weight: 6, opacity: 0.9, lineJoin: "round" }).addTo(map);
     stops.forEach((s, i) => {
       const end = i === 0 || i === stops.length - 1;
@@ -2959,8 +2670,8 @@
     const $ = (id) => document.getElementById(id);
     const paceStr = (minPerKm) => fmtPace(distUnit === "mi" ? minPerKm / MI_PER_KM : minPerKm) + " /" + distUnit;
     const youIcon = L.divIcon({ className: "follow-you", html: '<span class="fy-dot"></span>', iconSize: [22, 22], iconAnchor: [11, 11] });
-    let youMarker = null, accCircle = null, watchId = null, wakeLock = null, paceEMA = null, last = null, centred = false;
-    let startT = null, passedIdx = -1;
+    let youMarker = null, accCircle = null, paceEMA = null, last = null, centred = false;
+    let startT = null, passedIdx = -1, projHint = -1;
     const splits = [];
     const hms = (ms) => { const s = Math.max(0, Math.round(ms / 1000)), h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60; return h ? `${h}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}` : `${m}:${String(sec).padStart(2, "0")}`; };
     const hhmm = (d) => `${d.getHours()}:${String(d.getMinutes()).padStart(2, "0")}`;
@@ -2992,7 +2703,8 @@
     const onFix = (pos) => {
       const { latitude: lat, longitude: lon, accuracy } = pos.coords;
       const t = pos.timestamp;
-      const p = projectOnPath(lat, lon, path, cum);
+      const p = projectOnPath(lat, lon, path, cum, projHint);
+      projHint = p.i;
       const alongKm = p.alongKm * factor;
       const pct = Math.max(0, Math.min(100, Math.round((p.alongKm / pathRaw) * 100)));
       let nextIdx = stopAt.findIndex((sa) => sa > p.alongKm + 0.03);
@@ -3056,22 +2768,8 @@
     // Keep the screen awake while running; wake locks drop when the tab hides.
     const lockScreen = () => { if ("wakeLock" in navigator) navigator.wakeLock.request("screen").then((wl) => { wakeLock = wl; }).catch(() => {}); };
     lockScreen();
-    const onVis = () => { if (document.visibilityState === "visible") lockScreen(); };
+    onVis = () => { if (document.visibilityState === "visible") lockScreen(); };
     document.addEventListener("visibilitychange", onVis);
-
-    const stop = () => {
-      if (watchId != null) navigator.geolocation.clearWatch(watchId);
-      if (wakeLock) { wakeLock.release().catch(() => {}); wakeLock = null; }
-      document.removeEventListener("visibilitychange", onVis);
-      document.removeEventListener("keydown", onKey);
-      map.remove();
-      ov.remove();
-      document.body.classList.remove("follow-lock");
-      followActive = false;
-    };
-    const onKey = (e) => { if (e.key === "Escape") stop(); };
-    document.addEventListener("keydown", onKey);
-    $("fhStopBtn").addEventListener("click", stop);
   }
 
   function setupFollowAlong() {
@@ -3547,7 +3245,14 @@
         gpxLink.setAttribute("download", `Overland-${slug}.gpx`);
         return;
       }
-      if (gpxText === null) { try { gpxText = await (await vfetch(`routes/${slug}.gpx`)).text(); } catch (_) { gpxText = ""; } }
+      // Check res.ok first, or a 404 body gets reversed and handed to the
+      // visitor as a .gpx file.
+      if (gpxText === null) {
+        try {
+          const gres = await vfetch(`routes/${slug}.gpx`);
+          gpxText = gres.ok ? await gres.text() : "";
+        } catch (_) { gpxText = ""; }
+      }
       if (!gpxText) return;
       if (revUrl) URL.revokeObjectURL(revUrl);
       revUrl = URL.createObjectURL(new Blob([reverseGpxText(gpxText)], { type: "application/gpx+xml" }));
@@ -4303,8 +4008,16 @@
         }
       }
       if (kind === "route") {
-        const card = [...document.querySelectorAll("#routeList .route-card")].find((c) => c.querySelector("h3").textContent === name);
-        if (card) { card.scrollIntoView({ behavior: "smooth", block: "center" }); card.click(); }
+        // The library collapses to ROUTE_CARD_LIMIT cards, so most picks are not
+        // rendered yet — resolving against the DOM would silently find nothing.
+        // Seed the selection so the re-render surfaces the card, then select it.
+        const idx = ROUTES.findIndex((r) => r.name === name);
+        if (idx < 0) return;
+        routeMap.current = idx;
+        renderRouteCards();
+        selectRoute(idx, true);
+        const card = document.querySelector(`#routeList .route-card[data-i="${idx}"]`);
+        if (card) card.scrollIntoView({ behavior: "smooth", block: "center" });
         return;
       }
       if (kind === "line") {
@@ -4957,7 +4670,9 @@
   function cartoBasemap() {
     return L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
-      subdomains: "abcd", maxZoom: 20,
+      // CORS so the service worker can read the tile's status and cache only
+      // real tiles — an opaque response hides a 404 behind a valid-looking hit.
+      subdomains: "abcd", maxZoom: 20, crossOrigin: "anonymous",
     });
   }
 
@@ -4969,7 +4684,7 @@
   function osRoadBasemap() {
     return L.tileLayer("https://api.os.uk/maps/raster/v1/zxy/Road_3857/{z}/{x}/{y}.png?key=" + OS_KEY, {
       attribution: 'Contains OS data &copy; Crown copyright and database right 2026',
-      maxZoom: 20, maxNativeZoom: 16,
+      maxZoom: 20, maxNativeZoom: 16, crossOrigin: "anonymous",
     });
   }
 
@@ -5313,6 +5028,21 @@
     el.innerHTML = `<p class="diagram-empty">The map library couldn't load — check your connection.</p>`;
   }
 
+  // Defer a section's renderer until it scrolls near the viewport. The Superloop,
+  // LOOP and Capital Ring lists pull ~450 KB of JSON between them and all sit well
+  // below the fold, so fetching them at boot only slows the first paint. Their map
+  // counterparts are already gated the same way.
+  function whenVisible(id, fn) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const run = () => Promise.resolve(fn()).catch((e) => console.error("deferred render " + id + " failed:", e));
+    if (!("IntersectionObserver" in window)) { run(); return; }
+    const io = new IntersectionObserver((entries, obs) => {
+      if (entries.some((e) => e.isIntersecting)) { obs.disconnect(); run(); }
+    }, { rootMargin: "250px" });
+    io.observe(el);
+  }
+
   // Cumulative running distance (km) to each stop along the highlighted line's longest branch.
   function tmComputeKm(net, hi) {
     const out = {};
@@ -5336,7 +5066,7 @@
     // data provides one, otherwise fall back to its longest branch.
     const br = line.route && line.route.length
       ? line.route
-      : line.branches.reduce((a, b) => (b.length > a.length ? b : a), line.branches[0] || []);
+      : (line.branches || []).reduce((a, b) => (b.length > a.length ? b : a), (line.branches || [])[0] || []);
     let cum = 0;
     for (let i = 0; i < br.length; i++) {
       if (i > 0) { const a = line.stations[br[i - 1]], b = line.stations[br[i]]; cum += haversineKm([0, a.lat, a.lon], [0, b.lat, b.lon]) * ROAD_FACTOR; }
@@ -5619,7 +5349,8 @@
     if (!el) return;
     const res = await vfetch(opts.url).catch(() => null);
     if (!res || !res.ok) { el.innerHTML = `<p class="diagram-empty">Couldn't load ${escapeHtml(opts.label)} right now.</p>`; return; }
-    const data = await res.json();
+    const data = await res.json().catch(() => null);
+    if (!data) { el.innerHTML = `<p class="diagram-empty">Couldn't load ${escapeHtml(opts.label)} right now.</p>`; return; }
     const sections = Array.isArray(data && data.sections) ? data.sections : [];
     if (!sections.length) { el.innerHTML = `<p class="diagram-empty">No sections to show.</p>`; return; }
     const col = safeColour(data.colour || opts.col), tc = contrastText(col);
@@ -5723,7 +5454,7 @@
       const dlBox = body.querySelector(".sl-dl");
       if (dlBox && track.length > 1) {
         const slug = `${opts.slug}-${s.n}${rev ? "-reverse" : ""}`;
-        dlBox.innerHTML = `<a class="gpx-dl loop-gpx" href="#" title="Download ${escapeAttr(opts.trailShort)} Section ${s.n} as a GPX file for your watch">↓ GPX route</a><a class="gpx-dl loop-tcx" href="#" title="Download as a Garmin TCX course — Virtual Partner pacing at your site pace">⌚ TCX</a>`;
+        dlBox.innerHTML = `<a class="gpx-dl loop-gpx" href="#" title="Download ${escapeHtml(opts.trailShort)} Section ${s.n} as a GPX file for your watch">↓ GPX route</a><a class="gpx-dl loop-tcx" href="#" title="Download as a Garmin TCX course — Virtual Partner pacing at your site pace">⌚ TCX</a>`;
         dlBox.querySelector(".loop-gpx").addEventListener("click", (ev) => {
           ev.preventDefault();
           const text = gpxFromPoints(track, `${opts.trailFull} Section ${s.n} · ${from} → ${to}`);
@@ -5867,7 +5598,8 @@
     if (!el) return;
     const res = await vfetch("data/superloop.json").catch(() => null);
     if (!res || !res.ok) { el.innerHTML = `<p class="diagram-empty">Couldn't load the Superloop routes right now.</p>`; return; }
-    const data = await res.json();
+    const data = await res.json().catch(() => null);
+    if (!data) { el.innerHTML = `<p class="diagram-empty">Couldn't load the Superloop routes right now.</p>`; return; }
     const routes = Array.isArray(data && data.routes) ? data.routes : [];
     if (!routes.length) { el.innerHTML = `<p class="diagram-empty">No Superloop routes to show.</p>`; return; }
     slRoutes = routes; // share with the challenge panel (route count + km totals)
@@ -5973,7 +5705,7 @@
       const dlBox = body.querySelector(".sl-dl");
       if (dlBox && track.length > 1) {
         const slug = `superloop-${lineSlug(rt.id)}${rev ? "-reverse" : ""}`;
-        dlBox.innerHTML = `<a class="gpx-dl sl-gpx" href="#" title="Download the whole ${escapeAttr(rt.id)} route as a GPX file for your watch">↓ GPX route</a><a class="gpx-dl sl-tcx" href="#" title="Download as a Garmin TCX course — Virtual Partner pacing at your site pace">⌚ TCX</a>`;
+        dlBox.innerHTML = `<a class="gpx-dl sl-gpx" href="#" title="Download the whole ${escapeHtml(rt.id)} route as a GPX file for your watch">↓ GPX route</a><a class="gpx-dl sl-tcx" href="#" title="Download as a Garmin TCX course — Virtual Partner pacing at your site pace">⌚ TCX</a>`;
         dlBox.querySelector(".sl-gpx").addEventListener("click", (ev) => {
           ev.preventDefault();
           const text = gpxFromPoints(track, `Overland ${rt.id} · ${from} → ${to}`);
@@ -6326,7 +6058,7 @@
         const d = L.DomUtil.create("div", "iso-legend");
         d.innerHTML = `<b>Run + ride from ${escapeHtml(s0.n)}</b>
           <span class="iso-bands"><i style="opacity:.9"></i>30 min <i style="opacity:.55"></i>60 min <i style="opacity:.3"></i>90 min</span>
-          <span class="iso-note">running ~${fmtTime(rtPace)}/km, rough train times</span>
+          <span class="iso-note">running ~${fmtPace(rtPace)} /km, rough train times</span>
           <button type="button" class="iso-x" aria-label="Clear the reach shading">&times;</button>`;
         L.DomEvent.disableClickPropagation(d);
         d.querySelector(".iso-x").addEventListener("click", clearIso);
@@ -6433,6 +6165,8 @@
   let rtReversed = false; // direction of travel along the selected line
   let rtPaceSaved = false; // whether a visitor-saved pace exists (it then drives the planner select too)
   let rtPace = (() => { try { const v = parseFloat(localStorage.getItem("tuberun_rtpace")); if (v >= 4 && v <= 9) { rtPaceSaved = true; return v; } } catch (_) { /* private mode */ } return 6.5; })();
+  let syncingPace = false; // true while syncPaceSelect drives the select, to break the echo
+  let pacePersistT = 0; // debounce handle for persisting pace + re-rendering the cards
 
   // Ordered [name, lat, lon] stops for a line: the real run route when we have
   // one, then the line's stitched end-to-end main route from the open TfL
@@ -7028,7 +6762,7 @@
         .map(([id, info]) => ({ id, name: info.name, colour: info.colour }))
         .sort((a, b) => a.name.localeCompare(b.name));
       box.innerHTML = lines.map((l) =>
-        `<button type="button" class="ab-line" data-id="${escapeHtml(l.id)}" style="--lc:${l.colour};--lct:${contrastText(l.colour)}" aria-pressed="false"><span class="ab-line-dot"></span>${escapeHtml(l.name)}</button>`
+        `<button type="button" class="ab-line" data-id="${escapeHtml(l.id)}" style="--lc:${safeColour(l.colour)};--lct:${contrastText(safeColour(l.colour))}" aria-pressed="false"><span class="ab-line-dot"></span>${escapeHtml(l.name)}</button>`
       ).join("");
       if (wrap) wrap.hidden = false;
       const refresh = () => {
@@ -7128,29 +6862,38 @@
   // change is clamped, persisted and mirrored into the coarse select.
   function setRtPace(v) {
     rtPace = Math.min(9, Math.max(4, parseFloat(v) || 6.5));
-    try { localStorage.setItem("tuberun_rtpace", String(rtPace)); } catch (_) { /* private mode */ }
     syncPaceSelect();
-    renderRouteCards(); // cards only — their run-time estimates use rtPace
+    // Slider drags fire ~60 input events a second, and renderRouteCards rebuilds
+    // up to 126 cards, so trail the persist and the re-render behind the drag.
+    clearTimeout(pacePersistT);
+    pacePersistT = setTimeout(() => {
+      try { localStorage.setItem("tuberun_rtpace", String(rtPace)); } catch (_) { /* private mode */ }
+      renderRouteCards(); // cards only — their run-time estimates use rtPace
+    }, 150);
     return rtPaceLabel();
   }
   // Snap the planner's coarse pace select to the option nearest rtPace.
-  // Dispatching input keeps the planner's result in step with the sliders;
-  // the value-changed guard stops the setRtPace → sync → setRtPace echo.
+  // Dispatching input keeps the planner's result in step with the sliders, but
+  // the select only carries four options — without syncingPace the echo back
+  // through setRtPace would quantise the sliders' 0.25 steps onto those four.
   function syncPaceSelect() {
     if (!paceSel || !paceSel.options.length) return;
     const best = [...paceSel.options].reduce((a, b) =>
       Math.abs(parseFloat(b.value) - rtPace) < Math.abs(parseFloat(a.value) - rtPace) ? b : a);
     if (paceSel.value !== best.value) {
+      syncingPace = true;
       paceSel.value = best.value;
       paceSel.dispatchEvent(new Event("input", { bubbles: true }));
+      syncingPace = false;
     }
   }
   function setupPaceState() {
     if (!paceSel) return;
     if (rtPaceSaved) syncPaceSelect(); // reflect the saved pace on load
     // Registered before setupPlanner's `update` listener, so the planner
-    // always recalculates with the fresh rtPace.
-    paceSel.addEventListener("input", () => setRtPace(paceSel.value));
+    // always recalculates with the fresh rtPace. Skipped when we are the ones
+    // driving the select, so a slider's exact pace survives the round trip.
+    paceSel.addEventListener("input", () => { if (!syncingPace) setRtPace(paceSel.value); });
   }
 
   async function renderRunningTimes(holder) {
@@ -7254,23 +6997,23 @@
     ["themeSections", themeSections], ["renderLive", renderLive],
     ["renderFeature", renderFeature], ["showPageVersion", showPageVersion],
     ["renderTubeMap", renderTubeMap], ["renderLineStats", renderLineStats],
-    ["renderNext", renderNext], ["renderHeroCard", renderHeroCard],
-    ["renderJourneyBoard", renderJourneyBoard], ["renderList", renderList],
+    ["renderList", renderList],
     ["renderRoutes", renderRoutes], ["setupPaceState", setupPaceState],
     ["setupPlanner", setupPlanner], ["enrichInterchanges", enrichInterchanges], ["setupBusRunner", setupBusRunner],
     ["setupFollowAlong", setupFollowAlong],
     ["setupJourneyPlanner", setupJourneyPlanner], ["renderLineCollector", renderLineCollector],
     ["renderTimeMachine", renderTimeMachine], ["setupNetToggle", setupNetToggle], ["setupSiteSearch", setupSiteSearch],
     ["setupStripInteractions", setupStripInteractions],
-    ["wireSocials", wireSocials],
-    ["loadWeather", loadWeather], ["setupScrollSpy", setupScrollSpy],
+    ["setupScrollSpy", setupScrollSpy],
     ["setupUnitToggle", setupUnitToggle], ["setupLiveClock", setupLiveClock],
-    ["renderSuperloopRoutes", renderSuperloopRoutes],
-    ["renderLondonLoopSections", renderLondonLoopSections],
-    ["renderCapitalRingSections", renderCapitalRingSections],
-    ["loadLiveNow", loadLiveNow],
+    ["renderSuperloopRoutes", () => whenVisible("superloopRoutes", renderSuperloopRoutes)],
+    ["renderLondonLoopSections", () => whenVisible("loopSections", renderLondonLoopSections)],
+    ["renderCapitalRingSections", () => whenVisible("capringSections", renderCapitalRingSections)],
   ].forEach(([name, fn]) => {
-    try { fn(); } catch (e) { console.error("init " + name + " failed:", e); }
+    // Promise.resolve so an async init's rejection is logged like a sync throw
+    // rather than escaping the guard entirely as an unhandled rejection.
+    try { Promise.resolve(fn()).catch((e) => console.error("init " + name + " failed:", e)); }
+    catch (e) { console.error("init " + name + " failed:", e); }
   });
 
   // Deep-link: ?follow=<line-slug> opens live follow mode on that line, so a run
@@ -7304,24 +7047,20 @@
       nextRun = pickNextRun();
       pts = WAYPOINTS[nextRun ? nextRun.key : ""];
       const ph = runPhase(nextRun);
-      tickJourneyNow(); // slide the live "group ~here now" dot even when the headline is unchanged
       const sig = (nextRun ? nextRun.key : "") + "|" + ph.short + "|" + ph.label + "|" + ph.live;
       if (sig === timeSig) return; // nothing visible changed — skip the re-render
       timeSig = sig;
-      renderNext();
-      renderHeroCard();
       if (nextRun && nextRun.key !== prevKey) {
         // Run rolled over to a different entry (rare, ~monthly): refresh the
         // views that key off it. renderRoutes/Leaflet are untouched.
-        renderJourneyBoard();
         renderTubeMap();
         setupPlanner();
       }
     }
     refreshTime(); // seed timeSig so the first timer tick is a genuine no-op
     setInterval(refreshTime, 60000);
-    document.addEventListener("visibilitychange", () => { if (!document.hidden) { refreshTime(); loadLiveNow(); } });
-    window.addEventListener("pageshow", () => { refreshTime(); loadLiveNow(); });
+    document.addEventListener("visibilitychange", () => { if (!document.hidden) refreshTime(); });
+    window.addEventListener("pageshow", () => { refreshTime(); });
   }
 
   // Site-wide km/mi toggle in the header — re-renders everything showing a distance.
@@ -7335,9 +7074,6 @@
       distUnit = b.dataset.u;
       try { localStorage.setItem("tuberun_units", distUnit); } catch (_) { /* private mode */ }
       sync();
-      renderNext();
-      renderHeroCard(); // its distance line shows units too
-      renderJourneyBoard();
       renderList();
       renderRouteCards(); // cards only — renderRoutes() would re-init its Leaflet map
       if (routeMap.current >= 0) renderRouteStrip(ROUTES[routeMap.current]); // its leg distances follow the unit

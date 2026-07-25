@@ -12,11 +12,12 @@
 import { writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { overpassJson } from "./lib/overpass.mjs";
+import { distKm as haversineKm } from "./lib/geo.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const OUT = join(ROOT, "data", "capital-ring.json");
 const COLOUR = "#2166AC"; // Capital Ring waymark blue
-const ENDPOINTS = ["https://overpass-api.de/api/interpreter", "https://overpass.kumi.systems/api/interpreter"];
 // All Capital Ring route relations (main + alternatives); we filter in code.
 const QUERY = `[out:json][timeout:180];
 rel["name"~"Capital Ring",i]["type"="route"];
@@ -29,31 +30,6 @@ out;`;
 // "alternate" variants that share a section number.
 const MAIN_RE = /^Capital Ring \(Section \d+\)$/i;
 
-async function overpassJson(query) {
-  let lastErr;
-  for (const url of ENDPOINTS) {
-    try {
-      const res = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded", "User-Agent": "Overland/1.0 (running club map)" },
-        body: "data=" + encodeURIComponent(query),
-      });
-      if (!res.ok) { lastErr = new Error(`${url} ${res.status}`); continue; }
-      const text = await res.text();
-      if (!text.trim().startsWith("{")) { lastErr = new Error(`${url} returned non-JSON`); continue; }
-      return JSON.parse(text);
-    } catch (e) { lastErr = e; }
-  }
-  throw lastErr || new Error("all Overpass endpoints failed");
-}
-
-const R = 6371;
-const rad = (d) => (d * Math.PI) / 180;
-function haversineKm(a, b) {
-  const dLat = rad(b[0] - a[0]), dLon = rad(b[1] - a[1]);
-  const s = Math.sin(dLat / 2) ** 2 + Math.cos(rad(a[0])) * Math.cos(rad(b[0])) * Math.sin(dLon / 2) ** 2;
-  return R * 2 * Math.asin(Math.sqrt(s));
-}
 const dist2 = (a, b) => (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2;
 const near = (a, b) => dist2(a, b) < 1e-8;
 

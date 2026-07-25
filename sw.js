@@ -11,11 +11,12 @@
  * stale-while-revalidate handler caches whatever the page actually loads, so a new
  * ?v= simply becomes a new cache entry. Bump SW_VERSION to purge old caches.
  */
-const SW_VERSION = "v3"; // v3: rebrand cache prefix tuberun- -> overland-. v2: global cache lookup + runtime ?v= eviction; bumping purges v1's unbounded runtime
+const SW_VERSION = "v4"; // v4: RUNTIME beats the SHELL precache, tiles fetched cors so res.ok is real; bumping drops the old opaque tile entries. v3: rebrand cache prefix tuberun- -> overland-. v2: global cache lookup + runtime ?v= eviction; bumping purges v1's unbounded runtime
 const SHELL = "overland-shell-" + SW_VERSION;
 const RUNTIME = "overland-runtime-" + SW_VERSION;
 const TILES = "overland-tiles-" + SW_VERSION;
 const TILE_MAX = 500;
+const TILE_TOUCH = 0.15; // odds of re-putting a cache hit to refresh its eviction order
 
 // The app can boot offline from these. Cached individually so one 404 can't abort install.
 const PRECACHE = [
@@ -68,18 +69,42 @@ self.addEventListener("fetch", (e) => {
     const isShell = url.pathname === SCOPE_PATH || url.pathname === SCOPE_PATH + "index.html";
     e.respondWith(
       fetch(req)
-        .then((res) => { if (res.ok && isShell) { const copy = res.clone(); caches.open(SHELL).then((c) => c.put("index.html", copy)); } return res; })
+        .then((res) => { if (res.ok && isShell) { const copy = res.clone(); caches.open(SHELL).then((c) => c.put("index.html", copy)).catch(() => {}); } return res; })
         .catch(() => caches.match("index.html"))
+        // Offline before the shell was ever cached — respondWith(undefined) would throw.
+        .then((res) => res || new Response("Offline", { status: 503 }))
     );
     return;
   }
 
   // Map tiles (cross-origin): cache-first, capped so the cache can't grow without bound.
+  //
+  // The page asks for tiles from plain <img> tags, so the browser's request is no-cors
+  // and the response opaque — its status is unreadable, so a 404 or 500 tile would be
+  // cached as though it were valid and then served forever. Re-issue the request in
+  // cors mode (every basemap we use answers with Access-Control-Allow-Origin) so res.ok
+  // means something and only real tiles get stored. If a provider ever refuses CORS the
+  // original no-cors request still serves the tile, just without caching it.
+  // Adding crossOrigin: "anonymous" to the two L.tileLayer calls in script.js would make
+  // the page's own request cors and make this re-issue unnecessary.
   if (isTile(url.href)) {
     e.respondWith(
-      caches.open(TILES).then((cache) => cache.match(req).then((hit) =>
-        hit || fetch(req).then((res) => { if (res.ok || res.type === "opaque") { cache.put(req, res.clone()); trimCache(TILES, TILE_MAX); } return res; }).catch(() => hit)
-      ))
+      caches.open(TILES).then((cache) => cache.match(req).then((hit) => {
+        if (hit) {
+          // Approximate LRU: a put moves the entry to the back of the key order, so
+          // trimCache() drops tiles you haven't looked at lately instead of the home
+          // area you loaded first. Sampled, to keep panning off the write path.
+          if (Math.random() < TILE_TOUCH) cache.put(req, hit.clone()).catch(() => {});
+          return hit;
+        }
+        return fetch(req.url, { mode: "cors" })
+          .then((res) => {
+            if (res.ok) cache.put(req, res.clone()).then(() => trimCache(TILES, TILE_MAX)).catch(() => {});
+            return res;
+          })
+          .catch(() => fetch(req))
+          .catch(() => Response.error());
+      }))
     );
     return;
   }
@@ -89,31 +114,35 @@ self.addEventListener("fetch", (e) => {
   // failures to the page, which already handles a missing live.json.
   if (url.pathname.endsWith("/data/live.json")) return;
 
-  // Same-origin assets + data: stale-while-revalidate. Look the request up across ALL
-  // caches (global match) — the SHELL precache has to serve first-visit offline loads —
-  // but write fresh responses to RUNTIME. After each write, evict RUNTIME entries for
-  // the same path under a different query, so old ?v= generations don't pile up deploy
-  // after deploy.
+  // Same-origin assets + data: stale-while-revalidate. RUNTIME is consulted FIRST so a
+  // refreshed copy always wins: a global caches.match() walks caches in creation order,
+  // and SHELL is created at install, so site.webmanifest and the precached icons would
+  // otherwise be served from their install-time copies for the life of the registration.
+  // The global match stays as the fallback, because SHELL is what covers a first-visit
+  // offline load. Fresh responses go to RUNTIME, and after each write RUNTIME entries
+  // for the same path under a different query are evicted, so old ?v= generations don't
+  // pile up deploy after deploy.
   if (url.origin === self.location.origin) {
     e.respondWith(
-      Promise.all([caches.open(RUNTIME), caches.match(req)]).then(([cache, hit]) => {
+      caches.open(RUNTIME).then((cache) => cache.match(req).then((fresh) => fresh || caches.match(req)).then((hit) => {
         const network = fetch(req).then((res) => {
           if (res.ok) {
             cache.put(req, res.clone())
               .then(() => cache.keys(req, { ignoreSearch: true }))
-              .then((keys) => Promise.all(keys.filter((k) => k.url !== req.url).map((k) => cache.delete(k))));
+              .then((keys) => Promise.all(keys.filter((k) => k.url !== req.url).map((k) => cache.delete(k))))
+              .catch(() => {});
           }
           return res;
-        }).catch(() => hit);
+        }).catch(() => hit || Response.error());
         return hit || network;
-      })
+      }))
     );
   }
   // External APIs (open-meteo / TfL): not intercepted — they need the live network.
 });
 
 function trimCache(name, max) {
-  caches.open(name).then((cache) => cache.keys().then((keys) => {
-    if (keys.length > max) cache.delete(keys[0]).then(() => trimCache(name, max));
+  return caches.open(name).then((cache) => cache.keys().then((keys) => {
+    if (keys.length > max) return cache.delete(keys[0]).then(() => trimCache(name, max));
   }));
 }
