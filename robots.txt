@@ -1,4 +1,4 @@
-# Tube Run — all crawlers and AI agents welcome.
+# Overland — all crawlers and AI agents welcome.
 #
 # Note: robots.txt is an origin-root protocol and this is a GitHub Pages
 # project site, so most crawlers actually consult
@@ -8,7 +8,7 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://psurma.github.io/TubeRun/sitemap.xml
+Sitemap: https://psurma.github.io/Overland/sitemap.xml
 
 # Machine-readable site guide for LLMs and agents:
-# https://psurma.github.io/TubeRun/llms.txt
+# https://psurma.github.io/Overland/llms.txt

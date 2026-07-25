@@ -1,4 +1,4 @@
-/* Tube Run — schedule, distance planner, route map, weather, socials.
+/* Overland — schedule, distance planner, route map, weather, socials.
    ---------------------------------------------------------------------------
    EDIT THESE to run the group:
      • CONNECT      — your Strava + WhatsApp links
@@ -770,7 +770,7 @@
   // Client-side calendar export for a run — no backend. A timed 09:00 event on
   // the run date (all-day span for multi-day adventures) so people stop missing
   // the first-Sunday runs. Times are floating-local: the group meets in London.
-  const CAL_URL = "https://psurma.github.io/TubeRun/";
+  const CAL_URL = "https://psurma.github.io/Overland/";
   const CAL_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4.5" width="18" height="17" rx="2.5"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4"/></svg>`;
   const pad2 = (n) => String(n).padStart(2, "0");
   function icsEsc(s) { return String(s).replace(/([\\;,])/g, "\\$1").replace(/\n/g, "\\n"); }
@@ -813,12 +813,12 @@
     const loc = r.start ? r.start + (r.location === "London" ? ", London" : "") : r.location;
     const desc = [r.leg, distText(r.distance), multi ? null : `Meet ${MEET_TIME}`, CAL_URL].filter(Boolean).join("\n");
     const lines = [
-      "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//TubeRun//Runs//EN", "CALSCALE:GREGORIAN",
+      "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Overland//Runs//EN", "CALSCALE:GREGORIAN",
       "BEGIN:VEVENT",
       `UID:${icsDate(r.date)}-${slug}@tuberun`,
       `DTSTAMP:${icsStamp()}`,
       dtStart, dtEnd,
-      `SUMMARY:${icsEsc("Tube Run · " + r.badge)}`,
+      `SUMMARY:${icsEsc("Overland · " + r.badge)}`,
       loc ? `LOCATION:${icsEsc(loc)}` : "",
       `DESCRIPTION:${icsEsc(desc)}`,
       `URL:${CAL_URL}`,
@@ -1378,7 +1378,7 @@
     const slug = GPX_LINES.has(slugOrName) ? slugOrName : lineSlug(slugOrName);
     if (!GPX_LINES.has(slug)) return "";
     const label = lineName || slug;
-    return `<a class="gpx-dl${extraClass ? " " + extraClass : ""}" href="routes/${slug}.gpx" download="TubeRun-${slug}.gpx" title="Download the ${escapeHtml(label)} line's pavement route as a GPX file for your watch">↓ GPX</a><a class="gpx-dl tcx-dl${extraClass ? " " + extraClass : ""}" href="#" data-slug="${slug}" title="Download as a Garmin TCX course — Virtual Partner pacing at your site pace">⌚ TCX</a>`;
+    return `<a class="gpx-dl${extraClass ? " " + extraClass : ""}" href="routes/${slug}.gpx" download="Overland-${slug}.gpx" title="Download the ${escapeHtml(label)} line's pavement route as a GPX file for your watch">↓ GPX</a><a class="gpx-dl tcx-dl${extraClass ? " " + extraClass : ""}" href="#" data-slug="${slug}" title="Download as a Garmin TCX course — Virtual Partner pacing at your site pace">⌚ TCX</a>`;
   }
   // Flip a GPX file's direction: reverse each track segment's trackpoint order
   // (so a watch follows it the other way). Waypoint POIs are order-independent,
@@ -1431,7 +1431,7 @@
       return `<trkpt lat="${p[0]}" lon="${p[1]}">${ele}</trkpt>`;
     }).join("");
     return `<?xml version="1.0" encoding="UTF-8"?>
-<gpx version="1.1" creator="TubeRun" xmlns="http://www.topografix.com/GPX/1/1">
+<gpx version="1.1" creator="Overland" xmlns="http://www.topografix.com/GPX/1/1">
  <trk><name>${escapeHtml(name)}</name><trkseg>${trkpts}</trkseg></trk>
 </gpx>`;
   }
@@ -1461,9 +1461,9 @@
       let pts = vroutes[slug] && vroutes[slug][0] && vroutes[slug][0].length > 1 ? vroutes[slug][0] : null;
       if (!pts) { const segs = await loadRouteGpx(slug); pts = segs && segs[0]; }
       if (!pts || pts.length < 2) throw new Error("no track");
-      const tcx = tcxFromPoints(pts, `TubeRun ${slug}`, reverse);
+      const tcx = tcxFromPoints(pts, `Overland ${slug}`, reverse);
       if (!tcx) throw new Error("no track");
-      downloadBlob(`TubeRun-${slug}${reverse ? "-reverse" : ""}.tcx`, new Blob([tcx], { type: "application/vnd.garmin.tcx+xml" }));
+      downloadBlob(`Overland-${slug}${reverse ? "-reverse" : ""}.tcx`, new Blob([tcx], { type: "application/vnd.garmin.tcx+xml" }));
     } catch (_) {
       const was = a.textContent;
       a.textContent = "TCX unavailable";
@@ -3491,7 +3491,7 @@
       if (!reversed) {
         if (revUrl) { URL.revokeObjectURL(revUrl); revUrl = null; }
         gpxLink.href = `routes/${slug}.gpx`;
-        gpxLink.setAttribute("download", `TubeRun-${slug}.gpx`);
+        gpxLink.setAttribute("download", `Overland-${slug}.gpx`);
         return;
       }
       if (gpxText === null) { try { gpxText = await (await vfetch(`routes/${slug}.gpx`)).text(); } catch (_) { gpxText = ""; } }
@@ -3499,7 +3499,7 @@
       if (revUrl) URL.revokeObjectURL(revUrl);
       revUrl = URL.createObjectURL(new Blob([reverseGpxText(gpxText)], { type: "application/gpx+xml" }));
       gpxLink.href = revUrl;
-      gpxLink.setAttribute("download", `TubeRun-${slug}-reverse.gpx`);
+      gpxLink.setAttribute("download", `Overland-${slug}-reverse.gpx`);
     }
     function setReversed(v) {
       reversed = v;
@@ -3679,7 +3679,7 @@
     { icon: "⚫", name: "Northern Soul", desc: "The Northern line, both ways", test: (c) => c.both("Northern") },
     { icon: "🔵", name: "Piccadilly Pro", desc: "The Piccadilly line, both ways", test: (c) => c.both("Piccadilly") },
     { icon: "💙", name: "Victoria Victor", desc: "The Victoria line, both ways", test: (c) => c.both("Victoria") },
-    { icon: "👑", name: "Tube Run Royalty", desc: "Every line, both ways", test: (c) => c.linesBoth >= c.total / 2 },
+    { icon: "👑", name: "Overland Royalty", desc: "Every line, both ways", test: (c) => c.linesBoth >= c.total / 2 },
   ];
 
   function renderLineCollector() {
@@ -5071,16 +5071,16 @@
         const e = entries[i];
         if (gpxBlob) { URL.revokeObjectURL(gpxBlob); gpxBlob = null; }
         if (e && e.route && e.route.length > 1) {
-          const text = gpxFromPoints(e.route, `TubeRun ${e.label}`);
+          const text = gpxFromPoints(e.route, `Overland ${e.label}`);
           if (text) {
             gpxBlob = URL.createObjectURL(new Blob([text], { type: "application/gpx+xml" }));
-            gpx.href = gpxBlob; gpx.download = `TubeRun-${e.id}-${lineSlug(e.label)}.gpx`;
+            gpx.href = gpxBlob; gpx.download = `Overland-${e.id}-${lineSlug(e.label)}.gpx`;
             gpx.title = "Download this exact route as a GPX file for your watch";
             gpx.style.display = ""; tcx.style.display = ""; return;
           }
         }
         if (e && GPX_LINES.has(e.id)) {
-          gpx.href = `routes/${e.id}.gpx`; gpx.download = `TubeRun-${e.id}.gpx`;
+          gpx.href = `routes/${e.id}.gpx`; gpx.download = `Overland-${e.id}.gpx`;
           gpx.title = "Download this line's pavement route as a GPX file for your watch";
           gpx.style.display = ""; tcx.style.display = "";
         } else { gpx.removeAttribute("href"); gpx.style.display = "none"; tcx.style.display = "none"; }
@@ -5093,9 +5093,9 @@
           const vr = await loadVariantRoutes();
           pts = (vr[e.id] && vr[e.id][0]) || ((await loadRouteGpx(e.id)) || [])[0] || null;
         }
-        const doc = pts && pts.length > 1 ? tcxFromPoints(pts, `TubeRun ${e.label}`, false) : null;
+        const doc = pts && pts.length > 1 ? tcxFromPoints(pts, `Overland ${e.label}`, false) : null;
         if (!doc) { const was = tcx.textContent; tcx.textContent = "TCX unavailable"; setTimeout(() => { tcx.textContent = was; }, 1800); return; }
-        downloadBlob(`TubeRun-${e.id}-${lineSlug(e.label)}.tcx`, new Blob([doc], { type: "application/vnd.garmin.tcx+xml" }));
+        downloadBlob(`Overland-${e.id}-${lineSlug(e.label)}.tcx`, new Blob([doc], { type: "application/vnd.garmin.tcx+xml" }));
       });
       const syncStats = (i) => {
         const wp = entries[i] && entries[i].wp;
@@ -5923,12 +5923,12 @@
         dlBox.innerHTML = `<a class="gpx-dl sl-gpx" href="#" title="Download the whole ${escapeAttr(rt.id)} route as a GPX file for your watch">↓ GPX route</a><a class="gpx-dl sl-tcx" href="#" title="Download as a Garmin TCX course — Virtual Partner pacing at your site pace">⌚ TCX</a>`;
         dlBox.querySelector(".sl-gpx").addEventListener("click", (ev) => {
           ev.preventDefault();
-          const text = gpxFromPoints(track, `TubeRun ${rt.id} · ${from} → ${to}`);
+          const text = gpxFromPoints(track, `Overland ${rt.id} · ${from} → ${to}`);
           if (text) downloadBlob(`${slug}.gpx`, new Blob([text], { type: "application/gpx+xml" }));
         });
         dlBox.querySelector(".sl-tcx").addEventListener("click", (ev) => {
           ev.preventDefault();
-          const doc = tcxFromPoints(track, `TubeRun ${rt.id}`, false);
+          const doc = tcxFromPoints(track, `Overland ${rt.id}`, false);
           if (doc) downloadBlob(`${slug}.tcx`, new Blob([doc], { type: "application/vnd.garmin.tcx+xml" }));
         });
       }
@@ -6896,13 +6896,13 @@
             dlBox.innerHTML = `<a class="gpx-dl jr-gpx" href="#" title="Download this exact run route as a GPX file for your watch">↓ GPX route</a><a class="gpx-dl jr-tcx" href="#" title="Download as a Garmin TCX course — Virtual Partner pacing at your site pace">⌚ TCX</a>`;
             dlBox.querySelector(".jr-gpx").addEventListener("click", (ev) => {
               ev.preventDefault();
-              const text = gpxFromPoints(drawn.latlngs, `TubeRun ${name}`);
-              if (text) downloadBlob(`TubeRun-${slug}.gpx`, new Blob([text], { type: "application/gpx+xml" }));
+              const text = gpxFromPoints(drawn.latlngs, `Overland ${name}`);
+              if (text) downloadBlob(`Overland-${slug}.gpx`, new Blob([text], { type: "application/gpx+xml" }));
             });
             dlBox.querySelector(".jr-tcx").addEventListener("click", (ev) => {
               ev.preventDefault();
-              const doc = tcxFromPoints(drawn.latlngs, `TubeRun ${name}`, false);
-              if (doc) downloadBlob(`TubeRun-${slug}.tcx`, new Blob([doc], { type: "application/vnd.garmin.tcx+xml" }));
+              const doc = tcxFromPoints(drawn.latlngs, `Overland ${name}`, false);
+              if (doc) downloadBlob(`Overland-${slug}.tcx`, new Blob([doc], { type: "application/vnd.garmin.tcx+xml" }));
             });
           }
         });

@@ -1,6 +1,6 @@
 {
-  "name": "Tube Run — Run London's transport network, above ground",
-  "short_name": "Tube Run",
+  "name": "Overland — Run London's transport network, above ground",
+  "short_name": "Overland",
   "description": "Run London's Tube, Overground, Elizabeth and National Rail lines above ground with a friendly group — routes, buses, elevation, journey planner and more.",
   "start_url": "./",
   "scope": "./",

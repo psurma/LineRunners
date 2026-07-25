@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<gpx version="1.1" creator="TubeRun route generator" xmlns="http://www.topografix.com/GPX/1/1">
+<gpx version="1.1" creator="Overland route generator" xmlns="http://www.topografix.com/GPX/1/1">
   <metadata>
-    <name>Jubilee line — TubeRun</name>
+    <name>Jubilee line — Overland</name>
     <desc>Above-ground running route tracing the Jubilee line and its branches, station to station. Routed on pavements and footways from OpenStreetMap data (BRouter, shortest).</desc>
-    <author><name>TubeRun</name></author>
+    <author><name>Overland</name></author>
     <copyright author="OpenStreetMap contributors"><license>https://opendatacommons.org/licenses/odbl/1-0/</license></copyright>
     <link href="https://www.openstreetmap.org/copyright"><text>© OpenStreetMap contributors</text></link>
     <time>2026-07-06T18:42:05.461Z</time>

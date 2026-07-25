@@ -67,8 +67,8 @@ if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
   const RUN_PLAN = extractLiteral(readFileSync(join(ROOT, "script.js"), "utf8"), "RUN_PLAN");
   const runs = computeRuns(RUN_PLAN);
   const out = {
-    club: "Tube Run",
-    site: "https://psurma.github.io/TubeRun/",
+    club: "Overland",
+    site: "https://psurma.github.io/Overland/",
     generated: iso(new Date()),
     rule: "Regular runs are the first Sunday of each month, meeting 09:00 at the start station unless stated; dated specials are pinned. Runs beyond the current month are suggestions until confirmed a month out.",
     runs,

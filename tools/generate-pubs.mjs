@@ -52,7 +52,7 @@ async function pubsNear(lat, lon) {
   const url = `${FSA}?latitude=${lat}&longitude=${lon}&maxDistanceLimit=1&businessTypeId=${PUB_TYPE}&pageSize=25&sortOptionKey=distance`;
   for (let t = 1; ; t++) {
     try {
-      const res = await fetch(url, { headers: { "x-api-version": "2", "User-Agent": "TubeRun/1.0 (finish-line pints)" } });
+      const res = await fetch(url, { headers: { "x-api-version": "2", "User-Agent": "Overland/1.0 (finish-line pints)" } });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       return (await res.json()).establishments || [];
     } catch (e) {

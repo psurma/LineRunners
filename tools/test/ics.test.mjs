@@ -46,7 +46,7 @@ test("runIcs builds a valid single-day event at MEET_TIME", () => {
   assert.ok(u.includes("DTSTART:20260802T090000"), "starts at MEET_TIME on the run's date");
   assert.ok(u.includes("DTEND:20260802T113000"), "2h30 block");
   assert.ok(u.includes("UID:20260802-victoria@tuberun"));
-  assert.ok(u.includes("SUMMARY:Tube Run · Victoria line"));
+  assert.ok(u.includes("SUMMARY:Overland · Victoria line"));
   assert.ok(u.includes("LOCATION:Brixton stn (outside M&S)\\, London"), "location comma escaped");
   assert.ok(u.some((l) => /^DTSTAMP:\d{8}T\d{6}Z$/.test(l)), "DTSTAMP is a UTC timestamp");
   const desc = u.find((l) => l.startsWith("DESCRIPTION:"));

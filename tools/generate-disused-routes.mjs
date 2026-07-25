@@ -46,7 +46,7 @@ const DISUSED = [
 
 // Single attempt, throws on failure (there is no fallback for these — a failed
 // route is reported and left alone).
-const brouter = (vias) => brouterRaw(vias, "shortest", { userAgent: "TubeRun/1.0 (disused railway routes)" }); // [lon, lat, ele]
+const brouter = (vias) => brouterRaw(vias, "shortest", { userAgent: "Overland/1.0 (disused railway routes)" }); // [lon, lat, ele]
 
 const toR = Math.PI / 180;
 function distM(a, b) {

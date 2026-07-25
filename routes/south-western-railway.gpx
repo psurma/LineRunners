@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<gpx version="1.1" creator="TubeRun route generator" xmlns="http://www.topografix.com/GPX/1/1">
+<gpx version="1.1" creator="Overland route generator" xmlns="http://www.topografix.com/GPX/1/1">
   <metadata>
-    <name>South Western Railway — TubeRun</name>
+    <name>South Western Railway — Overland</name>
     <desc>Above-ground running route tracing the South Western Railway line, station to station. Routed on pavements and footways from OpenStreetMap data (BRouter, shortest).</desc>
-    <author><name>TubeRun</name></author>
+    <author><name>Overland</name></author>
     <copyright author="OpenStreetMap contributors"><license>https://opendatacommons.org/licenses/odbl/1-0/</license></copyright>
     <link href="https://www.openstreetmap.org/copyright"><text>© OpenStreetMap contributors</text></link>
     <time>2026-07-14T12:17:58.116Z</time>
@@ -20,7 +20,7 @@
   <wpt lat="51.29064" lon="-0.83081"><name>Fleet</name></wpt>
   <wpt lat="51.26836" lon="-1.08726"><name>Basingstoke</name></wpt>
   <trk>
-    <name>South Western Railway — TubeRun</name>
+    <name>South Western Railway — Overland</name>
     <trkseg>
       <trkpt lat="51.503334" lon="-0.113083"><ele>4.75</ele></trkpt>
       <trkpt lat="51.503254" lon="-0.112826"><ele>4.5</ele></trkpt>

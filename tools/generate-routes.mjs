@@ -102,7 +102,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // Route through the given points as hard via-points; returns [[lon,lat(,ele)], ...].
 // Single attempt, throws on failure — routeLine's per-segment fallback handles it.
-const brouter = (points) => brouterRaw(points, PROFILE, { userAgent: "TubeRun/1.0 (line routes)" });
+const brouter = (points) => brouterRaw(points, PROFILE, { userAgent: "Overland/1.0 (line routes)" });
 
 // Whole-line in one request; if any station won't snap, fall back to per-segment
 // so one bad leg (a straight-line placeholder) doesn't lose the whole line.
@@ -156,11 +156,11 @@ function toGpx(line, coords, when) {
       : `      <trkpt lat="${c[1]}" lon="${c[0]}"/>`))
     .join("\n");
   return `<?xml version="1.0" encoding="UTF-8"?>
-<gpx version="1.1" creator="TubeRun route generator" xmlns="http://www.topografix.com/GPX/1/1">
+<gpx version="1.1" creator="Overland route generator" xmlns="http://www.topografix.com/GPX/1/1">
   <metadata>
-    <name>${esc(line.name)} line — TubeRun</name>
+    <name>${esc(line.name)} line — Overland</name>
     <desc>Above-ground running route tracing the ${esc(line.name)} line, station to station. Routed on pavements and footways from OpenStreetMap data (BRouter, ${PROFILE}).</desc>
-    <author><name>TubeRun</name></author>
+    <author><name>Overland</name></author>
     <copyright author="OpenStreetMap contributors"><license>https://opendatacommons.org/licenses/odbl/1-0/</license></copyright>
     <link href="https://www.openstreetmap.org/copyright"><text>© OpenStreetMap contributors</text></link>
     <time>${when}</time>

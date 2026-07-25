@@ -35,7 +35,7 @@ async function overpassJson(query) {
     try {
       const res = await fetch(url, {
         method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded", "User-Agent": "TubeRun/1.0 (running club map)" },
+        headers: { "Content-Type": "application/x-www-form-urlencoded", "User-Agent": "Overland/1.0 (running club map)" },
         body: "data=" + encodeURIComponent(query),
       });
       if (!res.ok) { lastErr = new Error(`${url} ${res.status}`); continue; }

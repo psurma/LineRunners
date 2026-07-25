@@ -1,4 +1,4 @@
-/* Tube Run service worker — offline app shell + runtime caching.
+/* Overland service worker — offline app shell + runtime caching.
  *
  * Strategy:
  *   - navigations   → network-first, fall back to the cached shell (opens offline)
@@ -11,10 +11,10 @@
  * stale-while-revalidate handler caches whatever the page actually loads, so a new
  * ?v= simply becomes a new cache entry. Bump SW_VERSION to purge old caches.
  */
-const SW_VERSION = "v2"; // v2: global cache lookup + runtime ?v= eviction; bumping purges v1's unbounded runtime
-const SHELL = "tuberun-shell-" + SW_VERSION;
-const RUNTIME = "tuberun-runtime-" + SW_VERSION;
-const TILES = "tuberun-tiles-" + SW_VERSION;
+const SW_VERSION = "v3"; // v3: rebrand cache prefix tuberun- -> overland-. v2: global cache lookup + runtime ?v= eviction; bumping purges v1's unbounded runtime
+const SHELL = "overland-shell-" + SW_VERSION;
+const RUNTIME = "overland-runtime-" + SW_VERSION;
+const TILES = "overland-tiles-" + SW_VERSION;
 const TILE_MAX = 500;
 
 // The app can boot offline from these. Cached individually so one 404 can't abort install.
@@ -52,7 +52,7 @@ self.addEventListener("activate", (e) => {
   );
 });
 
-// Path of the SW scope root ("/TubeRun/" in production) — used to spot shell navigations.
+// Path of the SW scope root ("/Overland/" in production) — used to spot shell navigations.
 const SCOPE_PATH = new URL(self.registration.scope).pathname;
 const isTile = (href) => /basemaps\.cartocdn\.com|api\.os\.uk|tiles\.openfreemap\.org|server\.arcgisonline\.com/.test(href);
 

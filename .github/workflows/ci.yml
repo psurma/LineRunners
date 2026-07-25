@@ -2,7 +2,7 @@
 # be bypassed by a fresh clone that never installed .git/hooks/pre-commit, a
 # `git commit --no-verify`, or a second contributor. Mirrors tools/pre-commit
 # minus the file-mutating steps (cache-buster bump). No dependencies to install —
-# TubeRun is dependency-free vanilla JS (no package.json).
+# Overland is dependency-free vanilla JS (no package.json).
 name: CI
 
 on:

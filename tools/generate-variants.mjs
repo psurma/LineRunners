@@ -47,7 +47,7 @@ const PROFILE = "shortest"; // most direct — hugs the line's road corridor, ma
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // Single attempt, throws on failure — the caller's per-segment fallback handles it.
-const brouter = (points) => brouterRaw(points, PROFILE, { userAgent: "TubeRun/1.0 (variant routes)" });
+const brouter = (points) => brouterRaw(points, PROFILE, { userAgent: "Overland/1.0 (variant routes)" });
 
 // Whole path in one request; per-segment fallback so one un-snappable station
 // doesn't lose the whole variant (that leg becomes a straight-line placeholder).
