@@ -2936,8 +2936,10 @@
           <div><b id="fhPct">—</b><span>of the line</span></div>
           <div><b id="fhLeft">${fmtKm(totalKm, 1)}</b><span>to go</span></div>
           <div><b id="fhPace">—</b><span>pace</span></div>
+          <div><b id="fhEta">—</b><span>finish</span></div>
         </div>
         <div class="fh-msg" id="fhMsg">Waiting for GPS — allow location access when asked.</div>
+        <div class="fh-splits" id="fhSplits"></div>
       </div>
       <button type="button" class="follow-stop" id="fhStopBtn" aria-label="Stop following the run">✕ Stop</button>`;
     document.body.appendChild(ov);
@@ -2956,14 +2958,29 @@
     const paceStr = (minPerKm) => fmtPace(distUnit === "mi" ? minPerKm / MI_PER_KM : minPerKm) + " /" + distUnit;
     const youIcon = L.divIcon({ className: "follow-you", html: '<span class="fy-dot"></span>', iconSize: [22, 22], iconAnchor: [11, 11] });
     let youMarker = null, accCircle = null, watchId = null, wakeLock = null, paceEMA = null, last = null, centred = false;
+    let startT = null, passedIdx = -1;
+    const splits = [];
+    const hms = (ms) => { const s = Math.max(0, Math.round(ms / 1000)), h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60; return h ? `${h}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}` : `${m}:${String(sec).padStart(2, "0")}`; };
+    const hhmm = (d) => `${d.getHours()}:${String(d.getMinutes()).padStart(2, "0")}`;
+    const signed = (ms) => (ms >= 0 ? "+" : "−") + hms(Math.abs(ms));
+    const renderSplits = () => {
+      const el = $("fhSplits");
+      if (!splits.length) { el.innerHTML = ""; return; }
+      const rows = splits.slice().reverse().map((s, ri) =>
+        `<tr${ri === 0 ? ' class="sp-new"' : ""}><td>${escapeHtml(s.name)}</td><td>${hms(s.elapsedMs)}</td><td>${hms(s.splitMs)}</td><td class="${s.deltaMs <= 0 ? "sp-ahead" : "sp-behind"}">${signed(s.deltaMs)}</td></tr>`
+      ).join("");
+      el.innerHTML = `<table class="fh-split-tbl"><thead><tr><th>Station</th><th>Time</th><th>Split</th><th>± goal</th></tr></thead><tbody>${rows}</tbody></table>`;
+    };
 
     const onFix = (pos) => {
       const { latitude: lat, longitude: lon, accuracy } = pos.coords;
+      const t = pos.timestamp;
       const p = projectOnPath(lat, lon, path, cum);
       const alongKm = p.alongKm * factor;
       const pct = Math.max(0, Math.min(100, Math.round((p.alongKm / pathRaw) * 100)));
       let nextIdx = stopAt.findIndex((sa) => sa > p.alongKm + 0.03);
       if (nextIdx === -1) nextIdx = stops.length - 1;
+      if (startT == null) { startT = t; passedIdx = Math.max(0, nextIdx - 1); }
       const next = stops[nextIdx];
       const toNext = Math.max(0, stopAt[nextIdx] - p.alongKm) * factor;
       $("fhStop").textContent = next[0];
@@ -2973,14 +2990,28 @@
       // live pace, smoothed; ignore GPS jitter under 5 m or gaps over 5 min
       if (last) {
         const dKm = haversineKm([0, last.lat, last.lon], [0, lat, lon]);
-        const dMin = (pos.timestamp - last.t) / 60000;
+        const dMin = (t - last.t) / 60000;
         if (dKm > 0.005 && dMin > 0 && dMin < 5) {
           const inst = dMin / dKm;
           paceEMA = paceEMA == null ? inst : 0.6 * paceEMA + 0.4 * inst;
           $("fhPace").textContent = paceStr(paceEMA);
         }
       }
-      last = { lat, lon, t: pos.timestamp };
+      last = { lat, lon, t };
+      // Each station is a checkpoint: record a split the moment we reach the next one.
+      let added = false;
+      while (passedIdx + 1 < stops.length && p.alongKm >= stopAt[passedIdx + 1] - 0.03) {
+        passedIdx++;
+        const prevMs = splits.length ? splits[splits.length - 1].elapsedMs : 0;
+        const elapsedMs = t - startT;
+        const expMs = stopAt[passedIdx] * factor * rtPace * 60000;
+        splits.push({ name: stops[passedIdx][0], elapsedMs, splitMs: Math.max(0, elapsedMs - prevMs), deltaMs: elapsedMs - expMs });
+        added = true;
+      }
+      if (added) renderSplits();
+      // Finish ETA from live pace (falls back to the site pace before we're moving).
+      const goPace = paceEMA != null ? paceEMA : rtPace;
+      $("fhEta").textContent = hhmm(new Date(t + Math.max(0, totalKm - alongKm) * goPace * 60000));
       const far = p.off > 0.15;
       $("fhMsg").textContent = far ? `You're ${fmtKm(p.off, 2)} off the route.` : "";
       $("fhMsg").classList.toggle("off", far);
