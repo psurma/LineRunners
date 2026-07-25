@@ -1906,6 +1906,13 @@ body.follow-lock { overflow: hidden; }
 .fh-split-tbl tr.sp-new td { background: #eef3ff; }
 .fh-split-tbl .sp-ahead { color: #1a7a3c; font-weight: 800; }
 .fh-split-tbl .sp-behind { color: #c0261f; font-weight: 800; }
+.fh-share { position: absolute; top: 12px; right: 14px; z-index: 3; font: 800 12px Inter, sans-serif; padding: 5px 13px; border: 1px solid var(--line); border-radius: 999px; background: #fff; color: var(--tfl-blue); cursor: pointer; }
+.fh-share:hover { background: #f2f4f8; }
+.fh-strip { position: relative; height: 24px; margin: 12px 8px 2px; }
+.fh-rail { position: absolute; top: 10px; left: 0; right: 0; height: 4px; border-radius: 2px; background: var(--line); }
+.fh-tick { position: absolute; top: 7px; width: 10px; height: 10px; margin-left: -5px; border-radius: 50%; background: #fff; border: 2px solid var(--line); box-sizing: border-box; }
+.fh-tick.done { background: var(--fc); border-color: var(--fc); }
+.fh-you-dot { position: absolute; top: 3px; width: 18px; height: 18px; margin-left: -9px; border-radius: 50%; background: #1a73e8; border: 3px solid #fff; box-shadow: 0 1px 5px rgba(0, 0, 0, 0.35); transition: left 0.5s ease; z-index: 2; }
 .follow-stop { position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%); z-index: 4020; font: 800 15px Inter, sans-serif; padding: 12px 28px; border: none; border-radius: 999px; background: var(--tfl-red); color: #fff; cursor: pointer; box-shadow: 0 6px 20px rgba(220, 36, 31, 0.38); }
 .follow-stop:hover { background: #b81c17; }
 .follow-you { background: none; border: none; }

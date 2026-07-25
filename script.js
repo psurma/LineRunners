@@ -2925,13 +2925,15 @@
     ov.className = "follow-overlay";
     ov.innerHTML = `
       <div class="follow-map" id="followMap"></div>
-      <div class="follow-hud">
-        <div class="fh-line" style="--fc:${colour};color:${contrastText(colour)}">${escapeHtml(label || "Run")}</div>
+      <div class="follow-hud" style="--fc:${colour}">
+        <button type="button" class="fh-share" id="fhShare" title="Copy a link to follow this run" hidden>Share</button>
+        <div class="fh-line" style="color:${contrastText(colour)}">${escapeHtml(label || "Run")}</div>
         <div class="fh-next">
           <span class="fh-lbl">Next stop</span>
           <span class="fh-stop" id="fhStop">Locating…</span>
           <span class="fh-dist" id="fhDist"></span>
         </div>
+        <div class="fh-strip" id="fhStrip"></div>
         <div class="fh-grid">
           <div><b id="fhPct">—</b><span>of the line</span></div>
           <div><b id="fhLeft">${fmtKm(totalKm, 1)}</b><span>to go</span></div>
@@ -2971,6 +2973,21 @@
       ).join("");
       el.innerHTML = `<table class="fh-split-tbl"><thead><tr><th>Station</th><th>Time</th><th>Split</th><th>± goal</th></tr></thead><tbody>${rows}</tbody></table>`;
     };
+
+    const nStops = stops.length, strip = $("fhStrip");
+    strip.innerHTML = '<div class="fh-rail"></div>' +
+      stops.map((s, i) => `<span class="fh-tick" style="left:${nStops > 1 ? (i / (nStops - 1)) * 100 : 0}%" title="${escapeHtml(s[0])}"></span>`).join("") +
+      '<div class="fh-you-dot" id="fhYouDot" hidden></div>';
+    if (slug) {
+      const shareBtn = $("fhShare"), shareUrl = location.origin + location.pathname + "?follow=" + encodeURIComponent(slug);
+      shareBtn.hidden = false;
+      shareBtn.addEventListener("click", async () => {
+        try {
+          if (navigator.share) await navigator.share({ title: label || "Overland", text: "Follow this run on Overland", url: shareUrl });
+          else { await navigator.clipboard.writeText(shareUrl); shareBtn.textContent = "Copied!"; setTimeout(() => { shareBtn.textContent = "Share"; }, 1600); }
+        } catch (_) { /* share cancelled */ }
+      });
+    }
 
     const onFix = (pos) => {
       const { latitude: lat, longitude: lon, accuracy } = pos.coords;
@@ -3012,6 +3029,11 @@
       // Finish ETA from live pace (falls back to the site pace before we're moving).
       const goPace = paceEMA != null ? paceEMA : rtPace;
       $("fhEta").textContent = hhmm(new Date(t + Math.max(0, totalKm - alongKm) * goPace * 60000));
+      // Slide the progress dot along the strip; fill the ticks we've reached.
+      const prevIdx = Math.max(0, nextIdx - 1), seg = stopAt[nextIdx] - stopAt[prevIdx];
+      const frac = seg > 0 ? Math.min(1, Math.max(0, (p.alongKm - stopAt[prevIdx]) / seg)) : 1;
+      if (nStops > 1) { const yd = $("fhYouDot"); yd.style.left = ((prevIdx + frac) / (nStops - 1)) * 100 + "%"; yd.hidden = false; }
+      strip.querySelectorAll(".fh-tick").forEach((el, i) => el.classList.toggle("done", stopAt[i] <= p.alongKm + 0.03));
       const far = p.off > 0.15;
       $("fhMsg").textContent = far ? `You're ${fmtKm(p.off, 2)} off the route.` : "";
       $("fhMsg").classList.toggle("off", far);
@@ -7250,6 +7272,19 @@
   ].forEach(([name, fn]) => {
     try { fn(); } catch (e) { console.error("init " + name + " failed:", e); }
   });
+
+  // Deep-link: ?follow=<line-slug> opens live follow mode on that line, so a run
+  // can be shared. (It tracks the opener's own GPS — spectating someone else's
+  // live position would need a relay the static site doesn't have.)
+  try {
+    const fslug = new URLSearchParams(location.search).get("follow");
+    if (fslug) {
+      const key = Object.keys(WAYPOINTS).find((k) => lineSlug(k) === fslug);
+      if (key && WAYPOINTS[key].length > 1) {
+        startFollowAlong(WAYPOINTS[key], LINE_COLOURS[key] || "#0019A8", LINE_COLOURS[key] ? key + " line" : key, fslug);
+      }
+    }
+  } catch (_) { /* bad param — ignore */ }
 
   // Register the service worker (offline app shell + installable PWA). Best-effort:
   // a failure must never block the app, so the error is swallowed.
