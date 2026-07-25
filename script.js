@@ -345,9 +345,6 @@
     }
     return { short: "On now", label: "On now", live: true, day };
   }
-  // The meeting point / meet time / leg the card should show *right now*. For a
-  // multi-day run this follows the active day once day 1 is done, so the card
-  // stops advertising a leg the group has already run.
 
   // --- Route normalisation ----------------------------------------------
   // Turn a RUN_PLAN entry into a uniform shape the UI can render.
@@ -371,11 +368,15 @@
     return { ...rich, key: entry.name, badge: `${entry.name} · ${style.label}`, colour: entry.colour || style.colour };
   }
   // WCAG relative luminance, the basis for every contrast decision below.
+  // One implementation, shared by contrastText and lineTextColour.
+  function relLumRgb(r, g, b) {
+    const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; };
+    return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
+  }
   function relLum(hex) {
     let c = String(hex).replace("#", "");
     if (c.length < 6) c = c.split("").map((ch) => ch + ch).join(""); // #fff -> #ffffff
-    const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; };
-    return 0.2126 * f(parseInt(c.slice(0, 2), 16)) + 0.7152 * f(parseInt(c.slice(2, 4), 16)) + 0.0722 * f(parseInt(c.slice(4, 6), 16));
+    return relLumRgb(parseInt(c.slice(0, 2), 16), parseInt(c.slice(2, 4), 16), parseInt(c.slice(4, 6), 16));
   }
   // Readable foreground for a line colour used as a background. Picks whichever
   // of white / near-black actually scores higher, rather than the old YIQ
@@ -395,10 +396,7 @@
     if (lineTextCache[hex]) return lineTextCache[hex];
     const raw = hex.replace("#", "");
     let r = parseInt(raw.slice(0, 2), 16), g = parseInt(raw.slice(2, 4), 16), b = parseInt(raw.slice(4, 6), 16);
-    const lum = () => {
-      const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; };
-      return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
-    };
+    const lum = () => relLumRgb(r, g, b);
     while (1.05 / (lum() + 0.05) < 4.5 && (r || g || b)) {
       r = Math.floor(r * 0.92); g = Math.floor(g * 0.92); b = Math.floor(b * 0.92);
     }
@@ -2575,7 +2573,22 @@
   // follow (routes/<slug>.gpx): the drawn line and every distance follow that real
   // road path. Without a GPX we fall back to straight station hops × the road
   // factor. Used for the next run and, from the Lines table, any line.
+  // Any failure while starting must not leave followActive stuck true, or follow
+  // mode is dead for the rest of the session. Once the overlay is up its own
+  // Escape/stop handlers take over; this covers the setup before that point, and
+  // stops a throw surfacing as an unhandled rejection at the three call sites.
   async function startFollowAlong(stops, colour, label, slug) {
+    try {
+      await startFollowAlongImpl(stops, colour, label, slug);
+    } catch (err) {
+      console.error("follow mode failed to start:", err);
+      followActive = false;
+      document.body.classList.remove("follow-lock");
+      const ov = document.querySelector(".follow-overlay");
+      if (ov) ov.remove();
+    }
+  }
+  async function startFollowAlongImpl(stops, colour, label, slug) {
     if (followActive) return;
     if (!stops || stops.length < 2) return;
     if (!("geolocation" in navigator)) { window.alert("This device can't share its location."); return; }
@@ -4013,6 +4026,12 @@
         // Seed the selection so the re-render surfaces the card, then select it.
         const idx = ROUTES.findIndex((r) => r.name === name);
         if (idx < 0) return;
+        // Search covers the whole library, so a pick can sit outside the active
+        // filter — clear it, or the card never renders and the pick looks ignored.
+        if (!routeMatches(ROUTES[idx])) {
+          routeFilter.type = "all"; routeFilter.dist = "all"; routeFilter.borough = "all";
+          renderFilters();
+        }
         routeMap.current = idx;
         renderRouteCards();
         selectRoute(idx, true);

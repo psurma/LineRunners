@@ -4,7 +4,9 @@
 // entry with the same id in place, a genuinely new one is appended, and any
 // entry already in the region that the generator no longer produces is left
 // exactly as it is. Ids that a hand-written entry above the anchor already owns
-// are skipped rather than appended, so ROUTES can never gain a duplicate id.
+// are skipped rather than appended. (That covers collisions with existing
+// entries; two entries sharing an id *within* the generated file would still
+// both land, so build-book-routes.mjs is responsible for not emitting those.)
 // Field order mirrors the existing entries. Run AFTER build-book-routes.mjs.
 //
 //   node tools/splice-routes.mjs [--dry-run]
@@ -26,9 +28,20 @@ const s = (v) => JSON.stringify(v);
 // A field the generator didn't produce is omitted rather than emitted as the
 // literal `undefined` (JSON.stringify(undefined) is not a string).
 const field = (k, v) => (v === undefined ? "" : `${k}: ${s(v)}, `);
+// Coordinates become executable source, so they are validated as finite numbers
+// and serialised rather than interpolated — a non-numeric value from a garbled
+// upstream response would otherwise close the literal and inject code.
+const coord = (p, id) => {
+  if (!Array.isArray(p) || p.length < 2 || !Number.isFinite(+p[0]) || !Number.isFinite(+p[1])) {
+    console.error(`route ${id}: bad coordinate ${JSON.stringify(p)}; aborting`);
+    process.exit(1);
+  }
+  return `[${+p[0]}, ${+p[1]}]`;
+};
 const entry = (r) => {
-  const path = "[" + r.path.map((p) => `[${p[0]}, ${p[1]}]`).join(", ") + "]";
-  return `    { id: ${s(r.id)}, name: ${s(r.name)}, type: ${s(r.type)}, leg: ${s(r.leg)}, start: ${s(r.start)}, distance: ${s(r.distance)}, ${field("highlights", r.highlights)}${field("suitability", r.suitability)}loop: ${r.loop}, path: ${path} },`;
+  if (!Array.isArray(r.path)) { console.error(`route ${r.id}: path is not an array; aborting`); process.exit(1); }
+  const path = "[" + r.path.map((p) => coord(p, r.id)).join(", ") + "]";
+  return `    { id: ${s(r.id)}, name: ${s(r.name)}, type: ${s(r.type)}, leg: ${s(r.leg)}, start: ${s(r.start)}, distance: ${s(r.distance)}, ${field("highlights", r.highlights)}${field("suitability", r.suitability)}loop: ${r.loop === true}, path: ${path} },`;
 };
 
 const src = readFileSync(SCRIPT, "utf8");

@@ -34,12 +34,15 @@ a { color: inherit; text-decoration: none; }
 
 /* Skip link — the header puts 15 nav links, the search box and four toggles
    ahead of <main>, so keyboard and screen-reader users get a way past them.
-   Off-screen until focused, then pinned above the fixed header (z-index 20). */
+   Off-screen until focused, then pinned above the fixed header. The header's
+   z-index is re-declared to 1000 further down (to clear the Leaflet panes), and
+   both sit at top: 0 — exactly where the first Tab lands — so anything lower
+   here is painted over by the header's blurred background. */
 .skip-link {
   position: absolute;
   left: -9999px;
   top: 0;
-  z-index: 100;
+  z-index: 1001;
   padding: 12px 18px;
   background: var(--tfl-blue);
   color: #fff;
@@ -138,44 +141,8 @@ main:focus { outline: none; }
 @media (min-width: 981px) {
   .hero-inner { display: flex; align-items: center; gap: clamp(24px, 5vw, 72px); }
   .hero-copy { flex: 1 1 auto; min-width: 0; }
-  .hero-card { flex: 0 0 340px; }
 }
-.hero-card {
-  background: rgba(10, 14, 42, 0.55);
-  border: 1px solid rgba(255, 255, 255, 0.22);
-  border-left: 5px solid var(--run-col, var(--tfl-red));
-  border-radius: 14px;
-  padding: 20px 22px;
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
-  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.35);
-}
-@media (max-width: 980px) { .hero-card { margin-top: 34px; max-width: 480px; } }
-.hc-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
-.hc-cd { font-size: 13px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; color: #ffd34e; white-space: nowrap; }
-.hc-when { font-size: 14px; font-weight: 700; color: #a9b6ff; margin-bottom: 4px; }
-.hc-status { font-size: 13.5px; font-weight: 700; color: #cdd6ff; margin-bottom: 10px; }
-.hc-status.is-live { color: #4fe08a; }
-/* Live "on now" accent: bright green on the dark hero, dark green on the light
-   next-run card — both clear WCAG AA on their own backgrounds. */
-.hc-cd.is-live { color: #4fe08a; }
-.date-badge .cd.is-live { color: #147a3b; font-weight: 800; }
-.hc-status.is-live::before, .hc-cd.is-live::before, .date-badge .cd.is-live::before {
-  content: ""; display: inline-block; width: 8px; height: 8px; margin-right: 6px;
-  border-radius: 50%; background: currentColor; box-shadow: 0 0 8px 1px currentColor;
-  vertical-align: middle;
-}
-@media (prefers-reduced-motion: no-preference) {
-  .hc-status.is-live::before, .hc-cd.is-live::before, .date-badge .cd.is-live::before {
-    animation: live-pulse 1.4s ease-in-out infinite;
-  }
-  @keyframes live-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
-}
-.hc-leg { font-size: clamp(19px, 2.4vw, 23px); font-weight: 800; letter-spacing: -0.3px; margin-bottom: 10px; }
-.hc-meta { display: flex; flex-direction: column; gap: 4px; font-size: 14px; color: #dfe4ff; margin-bottom: 10px; }
-.hc-meta a { color: #fff; text-decoration: underline; text-decoration-color: rgba(255, 255, 255, 0.45); text-underline-offset: 3px; }
-.hc-bail { font-size: 13px; line-height: 1.45; color: #b9c2ee; margin: 0 0 14px; }
-.hc-more { display: inline-block; font-size: 14px; font-weight: 700; color: #ffd34e; }
+@media (max-width: 980px) { }
 
 /* Night lines: glowing tube lines in official colours with station ticks
    and white "train" dashes gliding along them. */
@@ -290,70 +257,6 @@ section { max-width: var(--max); margin: 0 auto; padding: clamp(48px, 8vw, 88px)
   margin-bottom: 8px;
 }
 .section-sub { color: var(--muted); margin-bottom: 28px; max-width: 620px; }
-
-/* ---------- Next run card ---------- */
-.next-card {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: clamp(20px, 4vw, 40px);
-  align-items: center;
-  background: var(--card);
-  border: 1px solid var(--line);
-  border-left: 10px solid var(--tfl-blue);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
-  padding: clamp(22px, 4vw, 36px);
-}
-.date-badge {
-  text-align: center;
-  min-width: 118px;
-  padding: 16px 18px;
-  border-radius: 14px;
-  background: var(--paper);
-}
-.date-badge .dow { font-size: 13px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); }
-.date-badge .day { font-size: 52px; font-weight: 800; line-height: 1; color: var(--tfl-blue); }
-.date-badge .mon { font-size: 15px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; }
-.date-badge .cd { margin-top: 8px; font-size: 12px; color: var(--muted); }
-
-.next-body h3 { font-size: clamp(22px, 3vw, 30px); font-weight: 800; margin-bottom: 6px; }
-.line-tag {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  font-weight: 700;
-  font-size: 13px;
-  color: #fff;
-  padding: 5px 14px;
-  border-radius: 30px;
-  margin-bottom: 14px;
-}
-.next-meta { display: flex; flex-wrap: wrap; gap: 18px 28px; color: var(--muted); font-size: 15px; margin-top: 10px; }
-.next-meta strong { color: var(--ink); display: block; font-size: 13px; text-transform: uppercase; letter-spacing: 1px; }
-.next-body .route-link { margin-top: 14px; }
-.meet-link { color: var(--tfl-blue); font-weight: 600; border-bottom: 1px solid currentColor; }
-.meet-link:hover { color: var(--tfl-red); }
-
-/* ---------- Weather chip ---------- */
-.weather {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-top: 16px;
-  padding: 12px 18px;
-  background: var(--card);
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  font-size: 15px;
-}
-.weather:empty { display: none; }
-.wx-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px; }
-.weather-multi .wx-row + .wx-row { border-top: 1px solid var(--line); padding-top: 8px; }
-.wx-icon { font-size: 22px; }
-.wx-main { font-weight: 700; }
-.wx-sub { color: var(--muted); }
-.wx-tag { margin-left: auto; font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; }
-.wx-soft { color: var(--muted); }
 
 /* ---------- Plan / distance calculator ---------- */
 .line-diagram {
@@ -580,19 +483,6 @@ body.strip-drag { user-select: none; -webkit-user-select: none; }
 .cr-time { color: var(--ink); }
 .cr-detail { color: #2b3140; margin-top: 4px; font-weight: 600; }
 .cr-note { color: var(--muted); font-size: 13px; margin-top: 8px; }
-
-/* ---------- Connect (socials) ---------- */
-.connect {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 12px;
-  margin-top: 30px;
-}
-.connect-label { color: var(--muted); font-size: 14px; margin-right: 4px; }
-.social-links { display: flex; flex-wrap: wrap; gap: 10px; }
-.btn-social { padding: 10px 20px; font-size: 14px; box-shadow: none; }
-.btn-social:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(16, 19, 28, 0.18); }
 
 /* ---------- Friends / other clubs ---------- */
 .clubs-group {
@@ -1175,7 +1065,7 @@ tr.ls-open .ls-caret { transform: rotate(90deg); }
 .sl-route.done .sl-route-head:hover { background: rgba(16, 160, 72, 0.09); }
 @media (max-width: 560px) { .sl-route-meta { display: none; } }
 
-/* Download-GPX links (line-by-line, planner, journey board, network map) */
+/* Download-GPX links (line-by-line, planner, network map) */
 .gpx-dl { display: inline-block; font-size: 12px; font-weight: 700; color: #0019a8; background: #eef1ff; border: 1px solid #cdd6ff; border-radius: 999px; padding: 2px 10px; text-decoration: none; white-space: nowrap; cursor: pointer; }
 .gpx-dl:hover { background: #dfe5ff; }
 .ls-gpx-row { margin: 0 0 10px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
@@ -1184,7 +1074,6 @@ tr.ls-open .ls-caret { transform: rotate(90deg); }
 .ls-reverse.on { background: #0019a8; border-color: #0019a8; color: #fff; }
 .ls-follow { font: 700 12px Inter, sans-serif; color: #fff; background: var(--tfl-blue); border: 1px solid var(--tfl-blue); border-radius: 999px; padding: 3px 12px; cursor: pointer; white-space: nowrap; transition: filter 0.12s; }
 .ls-follow:hover { filter: brightness(1.15); }
-.jb-gpx { vertical-align: middle; margin-left: 8px; font-size: 11px; padding: 1px 9px; }
 .plan-gpx-row { margin: 14px 0 0; color: var(--muted); font-size: 14px; }
 .geo-variant .geo-variant-row .geo-gpx { flex: none; width: auto; height: auto; line-height: normal; display: inline-flex; align-items: center; }
 
@@ -1199,7 +1088,6 @@ tr.ls-open .ls-caret { transform: rotate(90deg); }
 @media (max-width: 560px) { .ls-map { height: 240px; } }
 .ls-foot { margin-top: 14px; color: var(--muted); font-size: 13px; }
 
-
 /* ---------- Responsive ---------- */
 @media (max-width: 720px) {
   .site-header { flex-wrap: wrap; }
@@ -1209,12 +1097,10 @@ tr.ls-open .ls-caret { transform: rotate(90deg); }
   }
   .nav::-webkit-scrollbar { display: none; }
   .nav a { white-space: nowrap; font-size: 13px; padding: 6px 10px; border-radius: 999px; }
-  .next-card { grid-template-columns: 1fr; }
   .about-grid { grid-template-columns: 1fr; }
   .run-row { grid-template-columns: 76px 12px 1fr; }
   .run-row .r-dist { grid-column: 3; color: var(--tfl-blue); }
   .calc { grid-template-columns: 1fr; }
-  .wx-tag { margin-left: 0; }
   .nh-grid { grid-template-columns: 1fr; }
   .live-btns { margin-left: 0; }
 }
@@ -1222,22 +1108,11 @@ tr.ls-open .ls-caret { transform: rotate(90deg); }
 /* Underground-style display type (Hammersmith One, Johnston-inspired) for headings and brand
    marks; body text stays Inter for legibility. Single weight, so pin 400 to avoid faux-bold. */
 .brand-word, .eyebrow, .hero h1, .section-title,
-.next-body h3, .nh-col h3, .route-card h3,
-.strip-line, .line-tag, .cr-km {
+.nh-col h3, .route-card h3,
+.strip-line, .cr-km {
   font-family: var(--font-display);
   font-weight: 400;
 }
-
-/* Multi-day run emphasis on the next-run card */
-.multiday-badge {
-  display: inline-block; margin-left: 8px; vertical-align: middle;
-  background: var(--tfl-red); color: #fff; font: 700 11px/1 Inter, sans-serif;
-  text-transform: uppercase; letter-spacing: 0.6px; padding: 6px 10px; border-radius: 20px;
-}
-.nd-days { list-style: none; margin: 16px 0 6px; display: grid; gap: 8px; }
-.nd-days li { padding: 10px 14px; background: var(--paper); border-left: 4px solid var(--run-col, var(--tfl-blue)); border-radius: 8px; }
-.nd-days li strong { display: block; font-size: 14px; margin-bottom: 2px; }
-.nd-days li span { font-size: 13px; color: var(--muted); }
 
 /* Tube-line-coloured accent bar under every section heading */
 .section-title { position: relative; }
@@ -1449,8 +1324,8 @@ body {
 
 /* Premium Johnston-style display type: tighter tracking, real weights */
 .brand-word, .eyebrow, .hero h1, .section-title,
-.next-body h3, .nh-col h3, .route-card h3,
-.strip-line, .line-tag, .cr-km {
+.nh-col h3, .route-card h3,
+.strip-line, .cr-km {
   font-family: var(--font-display);
   font-weight: 800;
 }
@@ -1570,43 +1445,6 @@ body {
   border-radius: 2px;
   margin-top: 12px;
   background: var(--tfl-accent);
-}
-
-/* ---------- Next run card ---------- */
-.next-card {
-  border: 1px solid var(--line);
-  border-left: 8px solid var(--tfl-blue);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
-  background:
-    linear-gradient(180deg, #ffffff, #fbfcff);
-}
-.date-badge {
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: linear-gradient(180deg, #f3f6ff, #e9eefc);
-  box-shadow: inset 0 1px 0 #fff;
-}
-.date-badge .day {
-  font-family: var(--font-display);
-  font-weight: 900;
-  color: var(--tfl-blue);
-}
-.line-tag {
-  border-radius: 6px;
-  letter-spacing: 0.3px;
-  box-shadow: 0 4px 10px -4px rgba(13, 18, 32, 0.35);
-  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.18);
-}
-.multiday-badge {
-  background: var(--tfl-red);
-  border-radius: 6px;
-  box-shadow: 0 4px 10px -4px rgba(220, 36, 31, 0.6);
-}
-.nd-days li {
-  background: #f5f7fc;
-  border-radius: 8px;
-  box-shadow: inset 0 1px 0 #fff;
 }
 
 /* ---------- Route cards ---------- */
@@ -1778,8 +1616,6 @@ body {
 /* Scroll-spy: highlight the nav link for the section you're viewing */
 .nav a.active { color: var(--tfl-blue); font-weight: 800; background: rgba(0, 25, 168, 0.09); }
 
-/* Next-run compass direction chip */
-.run-dir { display: inline-flex; align-items: center; gap: 5px; font-weight: 700; font-size: 13px; color: var(--tfl-blue); background: rgba(0, 25, 168, 0.08); padding: 4px 11px; border-radius: 20px; margin-left: 8px; vertical-align: middle; }
 /* Route ideas: mark-as-run button + sightseeing badges */
 .rc-mark { font: 700 13px Inter, sans-serif; padding: 6px 13px; border-radius: 20px; border: 1px solid var(--tfl-blue); background: #fff; color: var(--tfl-blue); cursor: pointer; transition: all 0.12s; }
 .rc-mark:hover { background: var(--tfl-blue); color: #fff; }
@@ -1790,76 +1626,6 @@ body {
 .route-arrow { background: none; border: none; }
 .route-arrow span { display: block; font-size: 18px; line-height: 22px; text-align: center; text-shadow: 0 0 3px #fff, 0 0 3px #fff; }
 .tm-eta { color: var(--tfl-blue); font-weight: 700; }
-
-/* Journey board — vertical National-Rail-style calling points */
-.journey-board:empty { display: none; }
-.journey-board { margin-top: 22px; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 20px clamp(16px, 3vw, 26px); }
-.jb-title { font-size: 20px; font-weight: 800; }
-.jb-sub { font-weight: 700; font-size: 14px; margin-bottom: 12px; }
-.jb-list { list-style: none; margin: 0; padding: 0; max-height: 560px; overflow-y: auto; }
-.jb-stop, .jb-cols { position: relative; display: grid; grid-template-columns: 26px 1fr 72px 74px 84px minmax(120px, auto); align-items: start; gap: 10px; padding: 7px 0; }
-.jb-stop::before { content: ""; position: absolute; left: 11px; top: 0; bottom: 0; width: 3px; background: var(--jb-col); opacity: 0.35; }
-.jb-stop:first-child::before { top: 50%; }
-.jb-stop:last-child::before { bottom: 50%; }
-.jb-dot { position: relative; z-index: 1; width: 14px; height: 14px; margin: 3px 5px; border-radius: 50%; border: 3px solid; background: #fff; }
-.jb-name { font-weight: 700; font-size: 15px; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
-.jb-time { font-weight: 700; font-size: 13px; color: var(--muted); white-space: nowrap; text-align: right; padding-top: 2px; }
-.jb-end .jb-name { font-weight: 800; }
-.jb-end .jb-time { color: var(--tfl-blue); }
-.jb-foot { margin-top: 12px; font-size: 12px; color: var(--muted); }
-
-/* Journey board: highlight the row under the cursor for easier time-reading */
-.jb-stop { border-radius: 8px; transition: background 0.1s; }
-.jb-stop:hover { background: rgba(0, 25, 168, 0.06); }
-.jb-stop:hover .jb-time { color: var(--tfl-blue); }
-
-/* Journey board: per-day sections for multi-day events */
-.jb-section + .jb-section { margin-top: 22px; padding-top: 20px; border-top: 1px dashed var(--line); }
-.jb-day { font-weight: 800; font-size: 16px; margin-bottom: 2px; }
-
-/* Journey board extra columns (leg / elapsed / from start) */
-.jb-cols { padding: 2px 0 6px; font-size: 11px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); border-bottom: 1px solid var(--line); margin-bottom: 4px; }
-.jb-cols span:last-child { text-align: right; }
-.jb-leg, .jb-elapsed, .jb-dist { font-size: 13px; font-weight: 600; color: var(--muted); padding-top: 2px; white-space: nowrap; }
-@media (max-width: 720px) {
-  .jb-stop, .jb-cols { grid-template-columns: 26px 1fr minmax(110px, auto); }
-  .jb-leg, .jb-elapsed, .jb-dist, .jb-cols span:nth-child(3), .jb-cols span:nth-child(4), .jb-cols span:nth-child(5) { display: none; }
-}
-
-/* Journey board: a finished day collapses to an expandable summary */
-.jb-done > .jb-summary { cursor: pointer; display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; padding: 4px 0; list-style: none; }
-.jb-done > .jb-summary::-webkit-details-marker { display: none; }
-.jb-done > .jb-summary::before { content: "▸"; align-self: center; color: var(--muted); font-size: 12px; transition: transform 0.15s; }
-.jb-done[open] > .jb-summary::before { transform: rotate(90deg); }
-.jb-summary .jb-day, .jb-summary .jb-sub { margin-bottom: 0; }
-.jb-done-tag { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; color: #147a3b; }
-.jb-done[open] .jb-cols { margin-top: 8px; }
-
-/* Journey board: live "the group is roughly here now" marker on the active day */
-.jb-now { background: color-mix(in srgb, var(--jb-col) 9%, transparent); }
-.jb-now .jb-dot { background: var(--jb-col); }
-.jb-now .jb-name::after { content: "group ~here now"; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; color: var(--jb-text); }
-@media (prefers-reduced-motion: no-preference) {
-  .jb-now .jb-dot { animation: jb-now-pulse 1.6s ease-in-out infinite; }
-}
-@keyframes jb-now-pulse {
-  0% { box-shadow: 0 0 0 2px color-mix(in srgb, var(--jb-col) 45%, transparent); }
-  70% { box-shadow: 0 0 0 9px color-mix(in srgb, var(--jb-col) 0%, transparent); }
-  100% { box-shadow: 0 0 0 2px color-mix(in srgb, var(--jb-col) 0%, transparent); }
-}
-
-/* "Follow live" button — links to a runner's Garmin LiveTrack during a run */
-.live-follow { display: inline-flex; align-items: center; gap: 8px; margin: 12px 0 2px; padding: 9px 15px; border-radius: 999px; background: #c1121f; color: #fff; font-weight: 800; font-size: 14px; text-decoration: none; box-shadow: 0 2px 10px rgba(193, 18, 31, 0.35); }
-.live-follow:hover { background: #a10f1a; }
-.live-follow-dot { width: 9px; height: 9px; border-radius: 50%; background: #fff; flex: none; }
-@media (prefers-reduced-motion: no-preference) {
-  .live-follow-dot { animation: live-follow-pulse 1.3s ease-in-out infinite; }
-}
-@keyframes live-follow-pulse {
-  0% { box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.75); }
-  70% { box-shadow: 0 0 0 7px rgba(255, 255, 255, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(255, 255, 255, 0); }
-}
 
 /* Header km/mi toggle */
 .unit-toggle { display: inline-flex; border: 1.5px solid var(--tfl-blue); border-radius: 20px; overflow: hidden; flex: none; }

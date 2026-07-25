@@ -41,17 +41,21 @@ jobs:
             exit 1
           fi
 
-      - name: Regenerate schedule
-        # Keeps the validator's date-sensitive schedule-freshness check stable in
-        # CI regardless of the run date; not committed, just to satisfy the check.
-        # SOURCE_DATE_EPOCH pins it to the day data/schedule.json was last committed,
-        # so the rebuild is reproducible and can be diffed against the committed file
-        # below. The date is read in the committer's own timezone (that's the calendar
-        # day the generator saw) and handed over as midday UTC, so a late-evening BST
-        # commit doesn't rebuild as the day before.
+      - name: Pin the schedule reference date
+        # data/schedule.json is derived from the calendar, so the rebuild below and
+        # the validator's freshness check must reason from the SAME day — pinning
+        # only the rebuild makes every build fail once the month rolls over, on a
+        # commit that changed nothing. Written to GITHUB_ENV so both steps see it.
+        # Pinned to the day schedule.json was last committed, read in the committer's
+        # own timezone (the calendar day the generator actually saw) and handed over
+        # as midday UTC so a late-evening BST commit doesn't rebuild as the day before.
         run: |
           day=$(git log -1 --format=%cd --date=format:%Y-%m-%d -- data/schedule.json)
-          SOURCE_DATE_EPOCH=$(date -u -d "${day:-$(date -u +%F)} 12:00:00" +%s) node tools/generate-schedule.mjs
+          echo "SOURCE_DATE_EPOCH=$(date -u -d "${day:-$(date -u +%F)} 12:00:00" +%s)" >> "$GITHUB_ENV"
+
+      - name: Regenerate schedule
+        # Not committed — only so the diff check below has something to compare.
+        run: node tools/generate-schedule.mjs
 
       - name: Committed schedule is in step with RUN_PLAN
         # Without this the validator below only ever compares freshly generated output

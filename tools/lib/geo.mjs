@@ -6,9 +6,12 @@
 //   distM(a, b)   metres
 //   distKm(a, b)  kilometres
 //
-// Both fold the radius into a single multiply, which keeps distKm bit-identical
-// to the `12742 * asin(…)` and `R * 2 * asin(…)` forms it replaces: the callers'
-// generated artifacts don't shift by an ulp.
+// Both fold the radius into a single multiply. That is bit-identical to the
+// callers that already folded it (validate-data, build-shoreditch-10k). Two
+// callers instead wrote `(d * Math.PI) / 180` where this writes `d * (PI/180)`,
+// which is not the same in IEEE-754: measured over the real orbital geometry,
+// 6253 of 19124 segments differ, by at most 1.11e-16 km. Both round through
+// `+km.toFixed(1)` before they are written, so no generated artifact shifts.
 
 const toR = Math.PI / 180;
 
