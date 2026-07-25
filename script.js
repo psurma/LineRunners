@@ -11,11 +11,11 @@
 
   // --- Your links --------------------------------------------------------
   const CONNECT = {
-    strava: "https://www.strava.com/clubs/ldntuberun",
-    instagram: "https://www.instagram.com/ldntuberun",
-    facebook: "https://www.facebook.com/LdnTubeRun/",
-    twitter: "https://twitter.com/LdnTubeRun",
-    eventbrite: "https://www.eventbrite.co.uk/o/london-tube-run-15271012006",
+    strava: "",
+    instagram: "",
+    facebook: "",
+    twitter: "",
+    eventbrite: "",
     whatsapp: "", // TODO: paste the WhatsApp group invite link when ready
   };
 

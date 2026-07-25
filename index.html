@@ -5,45 +5,45 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https://*.basemaps.cartocdn.com https://api.os.uk https://tiles.openfreemap.org https://server.arcgisonline.com; connect-src 'self' https://api.open-meteo.com https://api.tfl.gov.uk https://tiles.openfreemap.org https://server.arcgisonline.com https://get.geojs.io; object-src 'none'; base-uri 'self'; form-action 'none'; frame-src 'none'" />
   <title>Overland &middot; Running London's transport network, above ground</title>
-  <meta name="description" content="Overland is a London running group that runs the city's transport network above ground — Tube lines on the first Sunday of every month, plus National Rail lines, bus routes, rivers, canals and parks." />
+  <meta name="description" content="Overland is a guide to running London's whole transport network above ground — every Tube, Overground, DLR, Elizabeth and National Rail line, plus bus routes, trams, the Superloop, the London LOOP and the Capital Ring." />
   <link rel="canonical" href="https://psurma.github.io/Overland/" />
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="Overland" />
   <meta property="og:url" content="https://psurma.github.io/Overland/" />
   <meta property="og:title" content="Overland · Running London's transport network, above ground" />
-  <meta property="og:description" content="A free, social London running club that traces the transport network above ground — one Tube line a month, plus National Rail lines, bus routes, river, canal and park runs." />
+  <meta property="og:description" content="Your guide to running London's whole transport network above ground — every Tube, Overground, DLR, Elizabeth and rail line, plus buses, trams, the Superloop, the London LOOP and the Capital Ring." />
   <meta property="og:image" content="https://psurma.github.io/Overland/img/icon-512.png" />
   <meta property="og:image:width" content="512" />
   <meta property="og:image:height" content="512" />
   <meta name="twitter:card" content="summary" />
   <meta name="twitter:title" content="Overland · Running London's transport network, above ground" />
-  <meta name="twitter:description" content="A free, social London running club that traces the transport network above ground — one Tube line a month, plus National Rail lines, bus routes, river, canal and park runs." />
+  <meta name="twitter:description" content="Your guide to running London's whole transport network above ground — every Tube, Overground, DLR, Elizabeth and rail line, plus buses, trams, the Superloop, the London LOOP and the Capital Ring." />
   <meta name="twitter:image" content="https://psurma.github.io/Overland/img/icon-512.png" />
   <link rel="alternate" type="text/markdown" href="llms.txt" title="llms.txt — machine-readable guide for AI agents" />
   <link rel="manifest" href="site.webmanifest" />
   <meta name="theme-color" content="#f7f8fa" />
   <link rel="icon" href="img/favicon-32.png" sizes="32x32" type="image/png" />
-  <link rel="icon" href="img/icon.svg" type="image/svg+xml" />
+  <link rel="icon" href="img/logo.svg" type="image/svg+xml" />
   <link rel="apple-touch-icon" href="img/apple-touch-icon.png" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-title" content="Overland" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-  <link rel="stylesheet" href="vendor/fonts/fonts.css?v=334" />
-  <link rel="stylesheet" href="vendor/leaflet/leaflet.css?v=334" />
-  <script src="vendor/leaflet/leaflet.js?v=334" defer></script>
-  <link rel="stylesheet" href="style.css?v=334" />
+  <link rel="stylesheet" href="vendor/fonts/fonts.css?v=335" />
+  <link rel="stylesheet" href="vendor/leaflet/leaflet.css?v=335" />
+  <script src="vendor/leaflet/leaflet.js?v=335" defer></script>
+  <link rel="stylesheet" href="style.css?v=335" />
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
     "@graph": [
       {
-        "@type": "SportsClub",
+        "@type": "WebApplication",
         "name": "Overland",
-        "sport": "Running",
+        "applicationCategory": "SportsApplication",
         "url": "https://psurma.github.io/Overland/",
         "logo": "https://psurma.github.io/Overland/img/icon-512.png",
-        "description": "A free, social London running club that runs the city's transport network above ground — one Tube line a month, plus National Rail lines, bus routes, disused railways, rivers, canals and parks.",
+        "description": "A guide to running London's whole transport network above ground — every Tube, Overground, DLR, Elizabeth and National Rail line, plus bus routes, trams, the Superloop, the London LOOP and the Capital Ring.",
         "areaServed": { "@type": "City", "name": "London", "sameAs": "https://en.wikipedia.org/wiki/London" },
         "isAccessibleForFree": true
       },
@@ -60,11 +60,10 @@
 <body>
   <header class="site-header">
     <a class="brand" href="#top" aria-label="Overland — home">
-      <img class="brand-icon" src="img/logo.png" alt="" width="42" height="42" />
+      <img class="brand-icon" src="img/logo.svg" alt="" width="42" height="42" />
       <span class="brand-word">Overland</span>
     </a>
     <nav class="nav">
-      <a href="#next">Next run</a>
       <a href="#plan">Plan</a>
       <a href="#schedule">Schedule</a>
       <a href="#network">Map</a>
@@ -79,7 +78,7 @@
       <a href="#capring">Ring</a>
       <a href="#collector">Progress</a>
       <a href="#clubs">Clubs</a>
-      <a href="#join">Come run</a>
+      <a href="#join">Get started</a>
     </nav>
     <div class="hdr-search">
       <input id="siteSearch" list="siteSearchList" placeholder="Search station, line, route…" autocomplete="off" aria-label="Search stations, lines and routes" />
@@ -104,19 +103,19 @@
     <section class="hero">
       <div class="hero-inner">
         <div class="hero-copy">
-          <p class="eyebrow">London &middot; Free social running club &middot; #TubeRun</p>
-          <h1>We run the Tube.<br /><span>Above ground.</span></h1>
+          <p class="eyebrow">London &middot; The whole network, above ground &middot; free</p>
+          <h1>Run every line.<br /><span>Above ground.</span></h1>
           <p class="lede">
-            Overland traces London's transport network on foot &mdash; Tube lines above the tunnels
-            first and foremost, plus rail lines out of town, bus routes, rivers, canals and parks.
-            One line at a time, once a month (sometimes more), rain or shine. Free, sociable, all paces welcome.
+            Overland maps London's whole transport network above ground and helps you run it.
+            Every Tube, Overground, DLR and Elizabeth line, the National Rail routes out of town,
+            the trams and the Superloop, plus the London LOOP and Capital Ring &mdash; traced street
+            by street. Pick a line, see the distance and route, and follow it end to end, on foot or by bike.
           </p>
           <div class="hero-cta">
-            <a class="btn btn-primary" href="#next">See the next run</a>
-            <a class="btn btn-ghost" href="#join">Join the group</a>
+            <a class="btn btn-primary" href="#network">Explore the map</a>
+            <a class="btn btn-ghost" href="#stats">Every line</a>
           </div>
         </div>
-        <aside class="hero-card" id="heroCard" aria-label="Next run at a glance" hidden></aside>
       </div>
       <div class="hero-night" aria-hidden="true">
         <div class="tline" style="--c:#ffd329; top:6%; --t:5.2s; --d:-1.4s"></div>
@@ -157,16 +156,6 @@
           </g>
         </defs>
       </svg>
-    </section>
-
-    <!-- NEXT RUN -->
-    <section id="next" class="next">
-      <h2 class="section-title">Next run</h2>
-      <div class="next-card" id="nextCard">
-        <!-- filled by script.js -->
-      </div>
-      <div class="weather" id="weather" aria-live="polite"></div>
-      <div id="journeyBoard" class="journey-board"></div>
     </section>
 
     <!-- PLAN YOUR DISTANCE -->
@@ -406,25 +395,26 @@
       <div class="about-grid">
         <div class="about-text">
           <p>
-            It started with a simple idea: what does the Underground actually look like
-            from up top? Each month we pick a line &mdash; or a stretch of one &mdash; and
-            run it end to end, staying as close to the tunnels and tracks as the streets allow.
+            It started with a simple question: what does the Underground actually look like
+            from up top? Overland answers it for the whole network &mdash; every line traced
+            above ground, station to station, on routes that hug the tunnels and tracks as
+            closely as the streets allow.
           </p>
           <p>
-            We stop at the stations, learn a bit of the history, and finish somewhere with
-            a good coffee (and usually a pub nearby). It's part run, part exploration of the
-            city most Londoners only ever see from a platform.
+            Run it, walk it or ride it: pick a line, see the distance, the elevation and the
+            route, then follow it end to end past every station. It's part run, part exploration
+            of the city most Londoners only ever see from a platform.
           </p>
           <ul class="facts">
-            <li><strong>When</strong> First Sunday of every month, 09:00</li>
-            <li><strong>Distance</strong> Typically 8&ndash;16 km, split into walk-friendly legs</li>
-            <li><strong>Pace</strong> Relaxed &mdash; no one gets left behind</li>
-            <li><strong>Cost</strong> Free. Bring your Oyster for the ride home.</li>
+            <li><strong>When</strong> Whenever you like &mdash; it's self-guided, not a fixture</li>
+            <li><strong>Distance</strong> From a 3 km branch to a 30 km main line, split into station legs</li>
+            <li><strong>Pace</strong> Yours &mdash; walk it, jog it or race it</li>
+            <li><strong>Cost</strong> Free. No fare, no sign-up.</li>
           </ul>
         </div>
         <div class="about-side">
-          <div class="stat"><span class="stat-num">11</span><span class="stat-label">lines to conquer</span></div>
-          <div class="stat"><span class="stat-num">40+</span><span class="stat-label">regular runners</span></div>
+          <div class="stat"><span class="stat-num">9</span><span class="stat-label">networks above ground</span></div>
+          <div class="stat"><span class="stat-num">11</span><span class="stat-label">Tube lines to trace</span></div>
           <div class="stat"><span class="stat-num">272</span><span class="stat-label">stations out there</span></div>
         </div>
       </div>
@@ -434,8 +424,8 @@
     <section id="clubs" class="clubs">
       <h2 class="section-title">Friends &amp; other London clubs</h2>
       <p class="section-sub">
-        Overland is a free, social, once-a-month thing &mdash; if you've caught the bug and want to run
-        more often, London's spoilt for choice. Here are some brilliant clubs and crews worth a look.
+        Overland is a free, self-guided guide &mdash; if you'd rather run with people, London's spoilt
+        for choice. Here are some brilliant clubs and crews worth a look.
       </p>
 
       <h3 class="clubs-group">Social run crews</h3>
@@ -469,30 +459,24 @@
 
     <!-- JOIN -->
     <section id="join" class="join">
-      <h2 class="section-title">Come run with us</h2>
+      <h2 class="section-title">Get out there</h2>
       <p class="section-sub">
-        There's nothing to join and nothing to pay &mdash; just turn up on the day. We post the
-        meeting point and line for every run right here and across our socials, so follow whichever
-        you like, then come say hi at the roundel.
+        There's nothing to join and nothing to pay. Pick a line, send the route to your watch,
+        and go run London above ground &mdash; your own way, at your own pace.
       </p>
       <div class="join-cta">
-        <a class="btn btn-primary" href="#next">See the next run</a>
+        <a class="btn btn-primary" href="#network">Explore the map</a>
         <a class="btn btn-outline" href="#newhere">New here? Start here</a>
-      </div>
-
-      <div class="connect">
-        <span class="connect-label">Keep up with us on</span>
-        <div class="social-links" id="socialLinks"></div>
       </div>
     </section>
   </main>
 
   <footer class="site-footer">
-    <p>Overland &middot; a community running group in London.</p>
+    <p>Overland &middot; a guide to running London above ground.</p>
     <p class="fine">Not affiliated with Transport for London. Roundel-inspired branding used with affection, not endorsement.</p>
     <p class="fine"><span id="pageVersion" class="page-version"></span></p>
   </footer>
 
-  <script src="script.js?v=334" defer></script>
+  <script src="script.js?v=335" defer></script>
 </body>
 </html>
