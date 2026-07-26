@@ -272,27 +272,6 @@ try {
       "windrush.gpx": [
         [51.511282, -0.056929, 800, "Thames Tunnel, Wapping to Rotherhithe"],
       ],
-      // TODO: not water crossings — one contiguous stretch (Farningham Road to
-      // Sole Street, over the North Downs) was spliced in at 5-decimal precision
-      // and ~245 m point spacing, against ~32 m for the rest of the file. The
-      // alignment looks right, the sampling doesn't. Re-trace that stretch.
-      "southeastern.gpx": [
-        [51.3894, 0.03525, 900, "TODO coarse spliced stretch"],
-        [51.36489, 0.11072, 1150, "TODO coarse spliced stretch"],
-        [51.35573, 0.12601, 800, "TODO coarse spliced stretch"],
-        [51.34508, 0.13887, 700, "TODO coarse spliced stretch"],
-        [51.33925, 0.14535, 650, "TODO coarse spliced stretch"],
-        [51.33214, 0.14849, 1150, "TODO coarse spliced stretch"],
-      ],
-      // TODO: not water crossings either — dense (1-60 m) geometry either side
-      // of each, so these are skipped waypoints leaving a straight-line jump,
-      // not sparse sampling. Re-trace those four legs.
-      "southern.gpx": [
-        [51.431804, -0.103927, 1700, "TODO skipped waypoint, Streatham to Penge"],
-        [51.42445, -0.08384, 1100, "TODO skipped waypoint, Penge to Birkbeck"],
-        [50.841766, -0.85518, 750, "TODO skipped waypoint, Chichester to Fishbourne"],
-        [50.841216, -1.025612, 650, "TODO skipped waypoint, Havant"],
-      ],
     };
     function termini(id) {
       const ln = tube[id] || nrNet[id];
