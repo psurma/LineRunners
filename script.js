@@ -1990,6 +1990,18 @@
       history.replaceState(null, "", url);
     } catch (_) { /* older browser / opaque origin — sharing degrades, nothing breaks */ }
   }
+  // A shared link's query says WHAT to show; a leftover section hash says WHERE to
+  // scroll, and the two contradict each other — ?bus=119#journey means "show bus
+  // 119" and "go to the journey planner" at once. The hash wins by default, and
+  // not just once: the browser jumps to the anchor on load and again as the lazy
+  // sections below settle, which outruns any smooth scroll we start. So drop a
+  // plain section hash before scrolling to what was actually shared. A
+  // #routes/<id> hash is a genuine deep link, not a scroll position, so it stays
+  // and is allowed to win.
+  function dropNavHash() {
+    if (!location.hash || /^#routes\//.test(location.hash)) return;
+    try { history.replaceState(null, "", location.pathname + location.search); } catch (_) { /* ignore */ }
+  }
   // Index of the route named by a #routes/<id> deep link, or -1.
   function routeIndexFromHash() {
     const m = /^#routes\/(.+)$/.exec(location.hash);
@@ -2545,12 +2557,16 @@
     if (sharedBus) {
       pick.value = sharedBus;
       if (new URLSearchParams(location.search).get("rev")) busMapObj.keep = { id: sharedBus, reversed: true, a: -1, b: -1 };
-      trace();
       const p = new URLSearchParams(location.search);
       const busrun = document.getElementById("busrun");
-      if (busrun && !p.get("from") && !p.get("loop") && !/^#routes\//.test(location.hash)) {
-        busrun.scrollIntoView({ behavior: "smooth", block: "start" });
-      }
+      const owns = !!busrun && !p.get("from") && !p.get("loop") && !/^#routes\//.test(location.hash);
+      if (owns) dropNavHash();
+      // Scroll only once the trace has rendered. The section is a loading stub
+      // until then, so scrolling first lands short and the page appears to ignore
+      // the link — which is what ?bus=119#journey looked like.
+      Promise.resolve(trace())
+        .then(() => { if (owns) busrun.scrollIntoView({ behavior: "smooth", block: "start" }); })
+        .catch(() => { /* trace reports its own failure in the result pane */ });
     }
     // Let the site-wide unit toggle re-render the last traced route in the new units.
     busMapObj.retrace = () => { if (busMapObj.currentId) { pick.value = busMapObj.currentId; trace(); } };
@@ -6784,7 +6800,7 @@
         plan();
       } else return;
       const sec = document.getElementById("journey");
-      if (sec && !/^#routes\//.test(location.hash)) sec.scrollIntoView({ behavior: "smooth", block: "start" });
+      if (sec && !/^#routes\//.test(location.hash)) { dropNavHash(); sec.scrollIntoView({ behavior: "smooth", block: "start" }); }
     }
 
     function ensureMap() {
