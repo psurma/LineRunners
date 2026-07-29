@@ -54,7 +54,7 @@ const cleanName = (n) => n.replace(/ (Rail|Underground|DLR) Station$/i, "").repl
 async function getJson(path, tries = 3) {
   for (let t = 1; ; t++) {
     try {
-      const res = await fetch(API + path, { headers: { "User-Agent": "Overland/1.0 (national rail build)" } });
+      const res = await fetch(API + path, { headers: { "User-Agent": "LineRunners/1.0 (national rail build)" } });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       return await res.json();
     } catch (e) {

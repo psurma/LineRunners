@@ -1,4 +1,4 @@
-/* Overland service worker — offline app shell + runtime caching.
+/* Line Runners service worker — offline app shell + runtime caching.
  *
  * Strategy:
  *   - navigations   → network-first, fall back to the cached shell (opens offline)
@@ -11,10 +11,10 @@
  * stale-while-revalidate handler caches whatever the page actually loads, so a new
  * ?v= simply becomes a new cache entry. Bump SW_VERSION to purge old caches.
  */
-const SW_VERSION = "v4"; // v4: RUNTIME beats the SHELL precache, tiles fetched cors so res.ok is real; bumping drops the old opaque tile entries. v3: rebrand cache prefix tuberun- -> overland-. v2: global cache lookup + runtime ?v= eviction; bumping purges v1's unbounded runtime
-const SHELL = "overland-shell-" + SW_VERSION;
-const RUNTIME = "overland-runtime-" + SW_VERSION;
-const TILES = "overland-tiles-" + SW_VERSION;
+const SW_VERSION = "v5"; // v5: rebrand cache prefix overland- -> linerunners- (activate drops anything outside the current triple, so the old caches go with it). v4: RUNTIME beats the SHELL precache, tiles fetched cors so res.ok is real; bumping drops the old opaque tile entries. v3: rebrand cache prefix tuberun- -> overland-. v2: global cache lookup + runtime ?v= eviction; bumping purges v1's unbounded runtime
+const SHELL = "linerunners-shell-" + SW_VERSION;
+const RUNTIME = "linerunners-runtime-" + SW_VERSION;
+const TILES = "linerunners-tiles-" + SW_VERSION;
 const TILE_MAX = 500;
 const TILE_TOUCH = 0.15; // odds of re-putting a cache hit to refresh its eviction order
 

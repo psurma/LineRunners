@@ -19,7 +19,7 @@ import { dirname, join } from "node:path";
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const BOUNDARIES = "https://services1.arcgis.com/ESMARspQHYMw9BZ9/arcgis/rest/services/Local_Authority_Districts_May_2023_UK_BGC_V2/FeatureServer/0/query?where=LAD23CD%20LIKE%20%27E09%25%27&outFields=LAD23NM&outSR=4326&f=geojson";
 
-const res = await fetch(BOUNDARIES, { headers: { "User-Agent": "Overland/1.0 (borough tagging)" }, redirect: "follow" });
+const res = await fetch(BOUNDARIES, { headers: { "User-Agent": "LineRunners/1.0 (borough tagging)" }, redirect: "follow" });
 if (!res.ok) throw new Error(`boundaries fetch: HTTP ${res.status}`);
 const gj = await res.json();
 

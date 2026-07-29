@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<gpx version="1.1" creator="Overland route generator" xmlns="http://www.topografix.com/GPX/1/1">
+<gpx version="1.1" creator="Line Runners route generator" xmlns="http://www.topografix.com/GPX/1/1">
   <metadata>
-    <name>Great Western Railway — Overland</name>
+    <name>Great Western Railway — Line Runners</name>
     <desc>Above-ground running route tracing the Great Western Railway line, station to station. Routed on pavements and footways from OpenStreetMap data (BRouter, shortest).</desc>
-    <author><name>Overland</name></author>
+    <author><name>Line Runners</name></author>
     <copyright author="OpenStreetMap contributors"><license>https://opendatacommons.org/licenses/odbl/1-0/</license></copyright>
     <link href="https://www.openstreetmap.org/copyright"><text>© OpenStreetMap contributors</text></link>
     <time>2026-07-14T12:17:58.116Z</time>
@@ -25,7 +25,7 @@
   <wpt lat="51.4854" lon="-1.09047"><name>Pangbourne</name></wpt>
   <wpt lat="51.52149" lon="-1.13305"><name>Goring &amp; Streatley</name></wpt>
   <trk>
-    <name>Great Western Railway — Overland</name>
+    <name>Great Western Railway — Line Runners</name>
     <trkseg>
       <trkpt lat="51.515945" lon="-0.176268"><ele>24.75</ele></trkpt>
       <trkpt lat="51.515703" lon="-0.175918"><ele>24.75</ele></trkpt>

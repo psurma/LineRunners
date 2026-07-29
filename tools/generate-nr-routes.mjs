@@ -23,7 +23,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
 // Single attempt, throws on failure — routeStations' per-segment fallback handles it.
-const brouter = (points) => brouterRaw(points, PROFILE, { userAgent: "Overland/1.0 (national rail routes)" }); // [lon, lat, ele]
+const brouter = (points) => brouterRaw(points, PROFILE, { userAgent: "LineRunners/1.0 (national rail routes)" }); // [lon, lat, ele]
 
 // Whole line in one request; per-segment fallback so one un-snappable station
 // doesn't lose the line (that leg becomes a straight-line placeholder).
@@ -77,18 +77,18 @@ function toGpx(name, stations, latlonele, when) {
     ? `      <trkpt lat="${c[0]}" lon="${c[1]}"><ele>${c[2]}</ele></trkpt>`
     : `      <trkpt lat="${c[0]}" lon="${c[1]}"/>`)).join("\n");
   return `<?xml version="1.0" encoding="UTF-8"?>
-<gpx version="1.1" creator="Overland route generator" xmlns="http://www.topografix.com/GPX/1/1">
+<gpx version="1.1" creator="Line Runners route generator" xmlns="http://www.topografix.com/GPX/1/1">
   <metadata>
-    <name>${esc(name)} — Overland</name>
+    <name>${esc(name)} — Line Runners</name>
     <desc>Above-ground running route tracing the ${esc(name)} line, station to station. Routed on pavements and footways from OpenStreetMap data (BRouter, ${PROFILE}).</desc>
-    <author><name>Overland</name></author>
+    <author><name>Line Runners</name></author>
     <copyright author="OpenStreetMap contributors"><license>https://opendatacommons.org/licenses/odbl/1-0/</license></copyright>
     <link href="https://www.openstreetmap.org/copyright"><text>© OpenStreetMap contributors</text></link>
     <time>${when}</time>
   </metadata>
 ${wpts}
   <trk>
-    <name>${esc(name)} — Overland</name>
+    <name>${esc(name)} — Line Runners</name>
     <trkseg>
 ${trkpts}
     </trkseg>

@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<gpx version="1.1" creator="Overland route generator" xmlns="http://www.topografix.com/GPX/1/1">
+<gpx version="1.1" creator="Line Runners route generator" xmlns="http://www.topografix.com/GPX/1/1">
   <metadata>
-    <name>Chiltern Railways — Overland</name>
+    <name>Chiltern Railways — Line Runners</name>
     <desc>Above-ground running route tracing the Chiltern Railways line, station to station. Routed on pavements and footways from OpenStreetMap data (BRouter, shortest).</desc>
-    <author><name>Overland</name></author>
+    <author><name>Line Runners</name></author>
     <copyright author="OpenStreetMap contributors"><license>https://opendatacommons.org/licenses/odbl/1-0/</license></copyright>
     <link href="https://www.openstreetmap.org/copyright"><text>© OpenStreetMap contributors</text></link>
     <time>2026-07-14T12:17:58.116Z</time>
@@ -20,7 +20,7 @@
   <wpt lat="51.81389" lon="-0.8151"><name>Aylesbury</name></wpt>
   <wpt lat="51.83116" lon="-0.86018"><name>Aylesbury Vale Parkway</name></wpt>
   <trk>
-    <name>Chiltern Railways — Overland</name>
+    <name>Chiltern Railways — Line Runners</name>
     <trkseg>
       <trkpt lat="51.522622" lon="-0.162964"><ele>29</ele></trkpt>
       <trkpt lat="51.522598" lon="-0.163088"><ele>29</ele></trkpt>

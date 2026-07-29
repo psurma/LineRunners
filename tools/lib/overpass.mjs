@@ -17,7 +17,7 @@
 // donated capacity and ask for it.
 
 const ENDPOINTS = ["https://overpass-api.de/api/interpreter", "https://overpass.kumi.systems/api/interpreter"];
-const DEFAULT_UA = "Overland/1.0 (route tools; https://psurma.github.io/Overland)";
+const DEFAULT_UA = "LineRunners/1.0 (route tools; https://psurma.github.io/Overland)";
 const MIN_INTERVAL_MS = 1500;
 const BACKOFF_MS = 5000;
 

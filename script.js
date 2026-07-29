@@ -1,4 +1,4 @@
-/* Overland — schedule, distance planner, route map, live follow.
+/* Line Runners — schedule, distance planner, route map, live follow.
    ---------------------------------------------------------------------------
    EDIT THESE to change the guide:
      • RUN_PLAN     — the rolling monthly plan (tube OR river/canal/bus routes)
@@ -571,12 +571,12 @@
     const loc = r.start ? r.start + (r.location === "London" ? ", London" : "") : r.location;
     const desc = [r.leg, distText(r.distance), multi ? null : `Meet ${MEET_TIME}`, CAL_URL].filter(Boolean).join("\n");
     const lines = [
-      "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Overland//Runs//EN", "CALSCALE:GREGORIAN",
+      "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Line Runners//Runs//EN", "CALSCALE:GREGORIAN",
       "BEGIN:VEVENT",
       `UID:${icsDate(r.date)}-${slug}@tuberun`,
       `DTSTAMP:${icsStamp()}`,
       dtStart, dtEnd,
-      `SUMMARY:${icsEsc("Overland · " + r.badge)}`,
+      `SUMMARY:${icsEsc("Line Runners · " + r.badge)}`,
       loc ? `LOCATION:${icsEsc(loc)}` : "",
       `DESCRIPTION:${icsEsc(desc)}`,
       `URL:${CAL_URL}`,
@@ -585,7 +585,7 @@
     return lines.map(icsFold).join("\r\n");
   }
   function downloadRunIcs(r) {
-    downloadBlob(`Overland-${lineSlug(r.key || r.badge)}.ics`, new Blob([runIcs(r)], { type: "text/calendar;charset=utf-8" }));
+    downloadBlob(`LineRunners-${lineSlug(r.key || r.badge)}.ics`, new Blob([runIcs(r)], { type: "text/calendar;charset=utf-8" }));
   }
 
   function renderList() {
@@ -1042,7 +1042,7 @@
     const slug = GPX_LINES.has(slugOrName) ? slugOrName : lineSlug(slugOrName);
     if (!GPX_LINES.has(slug)) return "";
     const label = lineName || slug;
-    return `<a class="gpx-dl${extraClass ? " " + extraClass : ""}" href="routes/${slug}.gpx" download="Overland-${slug}.gpx" title="Download the ${escapeHtml(label)} line's pavement route as a GPX file for your watch">↓ GPX</a><a class="gpx-dl tcx-dl${extraClass ? " " + extraClass : ""}" href="#" data-slug="${slug}" title="Download as a Garmin TCX course — Virtual Partner pacing at your site pace">⌚ TCX</a>`;
+    return `<a class="gpx-dl${extraClass ? " " + extraClass : ""}" href="routes/${slug}.gpx" download="LineRunners-${slug}.gpx" title="Download the ${escapeHtml(label)} line's pavement route as a GPX file for your watch">↓ GPX</a><a class="gpx-dl tcx-dl${extraClass ? " " + extraClass : ""}" href="#" data-slug="${slug}" title="Download as a Garmin TCX course — Virtual Partner pacing at your site pace">⌚ TCX</a>`;
   }
   // Flip a GPX file's direction: reverse each track segment's trackpoint order
   // (so a watch follows it the other way). Waypoint POIs are order-independent,
@@ -1095,7 +1095,7 @@
       return `<trkpt lat="${p[0]}" lon="${p[1]}">${ele}</trkpt>`;
     }).join("");
     return `<?xml version="1.0" encoding="UTF-8"?>
-<gpx version="1.1" creator="Overland" xmlns="http://www.topografix.com/GPX/1/1">
+<gpx version="1.1" creator="Line Runners" xmlns="http://www.topografix.com/GPX/1/1">
  <trk><name>${escapeHtml(name)}</name><trkseg>${trkpts}</trkseg></trk>
 </gpx>`;
   }
@@ -1125,9 +1125,9 @@
       let pts = vroutes[slug] && vroutes[slug][0] && vroutes[slug][0].length > 1 ? vroutes[slug][0] : null;
       if (!pts) { const segs = await loadRouteGpx(slug); pts = segs && segs[0]; }
       if (!pts || pts.length < 2) throw new Error("no track");
-      const tcx = tcxFromPoints(pts, `Overland ${slug}`, reverse);
+      const tcx = tcxFromPoints(pts, `Line Runners ${slug}`, reverse);
       if (!tcx) throw new Error("no track");
-      downloadBlob(`Overland-${slug}${reverse ? "-reverse" : ""}.tcx`, new Blob([tcx], { type: "application/vnd.garmin.tcx+xml" }));
+      downloadBlob(`LineRunners-${slug}${reverse ? "-reverse" : ""}.tcx`, new Blob([tcx], { type: "application/vnd.garmin.tcx+xml" }));
     } catch (_) {
       const was = a.textContent;
       a.textContent = "TCX unavailable";
@@ -1973,6 +1973,23 @@
 
   // A route's shareable URL, e.g. https://…/#routes/regents-canal.
   function routeShareUrl(r) { return location.href.split("#")[0] + "#routes/" + r.id; }
+  // Keep the address bar in step with what's on screen, so the URL can just be
+  // sent to someone and open the same thing. Query params carry the planner and
+  // bus-route state; the #routes/<id> fragment (written by selectRoute) carries
+  // the library pick, and the two don't tread on each other — a fragment-only
+  // replaceState keeps the query string, and this keeps the fragment.
+  // A null/empty value clears its param, so switching mode drops the stale one.
+  function setShareParams(patch) {
+    try {
+      const url = new URL(location.href);
+      for (const k in patch) {
+        const v = patch[k];
+        if (v === null || v === undefined || v === "") url.searchParams.delete(k);
+        else url.searchParams.set(k, String(v));
+      }
+      history.replaceState(null, "", url);
+    } catch (_) { /* older browser / opaque origin — sharing degrades, nothing breaks */ }
+  }
   // Index of the route named by a #routes/<id> deep link, or -1.
   function routeIndexFromHash() {
     const m = /^#routes\/(.+)$/.exec(location.hash);
@@ -2320,6 +2337,10 @@
       const stash = () => { busMapObj.keep = { id, reversed, a: picks.a, b: picks.b }; };
       const render = async () => {
         const myRender = ++renderSeq;
+        // Mirror the traced route (and which way round it's being run) into the
+        // URL. Runs on the first trace and on every Reverse, so the link always
+        // matches what's drawn.
+        setShareParams({ bus: id, rev: reversed ? 1 : null });
         const wp = reversed ? [...fwd].reverse() : fwd;
         const km = legDistanceKm(wp, 0, wp.length - 1);
         const from = wp[0][0], to = wp[wp.length - 1][0];
@@ -2515,6 +2536,22 @@
     const trace = makeBusTracer(pick, result);
     go.addEventListener("click", trace);
     pick.addEventListener("change", trace);
+    // Open a shared ?bus= link straight onto that route, in the direction it was
+    // shared in. Seeding busMapObj.keep is how the tracer is told the direction —
+    // it reads it back for this id on the way through. Only scrolls when the URL
+    // isn't also carrying a plan or a route deep link, so the two can't fight
+    // over the page position.
+    const sharedBus = new URLSearchParams(location.search).get("bus");
+    if (sharedBus) {
+      pick.value = sharedBus;
+      if (new URLSearchParams(location.search).get("rev")) busMapObj.keep = { id: sharedBus, reversed: true, a: -1, b: -1 };
+      trace();
+      const p = new URLSearchParams(location.search);
+      const busrun = document.getElementById("busrun");
+      if (busrun && !p.get("from") && !p.get("loop") && !/^#routes\//.test(location.hash)) {
+        busrun.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    }
     // Let the site-wide unit toggle re-render the last traced route in the new units.
     busMapObj.retrace = () => { if (busMapObj.currentId) { pick.value = busMapObj.currentId; trace(); } };
     const runRoute = (id) => { pick.value = id; trace(); };
@@ -2707,7 +2744,7 @@
       shareBtn.hidden = false;
       shareBtn.addEventListener("click", async () => {
         try {
-          if (navigator.share) await navigator.share({ title: label || "Overland", text: "Follow this run on Overland", url: shareUrl });
+          if (navigator.share) await navigator.share({ title: label || "Line Runners", text: "Follow this run on Line Runners", url: shareUrl });
           else { await navigator.clipboard.writeText(shareUrl); shareBtn.textContent = "Copied!"; setTimeout(() => { shareBtn.textContent = "Share"; }, 1600); }
         } catch (_) { /* share cancelled */ }
       });
@@ -3255,7 +3292,7 @@
       if (!reversed) {
         if (revUrl) { URL.revokeObjectURL(revUrl); revUrl = null; }
         gpxLink.href = `routes/${slug}.gpx`;
-        gpxLink.setAttribute("download", `Overland-${slug}.gpx`);
+        gpxLink.setAttribute("download", `LineRunners-${slug}.gpx`);
         return;
       }
       // Check res.ok first, or a 404 body gets reversed and handed to the
@@ -3270,7 +3307,7 @@
       if (revUrl) URL.revokeObjectURL(revUrl);
       revUrl = URL.createObjectURL(new Blob([reverseGpxText(gpxText)], { type: "application/gpx+xml" }));
       gpxLink.href = revUrl;
-      gpxLink.setAttribute("download", `Overland-${slug}-reverse.gpx`);
+      gpxLink.setAttribute("download", `LineRunners-${slug}-reverse.gpx`);
     }
     function setReversed(v) {
       reversed = v;
@@ -3450,7 +3487,7 @@
     { icon: "⚫", name: "Northern Soul", desc: "The Northern line, both ways", test: (c) => c.both("Northern") },
     { icon: "🔵", name: "Piccadilly Pro", desc: "The Piccadilly line, both ways", test: (c) => c.both("Piccadilly") },
     { icon: "💙", name: "Victoria Victor", desc: "The Victoria line, both ways", test: (c) => c.both("Victoria") },
-    { icon: "👑", name: "Overland Royalty", desc: "Every line, both ways", test: (c) => c.linesBoth >= c.total / 2 },
+    { icon: "👑", name: "Line Royalty", desc: "Every line, both ways", test: (c) => c.linesBoth >= c.total / 2 },
   ];
 
   function renderLineCollector() {
@@ -3974,14 +4011,56 @@
     // Only ever render a dozen suggestions — a 400-option datalist makes
     // Chrome re-anchor the page on every keystroke (the creeping-scroll bug).
     let searchIndex = null;
+    // London's ~19,000 bus stops are far too many to precompute and ship, so they
+    // come live from TfL as you type — the same StopPoint endpoint the bus panel
+    // already uses. Results are cached per query, and each hit's coordinates are
+    // kept so picking one can centre the map without a second round trip. Failures
+    // are deliberately NOT cached: a connection blip shouldn't blank bus results
+    // for that query for the rest of the session.
+    const busHits = new Map(); // query -> ["<name> (bus stop)", …]
+    const busAt = new Map();   // "<name> (bus stop)" -> { lat, lon }
+    let busSeq = 0, busT = 0;
     const suggest = () => {
-      if (!searchIndex) return;
       const q = input.value.trim().toLowerCase();
-      const hits = q.length < 2 ? [] : searchIndex.filter((o) => o.toLowerCase().includes(q)).slice(0, 12);
+      if (q.length < 2) { dl.innerHTML = ""; return; }
+      const stat = searchIndex ? searchIndex.filter((o) => o.toLowerCase().includes(q)) : [];
+      const bus = busHits.get(q) || [];
+      // The site's own lines, stations and routes lead; bus stops trail as the
+      // wider net and only take what is left of the twelve slots.
+      const hits = [...stat.slice(0, 12 - Math.min(bus.length, 4)), ...bus.slice(0, 4)];
       dl.innerHTML = hits.map((o) => `<option value="${escapeHtml(o)}"></option>`).join("");
     };
+    // Debounced so a fast typist fires one request rather than one per keystroke;
+    // the sequence guard discards a slow response that lands after a newer one.
+    const lookupBusStops = (q) => {
+      if (q.length < 3 || busHits.has(q)) return;
+      const mySeq = ++busSeq;
+      fetch(`https://api.tfl.gov.uk/StopPoint/Search/${encodeURIComponent(q)}?modes=bus&maxResults=6`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((j) => {
+          if (!j || mySeq !== busSeq) return;
+          const seen = new Set(), out = [];
+          for (const mt of j.matches || []) {
+            if (!mt.name || !isFinite(mt.lat) || !isFinite(mt.lon)) continue;
+            const k = norm(mt.name);
+            if (seen.has(k)) continue; // TfL returns a stop per pole; one per name is enough
+            seen.add(k);
+            const label = `${mt.name} (bus stop)`;
+            busAt.set(label, { lat: mt.lat, lon: mt.lon });
+            out.push(label);
+          }
+          busHits.set(q, out);
+          suggest();
+        })
+        .catch(() => { /* offline — lines, stations and routes still search fine */ });
+    };
     input.addEventListener("focus", () => buildIndex().then(suggest), { once: true });
-    input.addEventListener("input", suggest);
+    input.addEventListener("input", () => {
+      suggest();
+      clearTimeout(busT);
+      const q = input.value.trim().toLowerCase();
+      busT = setTimeout(() => lookupBusStops(q), 250);
+    });
     // Chrome scrolls the page toward a sticky input's document position on
     // focus and after every keystroke (asynchronously, so a post-input restore
     // loses the race). Capture the position before each key, and revert any
@@ -3999,11 +4078,26 @@
     }, { passive: true });
     input.addEventListener("blur", () => { lockY = null; });
     const go = async (forced) => {
-      const m = /^(.+) \((line|station|route)\)$/.exec((forced || input.value).trim());
+      const m = /^(.+) \((line|station|route|bus stop)\)$/.exec((forced || input.value).trim());
       if (!m) return;
       const [, name, kind] = m;
       input.value = "";
       input.blur();
+      // A bus stop is never part of the rail network, so it has to resolve before
+      // the switch-to-All-lines path below — that check would always miss for a
+      // stop and bounce the page through a pointless reload.
+      if (kind === "bus stop") {
+        const at = busAt.get(`${name} (bus stop)`);
+        document.getElementById("network").scrollIntoView({ behavior: "smooth" });
+        if (!at) return;
+        for (let i = 0; i < 30 && !tmMap.map; i++) await new Promise((r) => setTimeout(r, 100));
+        if (!tmMap.map) return;
+        tmMap.map.setView([at.lat, at.lon], Math.max(tmMap.map.getZoom(), 15), { animate: true });
+        L.popup({ autoPan: false }).setLatLng([at.lat, at.lon])
+          .setContent(`<b>${escapeHtml(name)}</b><span class="stn-kind">Bus stop</span>` + geoInterchangeTags(at.lat, at.lon))
+          .openOn(tmMap.map);
+        return;
+      }
       // Not in the current (Tube-mode) network but real? Switch to All lines
       // and finish the search after the reload.
       if (NET_MODE !== "all") {
@@ -4858,16 +4952,16 @@
         const e = entries[i];
         if (gpxBlob) { URL.revokeObjectURL(gpxBlob); gpxBlob = null; }
         if (e && e.route && e.route.length > 1) {
-          const text = gpxFromPoints(e.route, `Overland ${e.label}`);
+          const text = gpxFromPoints(e.route, `Line Runners ${e.label}`);
           if (text) {
             gpxBlob = URL.createObjectURL(new Blob([text], { type: "application/gpx+xml" }));
-            gpx.href = gpxBlob; gpx.download = `Overland-${e.id}-${lineSlug(e.label)}.gpx`;
+            gpx.href = gpxBlob; gpx.download = `LineRunners-${e.id}-${lineSlug(e.label)}.gpx`;
             gpx.title = "Download this exact route as a GPX file for your watch";
             gpx.style.display = ""; tcx.style.display = ""; return;
           }
         }
         if (e && GPX_LINES.has(e.id)) {
-          gpx.href = `routes/${e.id}.gpx`; gpx.download = `Overland-${e.id}.gpx`;
+          gpx.href = `routes/${e.id}.gpx`; gpx.download = `LineRunners-${e.id}.gpx`;
           gpx.title = "Download this line's pavement route as a GPX file for your watch";
           gpx.style.display = ""; tcx.style.display = "";
         } else { gpx.removeAttribute("href"); gpx.style.display = "none"; tcx.style.display = "none"; }
@@ -4880,9 +4974,9 @@
           const vr = await loadVariantRoutes();
           pts = (vr[e.id] && vr[e.id][0]) || ((await loadRouteGpx(e.id)) || [])[0] || null;
         }
-        const doc = pts && pts.length > 1 ? tcxFromPoints(pts, `Overland ${e.label}`, false) : null;
+        const doc = pts && pts.length > 1 ? tcxFromPoints(pts, `Line Runners ${e.label}`, false) : null;
         if (!doc) { const was = tcx.textContent; tcx.textContent = "TCX unavailable"; setTimeout(() => { tcx.textContent = was; }, 1800); return; }
-        downloadBlob(`Overland-${e.id}-${lineSlug(e.label)}.tcx`, new Blob([doc], { type: "application/vnd.garmin.tcx+xml" }));
+        downloadBlob(`LineRunners-${e.id}-${lineSlug(e.label)}.tcx`, new Blob([doc], { type: "application/vnd.garmin.tcx+xml" }));
       });
       const syncStats = (i) => {
         const wp = entries[i] && entries[i].wp;
@@ -5727,12 +5821,12 @@
         dlBox.innerHTML = `<a class="gpx-dl sl-gpx" href="#" title="Download the whole ${escapeHtml(rt.id)} route as a GPX file for your watch">↓ GPX route</a><a class="gpx-dl sl-tcx" href="#" title="Download as a Garmin TCX course — Virtual Partner pacing at your site pace">⌚ TCX</a>`;
         dlBox.querySelector(".sl-gpx").addEventListener("click", (ev) => {
           ev.preventDefault();
-          const text = gpxFromPoints(track, `Overland ${rt.id} · ${from} → ${to}`);
+          const text = gpxFromPoints(track, `Line Runners ${rt.id} · ${from} → ${to}`);
           if (text) downloadBlob(`${slug}.gpx`, new Blob([text], { type: "application/gpx+xml" }));
         });
         dlBox.querySelector(".sl-tcx").addEventListener("click", (ev) => {
           ev.preventDefault();
-          const doc = tcxFromPoints(track, `Overland ${rt.id}`, false);
+          const doc = tcxFromPoints(track, `Line Runners ${rt.id}`, false);
           if (doc) downloadBlob(`${slug}.tcx`, new Blob([doc], { type: "application/vnd.garmin.tcx+xml" }));
         });
       }
@@ -6664,7 +6758,34 @@
       const names = Object.values(graph.nodes).map((n) => n.name).sort((a, b) => a.localeCompare(b));
       dl.innerHTML = names.map((n) => `<option value="${escapeHtml(n)}"></option>`).join("");
       renderLineChips();
+      restoreSharedPlan();
     });
+
+    // Open a shared link on the plan it encodes. Deferred until the graph is
+    // ready, because plan() and generateLoop() both need it. Only scrolls when
+    // the URL actually asked for a plan, so an ordinary visit lands at the top
+    // as before — and never when a #routes/<id> deep link is also present,
+    // which is a more specific request for the page's attention.
+    function restoreSharedPlan() {
+      const p = new URLSearchParams(location.search);
+      const from = p.get("from"), to = p.get("to"), loop = p.get("loop");
+      if (loop) {
+        setMode(true);
+        if (loopStart) loopStart.value = loop;
+        const dist = p.get("dist"), rad = p.get("rad");
+        if (dist && loopDist) loopDist.value = dist;   // range inputs clamp their own bounds
+        if (rad && loopRad) loopRad.value = rad;
+        syncLoopLabels();
+        generateLoop();
+      } else if (from && to) {
+        setMode(false);
+        fromEl.value = from;
+        toEl.value = to;
+        plan();
+      } else return;
+      const sec = document.getElementById("journey");
+      if (sec && !/^#routes\//.test(location.hash)) sec.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
 
     function ensureMap() {
       if (jMap) return jMap;
@@ -6675,6 +6796,15 @@
     }
     function render(res) {
       last = res;
+      // Mirror the plan into the URL. Every route that reaches the map comes
+      // through here — typed, swapped, random or loop — so this is the one place
+      // that has to stay in step.
+      const startName = graph.nodes[res.path[0]].name;
+      if (res.loop) {
+        setShareParams({ loop: startName, dist: loopDist ? loopDist.value : null, rad: loopRad && +loopRad.value ? loopRad.value : null, from: null, to: null });
+      } else {
+        setShareParams({ from: startName, to: graph.nodes[res.path[res.path.length - 1]].name, loop: null, dist: null, rad: null });
+      }
       const segments = pathToLegs(graph, res.path, allowed);
       const map = ensureMap();
       if (!map) { result.innerHTML = journeyResultHtml(res, segments, graph); return; } // Leaflet unavailable — show the route text, skip the map
@@ -6702,13 +6832,13 @@
             dlBox.innerHTML = `<a class="gpx-dl jr-gpx" href="#" title="Download this exact run route as a GPX file for your watch">↓ GPX route</a><a class="gpx-dl jr-tcx" href="#" title="Download as a Garmin TCX course — Virtual Partner pacing at your site pace">⌚ TCX</a>`;
             dlBox.querySelector(".jr-gpx").addEventListener("click", (ev) => {
               ev.preventDefault();
-              const text = gpxFromPoints(drawn.latlngs, `Overland ${name}`);
-              if (text) downloadBlob(`Overland-${slug}.gpx`, new Blob([text], { type: "application/gpx+xml" }));
+              const text = gpxFromPoints(drawn.latlngs, `Line Runners ${name}`);
+              if (text) downloadBlob(`LineRunners-${slug}.gpx`, new Blob([text], { type: "application/gpx+xml" }));
             });
             dlBox.querySelector(".jr-tcx").addEventListener("click", (ev) => {
               ev.preventDefault();
-              const doc = tcxFromPoints(drawn.latlngs, `Overland ${name}`, false);
-              if (doc) downloadBlob(`Overland-${slug}.tcx`, new Blob([doc], { type: "application/vnd.garmin.tcx+xml" }));
+              const doc = tcxFromPoints(drawn.latlngs, `Line Runners ${name}`, false);
+              if (doc) downloadBlob(`LineRunners-${slug}.tcx`, new Blob([doc], { type: "application/vnd.garmin.tcx+xml" }));
             });
           }
         });

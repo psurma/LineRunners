@@ -85,7 +85,7 @@ if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
   const runs = computeRuns(RUN_PLAN);
   const file = join(ROOT, "data/schedule.json");
   const out = {
-    club: "Overland",
+    club: "Line Runners",
     site: "https://psurma.github.io/Overland/",
     generated: "",
     rule: "Regular runs are the first Sunday of each month, meeting 09:00 at the start station unless stated; dated specials are pinned. Runs beyond the current month are suggestions until confirmed a month out.",

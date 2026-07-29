@@ -16,7 +16,7 @@ const NET = JSON.parse(readFileSync(join(ROOT, "data/nr-network.json"), "utf8"))
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // Single attempt, throws on failure — routeStations' per-leg fallback handles it.
-const brouter = (points) => brouterRaw(points, "shortest", { userAgent: "Overland/1.0 (branch routes)" });
+const brouter = (points) => brouterRaw(points, "shortest", { userAgent: "LineRunners/1.0 (branch routes)" });
 async function routeStations(st) {
   try { return await brouter(st); } catch (_) { /* per-leg fallback */ }
   const out = [];

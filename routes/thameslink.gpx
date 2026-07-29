@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<gpx version="1.1" creator="Overland route generator" xmlns="http://www.topografix.com/GPX/1/1">
+<gpx version="1.1" creator="Line Runners route generator" xmlns="http://www.topografix.com/GPX/1/1">
   <metadata>
-    <name>Thameslink — Overland</name>
+    <name>Thameslink — Line Runners</name>
     <desc>Above-ground running route tracing the Thameslink line, station to station. Routed on pavements and footways from OpenStreetMap data (BRouter, shortest).</desc>
-    <author><name>Overland</name></author>
+    <author><name>Line Runners</name></author>
     <copyright author="OpenStreetMap contributors"><license>https://opendatacommons.org/licenses/odbl/1-0/</license></copyright>
     <link href="https://www.openstreetmap.org/copyright"><text>© OpenStreetMap contributors</text></link>
     <time>2026-07-14T13:53:19.171Z</time>
@@ -46,7 +46,7 @@
   <wpt lat="51.86686" lon="-0.18729"><name>Knebworth</name></wpt>
   <wpt lat="51.90169" lon="-0.20711"><name>Stevenage</name></wpt>
   <trk>
-    <name>Thameslink — Overland</name>
+    <name>Thameslink — Line Runners</name>
     <trkseg>
       <trkpt lat="50.828969" lon="-0.14129"><ele>40</ele></trkpt>
       <trkpt lat="50.828987" lon="-0.141488"><ele>40.25</ele></trkpt>

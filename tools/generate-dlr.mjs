@@ -25,7 +25,7 @@ const cleanName = (n) => n.replace(/ (Rail|Underground|DLR) Station$/i, "").repl
 async function getJson(path, tries = 3) {
   for (let t = 1; ; t++) {
     try {
-      const res = await fetch(API + path, { headers: { "User-Agent": "Overland/1.0 (dlr build)" } });
+      const res = await fetch(API + path, { headers: { "User-Agent": "LineRunners/1.0 (dlr build)" } });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       return await res.json();
     } catch (e) { if (t >= tries) throw e; await sleep(1500 * t); }
@@ -87,7 +87,7 @@ console.log(`merged into tube-network.json + tube-lines.geojson (${rings.length}
 
 // --- BRouter the main branch -> routes/dlr.gpx ---
 // Single attempt, throws on failure — routeStations' per-leg fallback handles it.
-const brouter = (points) => brouterRaw(points, "shortest", { userAgent: "Overland/1.0 (dlr route)" });
+const brouter = (points) => brouterRaw(points, "shortest", { userAgent: "LineRunners/1.0 (dlr route)" });
 async function routeStations(st) {
   try { return await brouter(st); } catch (_) { /* per-leg fallback */ }
   const out = []; for (let i = 0; i < st.length - 1; i++) { let seg; try { seg = await brouter([st[i], st[i + 1]]); } catch { seg = [[st[i].lon, st[i].lat, 0], [st[i + 1].lon, st[i + 1].lat, 0]]; } out.push(...(out.length ? seg.slice(1) : seg)); await sleep(300); } return out;
@@ -104,18 +104,18 @@ const when = new Date().toISOString();
 const wpts = main.map((s) => `  <wpt lat="${s.lat}" lon="${s.lon}"><name>${esc(s.n)}</name></wpt>`).join("\n");
 const trkpts = latlonele.map((c) => (Number.isFinite(c[2]) ? `      <trkpt lat="${c[0]}" lon="${c[1]}"><ele>${c[2]}</ele></trkpt>` : `      <trkpt lat="${c[0]}" lon="${c[1]}"/>`)).join("\n");
 const gpx = `<?xml version="1.0" encoding="UTF-8"?>
-<gpx version="1.1" creator="Overland route generator" xmlns="http://www.topografix.com/GPX/1/1">
+<gpx version="1.1" creator="Line Runners route generator" xmlns="http://www.topografix.com/GPX/1/1">
   <metadata>
-    <name>${NAME} — Overland</name>
+    <name>${NAME} — Line Runners</name>
     <desc>Above-ground running route tracing the ${NAME} line, station to station. Routed on pavements and footways from OpenStreetMap data (BRouter, shortest).</desc>
-    <author><name>Overland</name></author>
+    <author><name>Line Runners</name></author>
     <copyright author="OpenStreetMap contributors"><license>https://opendatacommons.org/licenses/odbl/1-0/</license></copyright>
     <link href="https://www.openstreetmap.org/copyright"><text>© OpenStreetMap contributors</text></link>
     <time>${when}</time>
   </metadata>
 ${wpts}
   <trk>
-    <name>${NAME} — Overland</name>
+    <name>${NAME} — Line Runners</name>
     <trkseg>
 ${trkpts}
     </trkseg>

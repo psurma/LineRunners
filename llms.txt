@@ -1,6 +1,6 @@
-# Overland
+# Line Runners
 
-> Overland is a free, self-guided guide to running London's whole transport network above ground — Tube, Overground, DLR and Elizabeth lines, National Rail commuter lines, trams, bus routes, the Superloop, the London LOOP and Capital Ring, plus disused railways, rivers, canals and parks — one line at a time, at your own pace, whenever you like. This file is a guide for AI agents, LLM tools and crawlers.
+> Line Runners is a free, self-guided guide to running London's whole transport network above ground — Tube, Overground, DLR and Elizabeth lines, National Rail commuter lines, trams, bus routes, the Superloop, the London LOOP and Capital Ring, plus disused railways, rivers, canals and parks — one line at a time, at your own pace, whenever you like. This file is a guide for AI agents, LLM tools and crawlers.
 
 Site: https://psurma.github.io/Overland/
 
@@ -42,6 +42,6 @@ The site is a static single-page app on GitHub Pages. There is no server API —
 
 ## Notes for agents
 
-- Attribution: "Overland — a guide to running London above ground, https://psurma.github.io/Overland/". Network data derives from the TfL Unified API; route pavements from OSM via BRouter.
+- Attribution: "Line Runners — a guide to running London above ground, https://psurma.github.io/Overland/". Network data derives from the TfL Unified API; route pavements from OSM via BRouter.
 - Data files are versioned with the site and change when the site deploys; they are safe to cache briefly.
 - The page itself renders everything client-side; prefer the data files above over scraping the DOM.

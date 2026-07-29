@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<gpx version="1.1" creator="Overland route generator" xmlns="http://www.topografix.com/GPX/1/1">
+<gpx version="1.1" creator="Line Runners route generator" xmlns="http://www.topografix.com/GPX/1/1">
   <metadata>
-    <name>Southern — Overland</name>
+    <name>Southern — Line Runners</name>
     <desc>Above-ground running route tracing the Southern line, station to station. Routed on pavements and footways from OpenStreetMap data (BRouter, shortest).</desc>
-    <author><name>Overland</name></author>
+    <author><name>Line Runners</name></author>
     <copyright author="OpenStreetMap contributors"><license>https://opendatacommons.org/licenses/odbl/1-0/</license></copyright>
     <link href="https://www.openstreetmap.org/copyright"><text>© OpenStreetMap contributors</text></link>
     <time>2026-07-14T14:22:26.931Z</time>
@@ -60,7 +60,7 @@
   <wpt lat="50.7985" lon="-1.09091"><name>Portsmouth &amp; Southsea</name></wpt>
   <wpt lat="50.79696" lon="-1.10784"><name>Portsmouth Harbour</name></wpt>
   <trk>
-    <name>Southern — Overland</name>
+    <name>Southern — Line Runners</name>
     <trkseg>
       <trkpt lat="51.49523" lon="-0.144451"><ele>4.25</ele></trkpt>
       <trkpt lat="51.495095" lon="-0.144542"><ele>4.75</ele></trkpt>
