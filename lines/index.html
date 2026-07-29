@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Run every London line — all 29 routes above ground | Line Runners</title>
+  <meta name="description" content="Street-by-street running routes for all 29 London lines: every Tube, Overground, DLR and Elizabeth line plus the National Rail commuter routes. Distances, stations and free GPX." />
+  <link rel="canonical" href="https://psurma.github.io/LineRunners/lines/" />
+  <meta property="og:type" content="article" />
+  <meta property="og:site_name" content="Line Runners" />
+  <meta property="og:url" content="https://psurma.github.io/LineRunners/lines/" />
+  <meta property="og:title" content="Run every London line — all 29 routes above ground | Line Runners" />
+  <meta property="og:description" content="Street-by-street running routes for all 29 London lines: every Tube, Overground, DLR and Elizabeth line plus the National Rail commuter routes. Distances, stations and free GPX." />
+  <meta property="og:image" content="https://psurma.github.io/LineRunners/img/icon-512.png" />
+  <meta name="twitter:card" content="summary" />
+  <link rel="icon" href="../img/favicon-32.png" sizes="32x32" type="image/png" />
+  <link rel="icon" href="../img/logo.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="../vendor/fonts/fonts.css?v=344" />
+  <link rel="stylesheet" href="../style.css?v=344" />
+  <style>
+    /* The app pads the body for its fixed header from JavaScript; these pages run
+       no script, so a fixed header would sit on top of the h1. Their header also
+       carries no text inputs, so the typing-scroll bug that fixed positioning
+       exists to avoid cannot apply here. */
+    .site-header { position: static; }
+    .pg { max-width: 860px; margin: 0 auto; padding: 28px 20px 64px; }
+    .pg-crumbs { font-size: 13.5px; color: #5a6572; margin-bottom: 18px; }
+    .pg-crumbs a { color: #5a6572; }
+    .pg h1 { font-family: var(--font-display); font-size: clamp(30px, 5vw, 44px); line-height: 1.1; margin-bottom: 10px; }
+    .pg .lede { font-size: 17px; color: #2b3140; margin-bottom: 22px; }
+    .pg h2 { font-family: var(--font-display); font-size: 22px; margin: 30px 0 12px; }
+    .pg-facts { display: flex; flex-wrap: wrap; gap: 10px; margin: 18px 0 6px; padding: 0; list-style: none; }
+    .pg-facts li { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 9px 13px; font-size: 14px; }
+    .pg-facts b { display: block; font-size: 12px; color: #5a6572; font-weight: 600; }
+    .pg-stops { columns: 3 190px; gap: 18px; padding-left: 20px; font-size: 14.5px; line-height: 1.75; }
+    .pg-cta { display: flex; flex-wrap: wrap; gap: 10px; margin: 24px 0 8px; }
+    .pg-list { list-style: none; padding: 0; display: grid; gap: 8px; }
+    .pg-list a { display: block; background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 11px 14px; text-decoration: none; }
+    .pg-list a:hover { border-color: var(--tfl-blue); }
+    .pg-list .m { color: #5a6572; font-size: 13.5px; }
+    .pg-swatch { display: inline-block; width: 11px; height: 11px; border-radius: 3px; vertical-align: -1px; margin-right: 7px; }
+    .pg-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
+    @media (max-width: 640px) { .pg-stops { columns: 1; } }
+  </style>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"CollectionPage","name":"Every London line, run above ground","url":"https://psurma.github.io/LineRunners/lines/","numberOfItems":29}</script>
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="../" aria-label="Line Runners — home">
+      <img class="brand-icon" src="../img/logo.svg" alt="" width="42" height="42" />
+      <span class="brand-word">Line Runners</span>
+    </a>
+    <nav class="nav">
+      <a href="../">Home</a>
+      <a href="../lines/">Lines</a>
+      <a href="../routes/">Routes</a>
+      <a href="../#network">Map</a>
+      <a href="../#journey">Plan a run</a>
+    </nav>
+  </header>
+  <main class="pg">
+    <nav class="pg-crumbs" aria-label="Breadcrumb"><a href="../">Line Runners</a> &rsaquo; Lines</nav>
+    <h1>Run every line, above ground</h1>
+    <p class="lede">All 29 London lines traced street by street: every Tube, Overground, DLR and Elizabeth line, plus the National Rail commuter routes out of town. Pick one, take the distance and the GPX, and run it end to end at your own pace.</p>
+    <h2>TfL lines (19)</h2>
+    <ul class="pg-list pg-grid">
+      <li><a href="bakerloo/"><span class="pg-swatch" style="background:#B36305"></span>Bakerloo<span class="m"> &middot; 28.2 km &middot; 25 stations</span></a></li>
+      <li><a href="central/"><span class="pg-swatch" style="background:#E32017"></span>Central<span class="m"> &middot; 20.0 km &middot; 22 stations</span></a></li>
+      <li><a href="circle/"><span class="pg-swatch" style="background:#FFD300"></span>Circle<span class="m"> &middot; 32.9 km &middot; 37 stations</span></a></li>
+      <li><a href="district/"><span class="pg-swatch" style="background:#00782A"></span>District<span class="m"> &middot; 51.9 km &middot; 43 stations</span></a></li>
+      <li><a href="dlr/"><span class="pg-swatch" style="background:#00A4A7"></span>DLR<span class="m"> &middot; 13.6 km &middot; 20 stations</span></a></li>
+      <li><a href="elizabeth/"><span class="pg-swatch" style="background:#6950A1"></span>Elizabeth<span class="m"> &middot; 94.8 km &middot; 25 stations</span></a></li>
+      <li><a href="hammersmith-city/"><span class="pg-swatch" style="background:#F3A9BB"></span>Hammersmith &amp; City<span class="m"> &middot; 31.3 km &middot; 29 stations</span></a></li>
+      <li><a href="jubilee/"><span class="pg-swatch" style="background:#A0A5A9"></span>Jubilee<span class="m"> &middot; 47.3 km &middot; 27 stations</span></a></li>
+      <li><a href="liberty/"><span class="pg-swatch" style="background:#5D6061"></span>Liberty<span class="m"> &middot; 6.3 km &middot; 3 stations</span></a></li>
+      <li><a href="lioness/"><span class="pg-swatch" style="background:#FAA61A"></span>Lioness<span class="m"> &middot; 33.4 km &middot; 19 stations</span></a></li>
+      <li><a href="metropolitan/"><span class="pg-swatch" style="background:#9B0056"></span>Metropolitan<span class="m"> &middot; 54.2 km &middot; 10 stations</span></a></li>
+      <li><a href="mildmay/"><span class="pg-swatch" style="background:#0077AD"></span>Mildmay<span class="m"> &middot; 22.7 km &middot; 18 stations</span></a></li>
+      <li><a href="northern/"><span class="pg-swatch" style="background:#000000"></span>Northern<span class="m"> &middot; 38.2 km &middot; 31 stations</span></a></li>
+      <li><a href="piccadilly/"><span class="pg-swatch" style="background:#003688"></span>Piccadilly<span class="m"> &middot; 62.1 km &middot; 38 stations</span></a></li>
+      <li><a href="suffragette/"><span class="pg-swatch" style="background:#5BBD72"></span>Suffragette<span class="m"> &middot; 28.2 km &middot; 13 stations</span></a></li>
+      <li><a href="victoria/"><span class="pg-swatch" style="background:#0098D4"></span>Victoria<span class="m"> &middot; 23.9 km &middot; 16 stations</span></a></li>
+      <li><a href="waterloo-city/"><span class="pg-swatch" style="background:#95CDBA"></span>Waterloo &amp; City<span class="m"> &middot; 2.8 km &middot; 2 stations</span></a></li>
+      <li><a href="weaver/"><span class="pg-swatch" style="background:#823A62"></span>Weaver<span class="m"> &middot; 13.6 km &middot; 7 stations</span></a></li>
+      <li><a href="windrush/"><span class="pg-swatch" style="background:#ED1B00"></span>Windrush<span class="m"> &middot; 10.9 km &middot; 12 stations</span></a></li>
+    </ul>
+    <h2>National Rail routes (10)</h2>
+    <ul class="pg-list pg-grid">
+      <li><a href="c2c/"><span class="pg-swatch" style="background:#B7007C"></span>c2c<span class="m"> &middot; 77.1 km &middot; 18 stations</span></a></li>
+      <li><a href="chiltern-railways/"><span class="pg-swatch" style="background:#00BFFF"></span>Chiltern Railways<span class="m"> &middot; 69.1 km &middot; 11 stations</span></a></li>
+      <li><a href="great-northern/"><span class="pg-swatch" style="background:#0072BC"></span>Great Northern<span class="m"> &middot; 57.4 km &middot; 21 stations</span></a></li>
+      <li><a href="great-western-railway/"><span class="pg-swatch" style="background:#0A493E"></span>Great Western Railway<span class="m"> &middot; 81.1 km &middot; 16 stations</span></a></li>
+      <li><a href="greater-anglia/"><span class="pg-swatch" style="background:#8B1E3F"></span>Greater Anglia<span class="m"> &middot; 72.8 km &middot; 9 stations</span></a></li>
+      <li><a href="heathrow-express/"><span class="pg-swatch" style="background:#532E63"></span>Heathrow Express<span class="m"> &middot; 26.2 km &middot; 3 stations</span></a></li>
+      <li><a href="south-western-railway/"><span class="pg-swatch" style="background:#55595C"></span>South Western Railway<span class="m"> &middot; 85.1 km &middot; 11 stations</span></a></li>
+      <li><a href="southeastern/"><span class="pg-swatch" style="background:#00A3A9"></span>Southeastern<span class="m"> &middot; 109.7 km &middot; 20 stations</span></a></li>
+      <li><a href="southern/"><span class="pg-swatch" style="background:#8CC63E"></span>Southern<span class="m"> &middot; 169.6 km &middot; 51 stations</span></a></li>
+      <li><a href="thameslink/"><span class="pg-swatch" style="background:#E9438D"></span>Thameslink<span class="m"> &middot; 144.6 km &middot; 37 stations</span></a></li>
+    </ul>
+    <p style="margin-top:20px">Looking for parks, canals and riverside instead? See <a href="../routes/">all 126 named routes</a>.</p>
+  </main>
+  <footer class="site-footer">
+    <p>Line Runners &middot; a guide to running London above ground.</p>
+  </footer>
+</body>
+</html>

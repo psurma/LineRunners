@@ -651,6 +651,9 @@ body.strip-drag { user-select: none; -webkit-user-select: none; }
   font-size: 14px;
 }
 .site-footer .fine { font-size: 12px; margin-top: 6px; opacity: 0.8; }
+/* Crawl path from the app into the generated line/route pages, and the quickest
+   way for a visitor to browse the whole library as a plain list. */
+.foot-browse { font-size: 14px; margin-top: 8px; }
 
 /* ---------- Live now banner ---------- */
 .live-banner {
@@ -1540,6 +1543,9 @@ body {
   background: var(--tfl-accent);
 }
 .site-footer .fine { color: #b8c2ee; opacity: 1; }
+/* White on the footer's TfL blue — the body link colour is unreadable there. */
+.site-footer .foot-browse { color: #dfe4ff; }
+.site-footer .foot-browse a { color: #fff; text-decoration: underline; }
 
 /* Planner: obvious next-pick prompt (Start vs Finish) */
 .plan-prompt { margin: 0 0 14px; padding: 10px 14px; border-radius: 10px; background: #eef1ff; border-left: 4px solid var(--tfl-blue); font-size: 15px; color: var(--ink); }
