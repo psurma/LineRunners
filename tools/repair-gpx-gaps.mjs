@@ -26,7 +26,7 @@ import { brouterTry } from "./lib/brouter.mjs";
 import { distM } from "./lib/geo.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
-const UA = "LineRunners/1.0 (gpx geometry repair; https://psurma.github.io/Overland)";
+const UA = "LineRunners/1.0 (gpx geometry repair; https://psurma.github.io/LineRunners)";
 // hiking-beta first: it keeps to footways the way the rest of the file was
 // routed. "shortest" is the generator's profile and the reliable fallback.
 const PROFILES = [["shortest", 3], ["hiking-beta", 2]];

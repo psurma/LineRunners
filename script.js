@@ -528,7 +528,7 @@
   // Client-side calendar export for a run — no backend. A timed 09:00 event on
   // the run date (all-day span for multi-day adventures) so people stop missing
   // the first-Sunday runs. Times are floating-local: the group meets in London.
-  const CAL_URL = "https://psurma.github.io/Overland/";
+  const CAL_URL = "https://psurma.github.io/LineRunners/";
   const CAL_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4.5" width="18" height="17" rx="2.5"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4"/></svg>`;
   const pad2 = (n) => String(n).padStart(2, "0");
   function icsEsc(s) { return String(s).replace(/([\\;,])/g, "\\$1").replace(/\n/g, "\\n"); }

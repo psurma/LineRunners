@@ -29,7 +29,7 @@ const GEOJSON = join(ROOT, "data/routes.geojson");
 const OUT = join(ROOT, "data/book-routes-generated.json");
 const CACHE = join(ROOT, "data/geocode-cache.json");
 const NOMINATIM = "https://nominatim.openstreetmap.org/search";
-const UA = "LineRunners/1.0 (book route tracing; https://psurma.github.io/Overland)";
+const UA = "LineRunners/1.0 (book route tracing; https://psurma.github.io/LineRunners)";
 // Greater London + a margin for Epping Forest, Richmond, Hampton Court, and the
 // Surrey Downs Link (Guildford–Cranleigh) to the south-west.
 const VIEWBOX = "-0.70,51.72,0.40,51.08"; // left,top,right,bottom

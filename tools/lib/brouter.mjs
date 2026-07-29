@@ -20,7 +20,7 @@
 // the calling tool to the public brouter.de instance.
 
 const BROUTER = "https://brouter.de/brouter";
-const DEFAULT_UA = "LineRunners/1.0 (route tools; https://psurma.github.io/Overland)";
+const DEFAULT_UA = "LineRunners/1.0 (route tools; https://psurma.github.io/LineRunners)";
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const lonlat = (p) => (Array.isArray(p) ? `${p[1]},${p[0]}` : `${p.lon},${p.lat}`);
 

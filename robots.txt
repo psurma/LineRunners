@@ -8,7 +8,7 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://psurma.github.io/Overland/sitemap.xml
+Sitemap: https://psurma.github.io/LineRunners/sitemap.xml
 
 # Machine-readable site guide for LLMs and agents:
-# https://psurma.github.io/Overland/llms.txt
+# https://psurma.github.io/LineRunners/llms.txt

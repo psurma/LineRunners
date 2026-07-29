@@ -22,7 +22,7 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const GEOJSON = join(ROOT, "data/routes.geojson");
 const STOPS = join(ROOT, "data/route-stops.json");
 
-const UA = "LineRunners/1.0 (race route snapping; https://psurma.github.io/Overland)";
+const UA = "LineRunners/1.0 (race route snapping; https://psurma.github.io/LineRunners)";
 // `profiles` lists below are ordered [profile, retries] pairs (see lib/brouter.mjs):
 // a road race prefers "shortest" (tracks the carriageway); a foot/park route
 // prefers "hiking-beta".

@@ -53,7 +53,7 @@ self.addEventListener("activate", (e) => {
   );
 });
 
-// Path of the SW scope root ("/Overland/" in production) — used to spot shell navigations.
+// Path of the SW scope root ("/LineRunners/" in production) — used to spot shell navigations.
 const SCOPE_PATH = new URL(self.registration.scope).pathname;
 const isTile = (href) => /basemaps\.cartocdn\.com|api\.os\.uk|tiles\.openfreemap\.org|server\.arcgisonline\.com/.test(href);
 
