@@ -7,11 +7,12 @@
 //
 //   node tools/generate-route-stops.mjs
 
-import { readFileSync, writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
+const STOPS = join(ROOT, "data/route-stops.json");
 const GEO = JSON.parse(readFileSync(join(ROOT, "data/routes.geojson"), "utf8"));
 const geomById = {};
 for (const f of GEO.features) geomById[f.properties.id] = f.geometry;
@@ -170,7 +171,15 @@ function alongPathKm(pt, path, cum) {
   return along;
 }
 
-const out = {};
+// data/route-stops.json has five producers (this one, build-route-stops.mjs for
+// the book routes, and the NR/disused builders) writing into the same object.
+// CURATED covers 27 of the ~120 keys on disk, so starting from {} and writing
+// wholesale would silently delete every entry the other four contributed and
+// leave those routes with no strip map. Seed from disk and merge, the way
+// tools/build-route-stops.mjs does.
+const out = existsSync(STOPS) ? JSON.parse(readFileSync(STOPS, "utf8")) : {};
+const before = Object.keys(out).length;
+let written = 0;
 for (const id in CURATED) {
   const geom = geomById[id];
   if (!geom) { console.log(`!! no geometry for ${id}`); continue; }
@@ -182,9 +191,12 @@ for (const id in CURATED) {
   // distinct leg (and the source of "0 m" legs on tight loops).
   const kept = pts.filter((p, i) => i === 0 || p.alongKm - pts[i - 1].alongKm > 0.12);
   out[id] = kept.map((p) => [p.n, Math.round(p.lat * 1e5) / 1e5, Math.round(p.lon * 1e5) / 1e5]);
+  written++;
   const flags = [maxOff > 400 ? `MAXOFF ${maxOff.toFixed(0)}m` : "", kept.length < 3 ? "ONLY " + kept.length : ""].filter(Boolean).join(" ");
   console.log(`${id}: ${kept.length}/${CURATED[id].length} stops, maxOff ${maxOff.toFixed(0)}m${flags ? "  <-- " + flags : ""}`);
 }
 
-writeFileSync(join(ROOT, "data/route-stops.json"), JSON.stringify(out));
-console.log(`\nWrote data/route-stops.json (${Object.keys(out).length} routes)`);
+writeFileSync(STOPS, JSON.stringify(out));
+// Both numbers, because the totals only make sense together: this tool owns the
+// curated slice, the rest arrived from the other producers and was carried over.
+console.log(`\nWrote data/route-stops.json (${written} curated routes merged into ${before} existing, ${Object.keys(out).length} total)`);

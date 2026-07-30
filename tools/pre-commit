@@ -91,6 +91,35 @@ case "$changed" in
     mv index.html.tmp index.html
     git add index.html
     echo "pre-commit: cache-buster bumped to ?v=$n"
+    # The 157 generated pages carry the same ?v= — tools/generate-pages.mjs bakes
+    # it in by READING it out of index.html — and they live under lines/ and
+    # routes/, which are in the trigger list above. So committing regenerated
+    # pages bumps index.html again and leaves every page one version behind, for
+    # ever: they can never catch up on their own. Rewrite them here with the same
+    # substitution so the whole set lands on one version. Hubs are listed
+    # separately because lines/*/index.html does not match lines/index.html.
+    pages=0
+    for page in lines/index.html lines/*/index.html routes/index.html routes/*/index.html; do
+      # Unmatched globs come through literally (no pages generated yet).
+      [ -f "$page" ] || continue
+      if ! sed -E "s/\?v=[0-9]+/?v=$n/g" "$page" > "$page.tmp"; then
+        rm -f "$page.tmp"
+        echo "pre-commit: cache-buster rewrite failed for $page — commit aborted." >&2
+        exit 1
+      fi
+      # Only stage pages the bump actually changed, so an unrelated regeneration
+      # sitting unstaged in the working tree isn't swept into this commit.
+      if cmp -s "$page.tmp" "$page"; then
+        rm -f "$page.tmp"
+        continue
+      fi
+      mv "$page.tmp" "$page"
+      git add "$page"
+      pages=$((pages + 1))
+    done
+    if [ "$pages" -gt 0 ]; then
+      echo "pre-commit: $pages generated page(s) rewritten to ?v=$n"
+    fi
     ;;
 esac
 exit 0

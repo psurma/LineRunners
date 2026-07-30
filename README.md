@@ -64,9 +64,9 @@ The map viewer (`#network`) has several tabs:
 
 ### Data & attribution
 
-- `data/tube-network.json` — 18 TfL lines / 425 stations with real coordinates, compiled from the [TfL Unified API](https://api.tfl.gov.uk) (open data). Drives station markers, interchange detection and running-time calculations.
-- `data/nr-network.json` + `data/nr-lines.geojson` — the ten National Rail commuter operators (stations, branches and track geometry, clipped to the commuter belt), also from the TfL Unified API via `tools/generate-nr-lines.mjs`. Together the site covers 28 lines / ~1,000 stations, out to Portsmouth, Southend and Luton.
-- `data/tube-lines.geojson` — real track geometry for the 18 TfL lines (`MultiLineString` per line), drawn as the coloured line overlay on the Leaflet map.
+- `data/tube-network.json` — 19 TfL lines / 470 stations with real coordinates, compiled from the [TfL Unified API](https://api.tfl.gov.uk) (open data). Drives station markers, interchange detection and running-time calculations.
+- `data/nr-network.json` + `data/nr-lines.geojson` — the ten National Rail commuter operators (stations, branches and track geometry, clipped to the commuter belt), also from the TfL Unified API via `tools/generate-nr-lines.mjs`. Together the site covers 29 lines / ~1,000 stations, out to Portsmouth, Southend and Luton.
+- `data/tube-lines.geojson` — real track geometry for the 19 TfL lines (`MultiLineString` per line), drawn as the coloured line overlay on the Leaflet map.
 - `data/station-toilets.json` — stations with confirmed toilets, from TfL StopPoint facility data.
 - `data/boroughs.json` — station/route → London borough tagging for the Borough bagger, from [ONS Open Geography](https://geoportal.statistics.gov.uk/) boundaries (OGL) via `tools/generate-boroughs.mjs`.
 - `data/route-pubs.json` — well-rated pubs near each curated route's ends, from the [Food Standards Agency API](https://ratings.food.gov.uk) (open data) via `tools/generate-pubs.mjs`.

@@ -48,6 +48,13 @@ const ver = (/style\.css\?v=(\d+)/.exec(readFileSync(join(ROOT, "index.html"), "
 const esc = (s) => String(s == null ? "" : s)
   .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
   .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+// JSON-LD goes inside a <script> block, and JSON.stringify escapes neither "<"
+// nor "</script" — a route name or description carrying one would close the
+// block early and spill the rest of the schema into the document as markup.
+// esc() is the wrong tool here: HTML entities inside a ld+json block corrupt the
+// JSON for the crawler that reads it. The < escape stays valid JSON, parses
+// back to "<", and cannot close the tag.
+const ldJson = (o) => JSON.stringify(o).replace(/</g, "\\u003c");
 // The data carries HTML entities (&mdash;, &rsquo;) written for innerHTML. They
 // are already valid in markup, so unescape them back after the blanket escape.
 const rich = (s) => esc(s).replace(/&amp;([a-z]+|#\d+);/gi, "&$1;");
@@ -127,6 +134,15 @@ const routes = ROUTES.filter((r) => r.id && r.name).map((r) => ({
 // --- page shell -------------------------------------------------------------
 // depth is how many directories down the page sits, so the asset links resolve
 // from lines/<slug>/ as well as from lines/.
+//
+// The CSP is a <meta> rather than a header because GitHub Pages serves these
+// files with no security headers at all and gives us nowhere to set one. It can
+// be this strict — script-src 'none' and no frames, forms or plugins — because
+// the pages deliberately run no script of their own; the only <script> here is
+// the application/ld+json data block, which is not executable content and so is
+// not governed by script-src (index.html already ships the same pairing).
+// 'unsafe-inline' on style-src is unavoidable: the shell carries an inline
+// <style> and the body sets inline background colours on the line swatches.
 function shell({ depth, title, desc, canonical, schema, body, crumbs }) {
   const up = "../".repeat(depth);
   return `<!DOCTYPE html>
@@ -134,6 +150,7 @@ function shell({ depth, title, desc, canonical, schema, body, crumbs }) {
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'none'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'none'; frame-src 'none'" />
   <title>${esc(title)}</title>
   <meta name="description" content="${esc(desc)}" />
   <link rel="canonical" href="${esc(canonical)}" />
@@ -173,7 +190,7 @@ function shell({ depth, title, desc, canonical, schema, body, crumbs }) {
     .pg-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
     @media (max-width: 640px) { .pg-stops { columns: 1; } }
   </style>
-  <script type="application/ld+json">${JSON.stringify(schema)}</script>
+  <script type="application/ld+json">${ldJson(schema)}</script>
 </head>
 <body>
   <header class="site-header">
@@ -211,6 +228,17 @@ function emit(relDir, html) {
   mkdirSync(dir, { recursive: true });
   writeFileSync(join(dir, "index.html"), html);
   urls.push(`${SITE}/${relDir}/`);
+}
+// Nothing past this point is recoverable: the loop below clears every managed
+// directory and the writes rebuild them from `lines` and `routes`. Neither array
+// is asserted anywhere upstream — an empty or malformed-but-parseable
+// tube-network.json parses fine, yields nothing, and this would then delete 157
+// tracked pages, shrink sitemap.xml to the home page and patch index.html's
+// footer to "all 0 lines", all on a zero exit. Refuse to destroy what we cannot
+// rebuild, the same way the TfL fetchers do (generate-tramlink, generate-superloop).
+if (!lines.length || !routes.length) {
+  console.error(`generate-pages: parsed ${lines.length} lines and ${routes.length} routes from script.js + data/ — aborting before the rewrite. Existing lines/, routes/, sitemap.xml and index.html left untouched.`);
+  process.exit(1);
 }
 // Rewrite from scratch so a deleted route loses its page instead of lingering.
 for (const d of ["lines", "routes"]) {

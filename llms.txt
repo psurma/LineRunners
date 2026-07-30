@@ -4,7 +4,7 @@
 
 Site: https://psurma.github.io/LineRunners/
 
-The site is a static single-page app on GitHub Pages. There is no server API — the JSON/GeoJSON/GPX files below are the API. Everything is served with `Access-Control-Allow-Origin: *`, no auth, no key, no rate limit beyond GitHub Pages itself. Coordinates are WGS84; `[lat, lon]` pair order unless a format (GeoJSON, GPX) dictates otherwise. Distances are kilometres.
+The site is a static single-page app on GitHub Pages. There is no server API — the JSON/GeoJSON/GPX files below are the API. Everything is served with `Access-Control-Allow-Origin: *`, no auth, no key, no rate limit beyond GitHub Pages itself. Coordinates are WGS84; `[lat, lon]` pair order unless a format (GeoJSON, GPX) dictates otherwise. `distance` fields are human-readable display strings, not numbers, and carry their own unit — usually kilometres (`~26 km`), sometimes miles (`46 miles over 2 days`), both (`13.1 mi (21.1 km)`) or a multi-day phrase (`2 days · ~59 km`). Parse the unit out of the string; do not assume km.
 
 ## The basics
 
@@ -26,7 +26,7 @@ Every one is listed in https://psurma.github.io/LineRunners/sitemap.xml. Prefer 
 ## Network data
 
 - Tube network: https://psurma.github.io/LineRunners/data/tube-network.json
-  18 TfL lines (Underground, Overground lines, Elizabeth, DLR, Tram) as `{ <lineId>: { name, colour, stations: { <naptanId>: { n, lat, lon } }, branches: [[naptanId, …]], route: [naptanId, …] } }`. `route` is the displayed main line, reading London-outward.
+  19 TfL lines (11 Underground, 6 Overground, Elizabeth and DLR — there is no tram line in this file) as `{ <lineId>: { name, colour, stations: { <naptanId>: { n, lat, lon } }, branches: [[naptanId, …]], route: [naptanId, …] | null } }`. `route` is the displayed main line, reading London-outward, but it may be `null` — it is null for `bakerloo`, `central`, `metropolitan` and `victoria`. When `route` is null, use the longest entry in `branches` as the line's spine. Always handle both cases.
 - National Rail network: https://psurma.github.io/LineRunners/data/nr-network.json
   10 commuter operators (SWR, Southern, Southeastern, Thameslink, GWR, Chiltern, c2c, Great Northern, Greater Anglia, Heathrow Express) in the same shape, clipped to the commuter belt (lat 50.75–51.95, lon −1.15–0.75). Main routes are anchored at each operator's London terminus.
 - Line geometry: https://psurma.github.io/LineRunners/data/tube-lines.geojson and https://psurma.github.io/LineRunners/data/nr-lines.geojson

@@ -164,7 +164,7 @@
       ["Pimlico", 51.4893, -0.1334], ["Victoria", 51.4965, -0.1447], ["Green Park", 51.5067, -0.1428],
       ["Oxford Circus", 51.5152, -0.1418], ["Warren Street", 51.5247, -0.1384], ["Euston", 51.5282, -0.1337],
       ["King's Cross St Pancras", 51.5308, -0.1238], ["Highbury & Islington", 51.5464, -0.1031],
-      ["Finsbury Park", 51.5642, -0.1065], ["Seven Sisters", 51.5828, -0.0749], ["Tottenham Hale", 51.5882, -0.0594],
+      ["Finsbury Park", 51.5642, -0.1065], ["Seven Sisters", 51.582931, -0.073306], ["Tottenham Hale", 51.5882, -0.0594],
       ["Blackhorse Road", 51.5867, -0.0410], ["Walthamstow Central", 51.5830, -0.0195],
     ],
     Bakerloo: [
@@ -394,7 +394,8 @@
   const lineTextCache = {};
   function lineTextColour(hex) {
     if (lineTextCache[hex]) return lineTextCache[hex];
-    const raw = hex.replace("#", "");
+    let raw = hex.replace("#", "");
+    if (raw.length < 6) raw = raw.split("").map((ch) => ch + ch).join(""); // #fff -> #ffffff, as relLum does
     let r = parseInt(raw.slice(0, 2), 16), g = parseInt(raw.slice(2, 4), 16), b = parseInt(raw.slice(4, 6), 16);
     const lum = () => relLumRgb(r, g, b);
     while (1.05 / (lum() + 0.05) < 4.5 && (r || g || b)) {
@@ -2006,7 +2007,11 @@
   function routeIndexFromHash() {
     const m = /^#routes\/(.+)$/.exec(location.hash);
     if (!m) return -1;
-    const id = decodeURIComponent(m[1]);
+    // A truncated or hand-edited link can leave a broken %-escape, and
+    // decodeURIComponent throws on those. renderRoutes calls this on the way in,
+    // so an unhandled throw here would blank the whole routes section.
+    let id;
+    try { id = decodeURIComponent(m[1]); } catch (_) { return -1; }
     return ROUTES.findIndex((r) => r.id === id);
   }
 
@@ -2157,7 +2162,10 @@
     }).catch(() => {});
   }
 
+  // Idempotent: the visibility gate and the ?bus= restore path both call this,
+  // and a second L.map() over the same container throws.
   function initBusMap(mapEl) {
+    if (busMapObj.map) return;
     busMapObj.map = createSiteMap(mapEl);
     requestAnimationFrame(() => busMapObj.map.invalidateSize(false));
   }
@@ -2544,10 +2552,15 @@
     if (typeof L === "undefined") { mapUnavailable(mapEl); return; }
 
     loadBusList();
-    initBusMap(mapEl);
+    // Lazy: a Leaflet map plus its first tiles for a section well below the fold,
+    // so it waits for the same visibility gate as the other maps.
+    whenVisible("busMap", () => initBusMap(mapEl));
     const trace = makeBusTracer(pick, result);
-    go.addEventListener("click", trace);
-    pick.addEventListener("change", trace);
+    // trace() is async, so a bare call drops its rejection on the floor. Every
+    // caller that isn't chaining goes through this guard instead.
+    const runTrace = () => Promise.resolve(trace()).catch((e) => console.error("bus trace failed:", e));
+    go.addEventListener("click", runTrace);
+    pick.addEventListener("change", runTrace);
     // Open a shared ?bus= link straight onto that route, in the direction it was
     // shared in. Seeding busMapObj.keep is how the tracer is told the direction —
     // it reads it back for this id on the way through. Only scrolls when the URL
@@ -2555,6 +2568,10 @@
     // over the page position.
     const sharedBus = new URLSearchParams(location.search).get("bus");
     if (sharedBus) {
+      // This path traces on boot and the tracer draws straight onto
+      // busMapObj.map, so it can't wait for the gate above to fire — build the
+      // map now and let the observer's later call no-op.
+      initBusMap(mapEl);
       pick.value = sharedBus;
       if (new URLSearchParams(location.search).get("rev")) busMapObj.keep = { id: sharedBus, reversed: true, a: -1, b: -1 };
       const p = new URLSearchParams(location.search);
@@ -2569,8 +2586,8 @@
         .catch(() => { /* trace reports its own failure in the result pane */ });
     }
     // Let the site-wide unit toggle re-render the last traced route in the new units.
-    busMapObj.retrace = () => { if (busMapObj.currentId) { pick.value = busMapObj.currentId; trace(); } };
-    const runRoute = (id) => { pick.value = id; trace(); };
+    busMapObj.retrace = () => { if (busMapObj.currentId) { pick.value = busMapObj.currentId; runTrace(); } };
+    const runRoute = (id) => { pick.value = id; runTrace(); };
     setupBusQuickPicks(runRoute);
     setupBusPlaceSearch(runRoute, mapEl);
     renderBusProgress();
@@ -4171,8 +4188,11 @@
       L.popup({ autoPan: false }).setLatLng([st.lat, st.lon])
         .setContent(`<b>${escapeHtml(st.n)}</b>` + interchangeTags(st.n, "search") + `<div class="iso-row"><button type="button" class="iso-go" data-sid="${escapeHtml(stId)}">How far from here?</button></div>`).openOn(tmMap.map);
     };
-    input.addEventListener("change", () => go());
-    input.addEventListener("keydown", (e) => { if (e.key === "Enter") go(); });
+    // go() is async and awaits fetches, so a bare call leaks its rejection.
+    // Every call site goes through this guard, which logs like the boot one does.
+    const runGo = (forced) => Promise.resolve(go(forced)).catch((e) => console.error("search go failed:", e));
+    input.addEventListener("change", () => runGo());
+    input.addEventListener("keydown", (e) => { if (e.key === "Enter") runGo(); });
     // 📍 beside the search: locate the visitor and jump to the nearest station
     // in the current network, through the same path as a search pick (map
     // centring, station popup, "How far from here?"). Status lives in a small
@@ -4223,7 +4243,7 @@
         // reload — stash the message so the fresh page can still show it.
         if (best.nr) { try { sessionStorage.setItem("tuberun_near_note", msg); } catch (_) { /* private mode */ } }
         note(msg, approx ? 15000 : 9000);
-        go(`${best.name} (station)`);
+        runGo(`${best.name} (station)`);
       };
       // Last resort: a network-address (IP) lookup. Street-level accuracy is
       // not guaranteed, but it beats a shrug when the browser has no position
@@ -4260,7 +4280,7 @@
     // A search that switched modes resumes here, once the network is in.
     let pending = null;
     try { pending = sessionStorage.getItem("tuberun_pending_search"); sessionStorage.removeItem("tuberun_pending_search"); } catch (_) { /* private mode */ }
-    if (pending) loadNetwork().catch(() => null).then(() => setTimeout(() => go(pending), 900));
+    if (pending) loadNetwork().catch(() => null).then(() => setTimeout(() => runGo(pending), 900));
     // A nearest-station result that crossed the mode switch shows its bubble here.
     let nearPending = null;
     try { nearPending = sessionStorage.getItem("tuberun_near_note"); sessionStorage.removeItem("tuberun_near_note"); } catch (_) { /* private mode */ }
@@ -4807,8 +4827,12 @@
 
   // Ordnance Survey "Road" raster tiles — an A-Z-style British street atlas.
   // Free on the OS OpenData plan to zoom 16 (upscaled beyond via maxNativeZoom).
-  // The key rides in the tile URL (unavoidable for a static site); it's the free
-  // OpenData plan so it can't incur cost, and it's restricted to our domain at OS.
+  // The key rides in the tile URL (unavoidable for a static site) and is public
+  // and unrestricted — tested: tiles return 200 with no Referer and with an
+  // arbitrary one, so there is no origin/referer/domain check at OS. It's the
+  // free OpenData plan, so there's no billing exposure; the exposure is someone
+  // else burning the rate limit and leaving the default basemap blank (visitors
+  // can still switch to Voyager). Rotate it in the OS Data Hub.
   const OS_KEY = "okbMrQnWH0qLZbLKEw29GCtB6ulDR9Tt";
   function osRoadBasemap() {
     return L.tileLayer("https://api.os.uk/maps/raster/v1/zxy/Road_3857/{z}/{x}/{y}.png?key=" + OS_KEY, {

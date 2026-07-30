@@ -11,7 +11,7 @@
 // script.js path (tests point them at doctored copies instead of touching the
 // real files). routes/ always comes from the repo.
 
-import { readFileSync, readdirSync } from "node:fs";
+import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join, basename } from "node:path";
 import { extractLiteral } from "./lib/extract.mjs";
@@ -441,6 +441,119 @@ try {
       if (v === undefined) continue;
       if (Array.isArray(v)) ok(`${f}: array of ${v.length}`);
       else fail(`${f}: expected a top-level array`);
+    }
+  }
+
+  // --- i. WAYPOINTS vs the network JSON ---------------------------------------
+  // The 4 lines with no `route` in tube-network.json hold their station
+  // coordinates twice: in script.js WAYPOINTS, which the GPX tracer follows, and
+  // in the network file, which the map draws. tools/generate-routes.mjs already
+  // warns about the split, but that tool needs BRouter and is run by hand, so on
+  // a normal commit nothing looks. Ported here with the same 40 m tolerance and
+  // a second band: past 40 m the two sources disagree by more than the survey
+  // noise between one entrance and another (warn); past 150 m they are naming
+  // different places — a moved station or a mistyped digit — and the GPX starts
+  // its leg from somewhere the runner isn't (fail).
+  {
+    const WP_SLUG = { Victoria: "victoria", Bakerloo: "bakerloo", Central: "central", Metropolitan: "metropolitan" };
+    const TOL_WARN = 40, TOL_FAIL = 150; // metres
+    const norm = (s) => String(s).toLowerCase().replace(/[^a-z0-9]/g, "");
+    let checked = 0, drifted = 0, serious = 0, worst = 0, worstAt = "";
+    for (const [key, slug] of Object.entries(WP_SLUG)) {
+      const ln = tube[slug];
+      if (!ln) { fail(`WAYPOINTS: ${key} has no "${slug}" entry in tube-network.json — the tracer and the map would be drawing different lines`); continue; }
+      const byName = {};
+      for (const id in ln.stations) byName[norm(ln.stations[id].n)] = ln.stations[id];
+      for (const [name, lat, lon] of WAYPOINTS[key] || []) {
+        const st = byName[norm(name)];
+        if (!st) { fail(`WAYPOINTS: ${key} waypoint "${name}" is not a station in tube-network.json — one source has been renamed or re-ordered without the other`); continue; }
+        checked++;
+        const d = distM([lat, lon], [st.lat, st.lon]);
+        if (d > worst) { worst = d; worstAt = `${key} "${name}"`; }
+        if (d <= TOL_WARN) continue;
+        drifted++;
+        const where = `WAYPOINTS: ${key} "${name}" — script.js and tube-network.json place it ${Math.round(d)} m apart`;
+        if (d > TOL_FAIL) {
+          serious++;
+          fail(`${where}, past the ${TOL_FAIL} m band where the two are no longer the same place — pick whichever is right and copy it into the other`);
+        } else {
+          warn(`${where} (over ${TOL_WARN} m)`);
+        }
+      }
+    }
+    if (!drifted) ok(`WAYPOINTS: ${checked} waypoints across ${Object.keys(WP_SLUG).length} lines sit within ${TOL_WARN} m of tube-network.json`);
+    else ok(`WAYPOINTS: ${checked} waypoints checked, ${drifted} drifted over ${TOL_WARN} m (${serious} over ${TOL_FAIL} m; worst ${Math.round(worst)} m — ${worstAt})`);
+  }
+
+  // --- j. generated pages in step with index.html and sitemap.xml -------------
+  // tools/generate-pages.mjs bakes index.html's ?v= into all 157 static pages
+  // and rewrites sitemap.xml from exactly the set it wrote. Both couplings are
+  // one-way and silent: a page left on an older ?v= serves whatever style.css a
+  // returning visitor already has cached, and a sitemap that disagrees with the
+  // directory either advertises 404s to the crawler or hides pages from it.
+  {
+    const pages = [];
+    for (const dir of ["lines", "routes"]) {
+      const base = join(ROOT, dir);
+      if (!existsSync(base)) continue;
+      if (existsSync(join(base, "index.html"))) pages.push(`${dir}/index.html`);
+      for (const e of readdirSync(base, { withFileTypes: true })) {
+        if (e.isDirectory() && existsSync(join(base, e.name, "index.html"))) pages.push(`${dir}/${e.name}/index.html`);
+      }
+    }
+    if (!pages.length) {
+      ok("generated pages: none on disk — nothing to check (run tools/generate-pages.mjs)");
+    } else {
+      const verOf = (text) => (text.match(/style\.css\?v=(\d+)/) || [, null])[1];
+      const siteVer = verOf(readFileSync(join(ROOT, "index.html"), "utf8"));
+      const byVer = new Map();
+      for (const rel of pages) {
+        const v = verOf(readFileSync(join(ROOT, rel), "utf8"));
+        if (!byVer.has(v)) byVer.set(v, []);
+        byVer.get(v).push(rel);
+      }
+      const spread = [...byVer.entries()].sort((a, b) => b[1].length - a[1].length);
+      if (spread.length > 1) {
+        // Mixed versions mean a regeneration was interrupted or only half staged:
+        // some pages point at a stylesheet the rest don't.
+        fail(`generated pages: ${pages.length} pages carry ${spread.length} different ?v= values (${spread.map(([v, f]) => `${f.length}×v=${v}`).join(", ")}) — a partial regeneration; re-run tools/generate-pages.mjs`);
+      } else if (spread[0][0] !== siteVer) {
+        // Uniformly behind is the known one-commit lag, not corruption: the hook
+        // validates before it bumps, so failing here would block the very commit
+        // that heals it. The hook now rewrites the pages too, so it converges.
+        warn(`generated pages: all ${pages.length} are on ?v=${spread[0][0]} while index.html is on ?v=${siteVer} — the next commit touching them levels the two up`);
+        ok(`generated pages: ${pages.length} pages agree on one ?v=`);
+      } else {
+        ok(`generated pages: ${pages.length} pages all on index.html's ?v=${siteVer}`);
+      }
+      const smPath = join(ROOT, "sitemap.xml");
+      if (!existsSync(smPath)) fail("sitemap.xml: missing — the generated pages have no crawl path; re-run tools/generate-pages.mjs");
+      else {
+        const locs = (readFileSync(smPath, "utf8").match(/<loc>/g) || []).length;
+        // +1 for the home page, which has no directory of its own.
+        if (locs !== pages.length + 1) fail(`sitemap.xml: lists ${locs} URLs for ${pages.length} pages on disk + the home page (expected ${pages.length + 1}) — it advertises pages that aren't there or omits ones that are; re-run tools/generate-pages.mjs`);
+        else ok(`sitemap.xml: ${locs} URLs = ${pages.length} generated pages + the home page`);
+      }
+    }
+  }
+
+  // --- k. routes/dlr.gpx carries the main branch only -------------------------
+  // Two tools can write this file. tools/generate-dlr.mjs owns it: one <wpt> per
+  // station of the DLR's MAIN branch (20 of the line's 45) over a de-spurred
+  // track. tools/generate-routes.mjs skips the line for that reason, but the skip
+  // is one line in a loop and section g passes either way — single trk/trkseg,
+  // right termini, no long gaps all hold for the wrong file too. The waypoint
+  // count is the one fingerprint that tells them apart: 45 means the other tool
+  // ran. Expect this number to move only when the DLR itself gains a station.
+  {
+    const dlr = join(ROOT, "routes", "dlr.gpx");
+    const WANT = 20;
+    if (!existsSync(dlr)) {
+      fail("routes/dlr.gpx: missing — re-run tools/generate-dlr.mjs");
+    } else {
+      const wpts = (readFileSync(dlr, "utf8").match(/<wpt\s/g) || []).length;
+      if (wpts === WANT) ok(`routes/dlr.gpx: ${wpts} <wpt> — the main branch, as tools/generate-dlr.mjs writes it`);
+      else fail(`routes/dlr.gpx: ${wpts} <wpt>, expected ${WANT} — that is the whole station list, not the main branch, so tools/generate-routes.mjs has overwritten the file (its de-spur pass is missing too); re-run tools/generate-dlr.mjs`);
     }
   }
 } catch (e) {

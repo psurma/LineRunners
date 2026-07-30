@@ -483,7 +483,6 @@ body.strip-drag { user-select: none; -webkit-user-select: none; }
 .calc-result:empty { display: none; }
 .cr-main { font-size: clamp(24px, 4vw, 34px); font-weight: 800; letter-spacing: -0.5px; }
 .cr-km { color: var(--tfl-blue); }
-.cr-time { color: var(--ink); }
 .cr-detail { color: #2b3140; margin-top: 4px; font-weight: 600; }
 .cr-note { color: var(--muted); font-size: 13px; margin-top: 8px; }
 

@@ -37,6 +37,16 @@ const WP = extractLiteral(readFileSync(join(ROOT, "script.js"), "utf8"), "WAYPOI
 // The 4 lines with no `route` in tube-network.json are exactly the WAYPOINTS lines.
 const WP_SLUG = { Victoria: "victoria", Bakerloo: "bakerloo", Central: "central", Metropolitan: "metropolitan" };
 
+// Lines whose GPX belongs to a different tool. loadLines() below claims every
+// entry carrying a `route` array, and generate-dlr.mjs writes one into
+// tube-network.json — so without this, a run here silently overwrites
+// routes/dlr.gpx with a file that is wrong in two ways the existing guards
+// cannot see: no de-spur pass (that tool traces the DLR's viaduct-heavy corridor
+// and prunes the out-and-back stubs BRouter leaves behind), and all 45 stations
+// as waypoints instead of the main branch's 20. Single trk/trkseg, correct
+// termini, no long gaps — every check still passes, so the damage is invisible.
+const OWNED_ELSEWHERE = { dlr: "tools/generate-dlr.mjs" };
+
 // Guard against silent drift: those 4 lines duplicate station coordinates that
 // also live in tube-network.json. Warn loudly at build time if any diverge beyond
 // ~40 m, or if a waypoint names a station the network JSON doesn't know — either
@@ -75,6 +85,7 @@ function checkWaypointDrift() {
 function loadLines() {
   const out = [];
   for (const [slug, ln] of Object.entries(NET)) {
+    if (OWNED_ELSEWHERE[slug]) { console.log(`! ${slug}: skipped — routes/${slug}.gpx is written by ${OWNED_ELSEWHERE[slug]}, which routes only the main branch and de-spurs it`); continue; }
     let stations;
     if (Array.isArray(ln.route)) {
       stations = ln.route.map((id) => {
