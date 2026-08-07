@@ -4843,13 +4843,20 @@
 
   // Ordnance Survey "Road" raster tiles — an A-Z-style British street atlas.
   // Free on the OS OpenData plan to zoom 16 (upscaled beyond via maxNativeZoom).
-  // The key rides in the tile URL (unavoidable for a static site) and is public
-  // and unrestricted — tested: tiles return 200 with no Referer and with an
-  // arbitrary one, so there is no origin/referer/domain check at OS. It's the
-  // free OpenData plan, so there's no billing exposure; the exposure is someone
-  // else burning the rate limit and leaving the default basemap blank (visitors
-  // can still switch to Voyager). Rotate it in the OS Data Hub.
-  const OS_KEY = "okbMrQnWH0qLZbLKEw29GCtB6ulDR9Tt";
+  //
+  // This key is public and unrestricted, and that cannot be fixed: it has to ride
+  // in the tile URL for a static site to fetch tiles at all, and OS does not offer
+  // referer or domain locking for raster keys — tested, tiles return 200 with no
+  // Referer and with an arbitrary one. Being on the OpenData plan there is no
+  // billing exposure; the exposure is someone else spending the rate limit.
+  //
+  // So the containment is elsewhere: this is no longer the default basemap.
+  // createSiteMap starts every map on CARTO Voyager, which needs no key, and the
+  // street atlas is a layer the reader chooses. If this key is exhausted or
+  // revoked, that choice stops working and nothing else does.
+  //
+  // Rotated 2026-07-30; the key it replaced now returns 401.
+  const OS_KEY = "lQFFhumAUBIbgKYibXGekchkYJae5ODE";
   function osRoadBasemap() {
     return L.tileLayer("https://api.os.uk/maps/raster/v1/zxy/Road_3857/{z}/{x}/{y}.png?key=" + OS_KEY, {
       attribution: 'Contains OS data &copy; Crown copyright and database right 2026',
