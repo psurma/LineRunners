@@ -1,7 +1,7 @@
 {
  "club": "Line Runners",
  "site": "https://psurma.github.io/LineRunners/",
- "generated": "2026-07-25",
+ "generated": "2026-08-07",
  "rule": "Regular runs are the first Sunday of each month, meeting 09:00 at the start station unless stated; dated specials are pinned. Runs beyond the current month are suggestions until confirmed a month out.",
  "runs": [
   {
@@ -52,7 +52,7 @@
    ]
   },
   {
-   "date": "2026-08-02",
+   "date": "2026-09-06",
    "days": 1,
    "status": "suggested",
    "kind": "tube",
@@ -67,7 +67,7 @@
    "exits": null
   },
   {
-   "date": "2026-09-06",
+   "date": "2026-10-04",
    "days": 1,
    "status": "suggested",
    "kind": "tube",
@@ -82,7 +82,7 @@
    "exits": null
   },
   {
-   "date": "2026-10-04",
+   "date": "2026-11-01",
    "days": 1,
    "status": "suggested",
    "kind": "canal",
@@ -97,7 +97,7 @@
    "exits": null
   },
   {
-   "date": "2026-11-01",
+   "date": "2026-12-06",
    "days": 1,
    "status": "suggested",
    "kind": "tube",
@@ -112,7 +112,7 @@
    "exits": null
   },
   {
-   "date": "2026-12-06",
+   "date": "2027-01-03",
    "days": 1,
    "status": "suggested",
    "kind": "river",
@@ -127,7 +127,7 @@
    "exits": null
   },
   {
-   "date": "2027-01-03",
+   "date": "2027-02-07",
    "days": 1,
    "status": "suggested",
    "kind": "bus",
@@ -142,7 +142,7 @@
    "exits": null
   },
   {
-   "date": "2027-02-07",
+   "date": "2027-03-07",
    "days": 1,
    "status": "suggested",
    "kind": "superloop",
@@ -157,7 +157,7 @@
    "exits": null
   },
   {
-   "date": "2027-03-07",
+   "date": "2027-04-04",
    "days": 1,
    "status": "suggested",
    "kind": "superloop",

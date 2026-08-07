@@ -163,6 +163,31 @@ try {
     if (noFile.length) fail(`GPX_LINES: no routes/<id>.gpx for: ${noFile.join(", ")}`);
     if (noSet.length) fail(`routes/: gpx files not in GPX_LINES: ${noSet.join(", ")}`);
     if (!noFile.length && !noSet.length) ok(`GPX_LINES: ${GPX_LINES.size} ids match routes/*.gpx exactly`);
+
+    // Every GPX needs the compact JSON copy the site actually reads. Without it
+    // loadRouteGpx silently falls back to parsing the GPX, which still works but
+    // downloads up to 432 KB uncompressed instead of under 40 KB gzipped — a
+    // regression nothing else would surface. Written by generate-route-json.mjs.
+    const jsonOnDisk = new Set(readdirSync(join(ROOT, "routes")).filter((f) => f.endsWith(".json")).map((f) => basename(f, ".json")));
+    const noJson = [...onDisk].filter((id) => !jsonOnDisk.has(id));
+    const strayJson = [...jsonOnDisk].filter((id) => !onDisk.has(id));
+    if (noJson.length) fail(`routes/: no <id>.json companion for: ${noJson.join(", ")} — run node tools/generate-route-json.mjs`);
+    if (strayJson.length) fail(`routes/: <id>.json with no matching .gpx: ${strayJson.join(", ")}`);
+    if (!noJson.length && !strayJson.length) {
+      // A stale copy is worse than a missing one: it draws the wrong line with no
+      // error, so check the point counts still agree rather than just existence.
+      const stale = [];
+      for (const id of onDisk) {
+        const gpxPts = (readFileSync(join(ROOT, "routes", `${id}.gpx`), "utf8").match(/<trkpt /g) || []).length;
+        let jsonPts = 0;
+        try {
+          for (const seg of JSON.parse(readFileSync(join(ROOT, "routes", `${id}.json`), "utf8"))) jsonPts += seg.length;
+        } catch (_) { stale.push(`${id} (unparseable json)`); continue; }
+        if (jsonPts !== gpxPts) stale.push(`${id} (gpx ${gpxPts} pts, json ${jsonPts})`);
+      }
+      if (stale.length) fail(`routes/: json copy out of step with its gpx: ${stale.join(", ")} — re-run node tools/generate-route-json.mjs`);
+      else ok(`routes/: all ${jsonOnDisk.size} .json copies match their .gpx point-for-point`);
+    }
   }
 
   // --- d. freshness drift: boroughs (fail >10%) / pubs (warn) ------------------
