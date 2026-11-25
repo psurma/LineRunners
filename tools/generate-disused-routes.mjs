@@ -44,6 +44,11 @@ const DISUSED = [
   { id: "longmoor-military", vias: [stn("Liss"), [51.0505, -0.8877], [51.0571, -0.8842]] },
 ];
 
+// london-necropolis-railway is not in this list. Its middle is still the
+// South Western main line, so the drawn line is that pavement trace from the
+// Westminster Bridge Road terminus to Brookwood, then cemetery roads to South
+// station. A shortest-path through here would leave the railway.
+
 // Single attempt, throws on failure (there is no fallback for these — a failed
 // route is reported and left alone).
 const brouter = (vias) => brouterRaw(vias, "shortest", { userAgent: "LineRunners/1.0 (disused railway routes)" }); // [lon, lat, ele]
